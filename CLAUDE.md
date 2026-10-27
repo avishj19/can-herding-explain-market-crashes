@@ -29,10 +29,22 @@ The final product is a web app where users can tune herding strength and watch c
 - Later: reproduce Kirman's ant model first as a check against his math.
 
 ## Where things live
-- `main.py`: current draft (simulation + comparison with S&P 500, saves `figures/draft.png`)
-- `data/spx_daily.csv`: S&P 500 daily closes, 1950 to today (Yahoo Finance, ^GSPC)
+- `main.py`: runs the comparison (S&P 500 vs 20 calibrated histories vs paper settings), saves `figures/draft.png`
+- `herding/`: the program, one module per job
+  - `model.py`: the Lux-Marchesi simulation and its guardrails (numba-accelerated when installed)
+  - `stats.py`: tail exponent, kurtosis, autocorrelation, the "stylized facts" fingerprint
+  - `market_data.py`: loads and checks `data/spx_daily.csv`
+  - `kirman.py`: Kirman's ant model with its exact solution (the herding check from the proposal)
+  - `calibrate.py`: fits settings to the S&P 500 (`python3 -m herding.calibrate`) -> `calibrated_params.json`
+  - `plots.py`: figures (reusable by the future web app)
+- `tests/`: one test file per module; `python3 -m pytest tests/ -q` (quick: add `-m "not slow"`);
+  `tests/experiments.py` makes `figures/test_*.png`
+- `analysis/`: exploration scripts behind each finding, plus `history/` (earlier versions)
+- `data/`: S&P 500 daily closes 1950-today (Yahoo ^GSPC), VIX, NBER recessions (FRED USREC)
 - `paper/`: sources. The Lux & Marchesi Nature paper (doi:10.1038/17290) is paywalled
   and still needs to be added via CMU library access.
+- `notes/`: my own notes from tutoring sessions
+- `scratch/`: temporary files (git-ignored)
 - `journal/`: build journal logs (copied automatically; don't edit by hand)
 
 ## Working rules
