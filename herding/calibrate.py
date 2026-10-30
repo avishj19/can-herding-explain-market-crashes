@@ -12,9 +12,8 @@ from multiprocessing import Pool
 
 import numpy as np
 
-from . import market_data
-from . import model
-from . import stats
+from . import experiments, market_data, model, stats
+from .experiments import BURN, DAYS
 
 OUT = market_data.ROOT / "calibrated_params.json"
 TARGETS = ["alpha_5pct", "alpha_1pct", "share_4sd", "ac_r_1", "ac_r_2", "ac_r_2to10",
@@ -26,7 +25,9 @@ SCALE = dict(alpha_5pct=0.25, alpha_1pct=0.5, share_4sd=0.002, ac_r_1=0.03, ac_r
 RANGES = dict(a1=(0.0, 1.5), a2=(0.0, 6.0), a3=(0.02, 2.0), v1=(0.5, 6.0), v2=(1.0, 6.0),
               tc=(0.02, 0.3), gamma=(0.03, 0.8), s=(0.5, 2.0), beta=(20.0, 100.0),
               tau=(0.05, 1.0))
-DAYS, BURN = 19300, 300          # same length as the S&P 500 sample
+# Every seed search() and refine() score candidates on. Any check of the fitted
+# model must use OTHER seeds, or it is graded on its own homework.
+CALIBRATION_SEEDS = tuple(range(0, 28))
 
 
 def spx_facts():
@@ -34,14 +35,15 @@ def spx_facts():
 
 
 def model_facts(p, seeds, days=DAYS):
-    """Average fingerprint over seeds, or None if any run leaves the realistic regime."""
+    """Average fingerprint over seeds, or None if any run leaves the realistic regime.
+    Bad settings (e.g. a typo) still raise ValueError: only runaway runs are scored inf."""
     facts = []
     for seed in seeds:
         try:
-            r, _ = model.simulate(days + BURN, p=p, seed=seed)
-        except (model.ModelRegimeError, ValueError, FloatingPointError):
+            r = experiments.history(p, seed, days)
+        except (model.ModelRegimeError, FloatingPointError):
             return None
-        facts.append(stats.stylized_facts(r[BURN:]))
+        facts.append(stats.stylized_facts(r))
     return {k: float(np.mean([f[k] for f in facts])) for k in facts[0]}
 
 
@@ -96,6 +98,8 @@ def refine(center, n=200, spread=0.3, seeds=(3, 4, 5), final_seeds=tuple(range(2
     with Pool() as pool:
         rough = pool.map(_score, [(p, seeds, target) for p in cands])
         best = [p for _, p in sorted(zip(rough, cands), key=lambda x: x[0][0])[:top]]
+        if center not in best:            # never return something worse than the start
+            best.append(center)
         fine = pool.map(_score, [(p, final_seeds, target) for p in best])
     (l, f), p = min(zip(fine, best), key=lambda x: x[0][0])
     return p, l, f, target

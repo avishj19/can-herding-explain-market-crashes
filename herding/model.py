@@ -104,18 +104,30 @@ def _clip(u):
 
 
 def _run_impl(g, days, steps, herding, N, nf, npl, nmi, m2, mF, lp, v1, v2, beta,
-              tc, gamma, a1, a2, a3, R, s, sigma, tau, max_mis):
+              tc, gamma, a1, a2, a3, R, s, sigma, tau, max_mis, cb1, cb2, cb3, halt_steps,
+              shock):
     """The simulation loop. Returns (log price, log value, chartist fraction,
-    status, day): status 0 = ok, 1 = diverged (NaN), 2 = left realistic regime."""
+    halt level per day, intraday low per day, largest one-step price move,
+    status, day): status 0 = ok, 1 = diverged (NaN), 2 = left realistic regime.
+    Circuit breakers: cb1..cb3 are log-return trigger levels (< 0), or 0 for off.
+    shock[day]: log change of the fundamental value at the start of that day."""
     dt = 1.0 / steps
     lf = lp
     trend = 0.0                                # smoothed d(log price)/dt per day
     out_lp = np.empty(days + 1)
     out_lf = np.empty(days + 1)
     frac = np.empty(days)
+    halts = np.zeros(days, dtype=np.int64)     # 0 none, 1-2 pauses, 3 closed for the day
+    low = np.empty(days)                       # lowest log price vs previous close
+    max_step = 0.0
     out_lp[0] = lp
     out_lf[0] = lf
     for day in range(days):
+        lf += shock[day]                       # policy surprise (0 on ordinary days)
+        prev_close = lp
+        day_low = 0.0
+        paused = 0                             # steps of pause left
+        closed = False
         for _ in range(steps):
             if herding:
                 nc = npl + nmi
@@ -140,21 +152,39 @@ def _run_impl(g, days, steps, herding, N, nf, npl, nmi, m2, mF, lp, v1, v2, beta
                 npl += f2o - o2f
                 nmi += f2p - p2f
                 nf += o2f + p2f - f2o - f2p
-            # market maker: log price moves with excess demand
-            ed = (npl - nmi) * tc + nf * gamma * (lf - lp)
-            dlp = beta * ed / N * dt
+            # market maker: log price moves with excess demand (frozen while halted)
+            if closed or paused > 0:
+                dlp = 0.0
+                paused = max(0, paused - 1)
+            else:
+                ed = (npl - nmi) * tc + nf * gamma * (lf - lp)
+                dlp = beta * ed / N * dt
             lp += dlp
             trend += (dlp / dt - trend) * min(1.0, dt / tau)   # smoothed
+            max_step = max(max_step, abs(dlp))
+            fall = lp - prev_close
+            day_low = min(day_low, fall)
+            # circuit breakers: each level fires at most once a day
+            if cb3 < 0 and not closed and fall <= cb3:
+                closed = True
+                halts[day] = 3
+            elif cb2 < 0 and halts[day] < 2 and fall <= cb2:
+                halts[day] = 2
+                paused = halt_steps
+            elif cb1 < 0 and halts[day] < 1 and fall <= cb1:
+                halts[day] = 1
+                paused = halt_steps
             # Gaussian news moves the fundamental value
             lf += sigma * np.sqrt(dt) * g.standard_normal()
         out_lp[day + 1] = lp
         out_lf[day + 1] = lf
         frac[day] = (npl + nmi) / N
+        low[day] = day_low
         if not np.isfinite(lp):
-            return out_lp, out_lf, frac, 1, day
+            return out_lp, out_lf, frac, halts, low, max_step, 1, day
         if max_mis > 0 and abs(lp - lf) > max_mis:
-            return out_lp, out_lf, frac, 2, day
-    return out_lp, out_lf, frac, 0, days
+            return out_lp, out_lf, frac, halts, low, max_step, 2, day
+    return out_lp, out_lf, frac, halts, low, max_step, 0, days
 
 
 USE_JIT = numba is not None and os.environ.get("MODEL_NO_JIT") != "1"
@@ -166,25 +196,59 @@ else:
     _run = _run_impl
 
 
-def simulate(days, herding=True, p=P, seed=None, paths=False,
-             max_mispricing=MAX_MISPRICING):
-    """Simulate the market for `days` trading days.
+def check_breakers(breakers):
+    """Circuit-breaker rules: dict(levels=(l1, l2, l3), halt_minutes=m), where the
+    levels are price falls below the previous close (e.g. 0.07 = 7%), increasing,
+    and l1, l2 pause trading for m minutes of a 390-minute day; l3 closes the day."""
+    if breakers is None:
+        return
+    if set(breakers) != {"levels", "halt_minutes"}:
+        raise ValueError(f"breakers needs exactly 'levels' and 'halt_minutes', got {sorted(breakers)}")
+    lv = tuple(breakers["levels"])
+    if len(lv) != 3 or not all(0 < x < 1 for x in lv) or not lv[0] < lv[1] < lv[2]:
+        raise ValueError(f"breakers levels must be 3 increasing falls between 0 and 1, got {lv}")
+    if not breakers["halt_minutes"] > 0:
+        raise ValueError(f"breakers halt_minutes must be > 0, got {breakers['halt_minutes']}")
 
-    Returns daily log returns and the chartist fraction at each day's close;
-    with paths=True also the daily log price and log fundamental value.
-    Raises ModelRegimeError if |log price - log value| ever exceeds
-    max_mispricing (pass None to explore unrealistic settings anyway).
-    """
+
+def check_shocks(shocks, days):
+    """Policy shocks: {day: fractional change of the fundamental value}, e.g.
+    {200: -0.05} = on day 200 a surprise cuts the value by 5%."""
+    for day, x in (shocks or {}).items():
+        if isinstance(day, bool) or not isinstance(day, (int, np.integer)) or not 0 <= day < days:
+            raise ValueError(f"shock day must be a whole number from 0 to {days - 1}, got {day!r}")
+        if isinstance(x, bool) or not isinstance(x, (int, float, np.number)) or not np.isfinite(x) \
+                or x <= -1:
+            raise ValueError(f"shock on day {day} must be a number > -1 (a fraction), got {x!r}")
+
+
+def simulate_full(days, herding=True, p=P, seed=None, max_mispricing=MAX_MISPRICING,
+                  breakers=None, shocks=None):
+    """Simulate and return everything as a dict:
+    r (daily log returns), frac (chartist share at each close), lp, lf (log price
+    and log value, days + 1 values), halts (0 none, 1-2 pause levels, 3 closed),
+    low (each day's lowest log price vs the previous close), max_step (largest
+    one-step log price move). See simulate() for the guardrails."""
     check_inputs(days, herding, p)
+    check_breakers(breakers)
+    check_shocks(shocks, days)
+    shock = np.zeros(int(days))
+    for day, x in (shocks or {}).items():
+        shock[day] += np.log1p(x)
     N, steps = int(p["N"]), int(round(1 / p["dt"]))
     m = int(p["min_chartists"])
     nf, npl, nmi = initial_counts(N, herding, m)
-    lp, lf, frac, status, day = _run(
+    if breakers is None:
+        cb, halt_steps = (0.0, 0.0, 0.0), 0
+    else:
+        cb = tuple(float(np.log(1 - x)) for x in breakers["levels"])
+        halt_steps = max(1, int(round(breakers["halt_minutes"] / 390 * steps)))
+    lp, lf, frac, halts, low, max_step, status, day = _run(
         np.random.default_rng(seed), int(days), steps, bool(herding), N, nf, npl, nmi,
         m // 2 if herding else 0, m, float(np.log(p["pf0"])),
         *(float(p[k]) for k in ("v1", "v2", "beta", "tc", "gamma", "a1", "a2", "a3",
                                 "R", "s", "sigma_news", "tau")),
-        -1.0 if max_mispricing is None else float(max_mispricing))
+        -1.0 if max_mispricing is None else float(max_mispricing), *cb, halt_steps, shock)
     if status == 1:
         raise FloatingPointError("simulation diverged; try a smaller dt")
     if status == 2:
@@ -194,5 +258,20 @@ def simulate(days, herding=True, p=P, seed=None, paths=False,
             f"with {frac[day]:.0%} chartists. These settings are outside the "
             f"model's realistic range (known causes: N < {N_STABLE}, s < 0.5, v2 < 1). "
             f"Pass max_mispricing=None to run anyway.")
-    r = np.diff(lp)
-    return (r, frac, lp, lf) if paths else (r, frac)
+    return dict(r=np.diff(lp), frac=frac, lp=lp, lf=lf, halts=halts, low=low,
+                max_step=float(max_step))
+
+
+def simulate(days, herding=True, p=P, seed=None, paths=False,
+             max_mispricing=MAX_MISPRICING, breakers=None, shocks=None):
+    """Simulate the market for `days` trading days.
+
+    Returns daily log returns and the chartist fraction at each day's close;
+    with paths=True also the daily log price and log fundamental value.
+    Raises ModelRegimeError if |log price - log value| ever exceeds
+    max_mispricing (pass None to explore unrealistic settings anyway).
+    breakers: optional circuit-breaker rules (see check_breakers).
+    shocks: optional policy surprises to the fundamental value (see check_shocks).
+    """
+    o = simulate_full(days, herding, p, seed, max_mispricing, breakers, shocks)
+    return (o["r"], o["frac"], o["lp"], o["lf"]) if paths else (o["r"], o["frac"])

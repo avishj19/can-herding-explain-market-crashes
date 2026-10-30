@@ -31,10 +31,10 @@ def test_main_table_has_every_fact_and_columns(tmp_path, capsys):
 def test_plotted_history_is_the_median_mismatch_one(tmp_path):
     # main must plot the typical history, not a cherry-picked best one
     _, herd, _ = main.main(out=tmp_path / "f.png", histories=5, days=3000)
-    runs, facts = main.ensemble(calibrate.load(), range(1, 6), days=3000)
+    runs, facts = main.ensemble(calibrate.load(), main.SEEDS[:5], days=3000)
     target = stats.stylized_facts(main.data.spx_returns().values)
     i = calibrate.representative(facts, target)
-    assert np.array_equal(herd, runs[i][0])
+    assert np.array_equal(herd, runs[i])
 
 
 def test_ensemble_table_flags_unusual_facts():
@@ -48,3 +48,10 @@ def test_run_model_drops_burn_in():
     r, f = main.run_model(seed=4, days=500)
     full, _ = model.simulate(500 + main.BURN, seed=4)
     assert np.array_equal(r, full[main.BURN:]) and len(f) == 500
+
+
+def test_main_histories_are_held_out_from_calibration():
+    # Bug fix: the "is the S&P typical?" table must use seeds the calibration
+    # never scored, or it overstates the fit
+    assert set(main.SEEDS).isdisjoint(calibrate.CALIBRATION_SEEDS)
+    assert len(main.SEEDS) >= main.HISTORIES

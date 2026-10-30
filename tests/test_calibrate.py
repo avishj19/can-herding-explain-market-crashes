@@ -151,3 +151,52 @@ def test_spx_is_a_typical_history_of_the_calibrated_model():
     pct = calibrate.percentiles(calibrate.spx_facts(), sims, calibrate.TARGETS)
     unusual = [k for k, v in pct.items() if not 5 <= v <= 95]
     assert len(unusual) <= 1, f"S&P looks unusual on {unusual}"
+
+
+# ------------------------------------------- out-of-sample: data never calibrated on
+# Spec: markets the calibration never saw should look like typical model histories.
+# With 10 measures and a 5-95% band, ~1 "unusual" measure is expected by chance.
+
+def _unusual(real_returns, first_seed, n=20):
+    sims = [calibrate.model_facts(calibrate.load(), [s], days=len(real_returns))
+            for s in range(first_seed, first_seed + n)]
+    pct = calibrate.percentiles(stats.stylized_facts(real_returns), sims, calibrate.TARGETS)
+    return [k for k, v in pct.items() if not 5 <= v <= 95]
+
+
+@pytest.mark.slow
+def test_nasdaq_100_is_a_typical_history():
+    from herding import market_data
+    assert len(_unusual(market_data.returns("ndx").values, 1000)) <= 2
+
+
+@pytest.mark.slow
+def test_sp500_since_1928_with_great_depression_is_a_typical_history():
+    from herding import market_data
+    assert len(_unusual(market_data.returns("spx_1928").values, 1000)) <= 2
+
+
+def test_calibration_seeds_cover_every_seed_the_search_uses():
+    import inspect
+    used = set()
+    for fn in (calibrate.search, calibrate.refine):
+        for name, par in inspect.signature(fn).parameters.items():
+            if "seeds" in name:
+                used |= set(par.default)
+    assert used <= set(calibrate.CALIBRATION_SEEDS)
+
+
+def test_model_facts_does_not_hide_typos():
+    # Bug fix: a misspelled setting must raise, not silently score "infinitely bad"
+    with pytest.raises(ValueError, match="sgma_news"):
+        calibrate.model_facts(dict(model.P, sgma_news=0.01), seeds=[0], days=100)
+
+
+@pytest.mark.slow
+def test_refine_never_returns_worse_than_its_start():
+    # A deliberately poor start (paper settings): refine may improve it, never worsen it
+    target = calibrate.spx_facts()
+    start = dict(model.P)
+    final = calibrate.refine.__defaults__[3]
+    p, l, _, _ = calibrate.refine(start, n=8, top=2, seed=9)
+    assert l <= calibrate.loss(calibrate.model_facts(start, final), target) + 1e-9
