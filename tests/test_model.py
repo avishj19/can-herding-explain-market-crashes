@@ -420,14 +420,15 @@ def test_numba_and_plain_python_agree_exactly(herding):
     # Same code, same random numbers: the fast and the portable path must match
     N, m = 500, 4
     nf, npl, nmi = model.initial_counts(N, herding, m)
+    # with circuit breakers on, so the halt logic is compared too
     args = (300, 50, herding, N, nf, npl, nmi, m // 2 if herding else 0, m, np.log(10.0),
-            3.0, 2.0, 50.0, 0.1, 0.1, 0.6, 2.0, 0.5, 0.0004, 0.75, 0.01, 0.2, 1.0)
+            3.0, 2.0, 50.0, 0.1, 0.1, 0.6, 2.0, 0.5, 0.0004, 0.75, 0.05, 0.2, -1.0,
+            np.log(0.93), np.log(0.87), np.log(0.80), 2, np.where(np.arange(300) == 150, -0.05, 0.0))
     fast = model._run(np.random.default_rng(9), *args)
-    plain = model._run_impl.__wrapped__(np.random.default_rng(9), *args) \
-        if hasattr(model._run_impl, "__wrapped__") else _plain_run(np.random.default_rng(9), *args)
-    for a, b in zip(fast[:3], plain[:3]):
+    plain = _plain_run(np.random.default_rng(9), *args)
+    for a, b in zip(fast[:5], plain[:5]):
         assert np.array_equal(a, b)
-    assert fast[3:] == plain[3:]
+    assert fast[5:] == plain[5:]
 
 
 def _plain_run(g, *args):
@@ -451,3 +452,126 @@ def test_runs_fast_enough_for_calibration():
     t = time.perf_counter()
     model.simulate(8200, seed=1)
     assert time.perf_counter() - t < 1.0
+
+
+# ------------------------------------------------------------ circuit breakers
+# Spec (US rules since 2013, simplified): intraday fall of 7% or 13% below the
+# previous close -> 15-minute pause (price frozen; traders and news continue);
+# 20% -> closed for the rest of the day. Each level fires at most once per day.
+# With breakers off, nothing changes (bit-identical).
+
+US_RULES = dict(levels=(0.07, 0.13, 0.20), halt_minutes=15)
+WILD = dict(model.P, sigma_news=0.05)          # forces big intraday falls (all 3 seeds hit -20%)
+
+
+def test_breakers_off_is_bit_identical():
+    a = model.simulate(800, seed=3)
+    b = model.simulate(800, seed=3, breakers=None)
+    out = model.simulate_full(800, seed=3)
+    assert all(np.array_equal(x, y) for x, y in zip(a, b))
+    assert np.array_equal(out["r"], a[0]) and np.all(out["halts"] == 0)
+
+
+def test_breakers_that_never_fire_change_nothing():
+    a = model.simulate_full(800, seed=4)
+    b = model.simulate_full(800, seed=4, breakers=dict(levels=(0.9, 0.95, 0.99), halt_minutes=15))
+    assert np.array_equal(a["r"], b["r"]) and np.all(b["halts"] == 0)
+
+
+@pytest.mark.parametrize("seed", SEEDS[:3])
+def test_no_day_falls_much_beyond_the_20pct_close(seed):
+    out = model.simulate_full(3000, p=WILD, seed=seed, breakers=US_RULES, max_mispricing=None)
+    assert out["halts"].max() == 3, "test needs a level-3 day to be meaningful"
+    # trading stops at the first step past -20%, so the close is at most one step lower
+    assert out["r"].min() > np.log(0.80) - out["max_step"]
+
+
+@pytest.mark.parametrize("seed", SEEDS[:3])
+def test_closing_below_a_level_means_it_fired(seed):
+    out = model.simulate_full(3000, p=WILD, seed=seed, breakers=US_RULES, max_mispricing=None)
+    r, h = out["r"], out["halts"]
+    assert np.all(h[r <= np.log(1 - 0.07)] >= 1)
+    assert np.all(h[r <= np.log(1 - 0.13)] >= 2)
+    assert set(np.unique(h)) <= {0, 1, 2, 3}
+
+
+def test_days_that_never_fell_7pct_never_halt():
+    # a day can fall, pause and recover, but a day whose LOW stayed above -7% cannot halt
+    out = model.simulate_full(3000, p=WILD, seed=1, breakers=US_RULES, max_mispricing=None)
+    assert np.all(out["halts"][out["low"] > np.log(1 - 0.07)] == 0)
+    assert np.all(out["low"] <= np.minimum(out["r"], 0) + 1e-12)   # low is never above close
+
+
+def test_halt_freezes_the_price():
+    # A full-day closure from the first step: price must not move after it fires
+    out = model.simulate_full(400, p=WILD, seed=2, breakers=dict(levels=(1e-9, 2e-9, 3e-9),
+                              halt_minutes=15), max_mispricing=None)
+    # every day's close sits within one step of the level-3 trigger or above it
+    assert np.all(out["r"] > -3e-9 - out["max_step"])
+
+
+@pytest.mark.parametrize("bad", [dict(levels=(0.13, 0.07, 0.20), halt_minutes=15),
+                                 dict(levels=(0.07, 0.13, 1.2), halt_minutes=15),
+                                 dict(levels=(0.0, 0.13, 0.2), halt_minutes=15),
+                                 dict(levels=(0.07, 0.13), halt_minutes=15),
+                                 dict(levels=(0.07, 0.13, 0.2), halt_minutes=0),
+                                 dict(levels=(0.07, 0.13, 0.2), halt_minutes=15, extra=1),
+                                 dict(levels=(0.07, 0.13, 0.2))])
+def test_rejects_bad_breaker_rules(bad):
+    with pytest.raises(ValueError, match="breakers"):
+        model.simulate(10, seed=0, breakers=bad)
+
+
+@pytest.mark.parametrize("seed", SEEDS[:3])
+def test_breakers_change_nothing_before_the_first_pause(seed):
+    # Paired runs share every random number, so until a breaker first fires the
+    # two histories must be identical; afterwards they may differ
+    off = model.simulate_full(3000, p=WILD, seed=seed, max_mispricing=None)
+    on = model.simulate_full(3000, p=WILD, seed=seed, breakers=US_RULES, max_mispricing=None)
+    first = int(np.argmax(on["halts"] > 0))
+    assert on["halts"][first] > 0
+    assert np.array_equal(off["r"][:first], on["r"][:first])
+    assert not np.array_equal(off["r"][first:], on["r"][first:])
+
+
+# ------------------------------------------------------------- policy shocks
+# Spec: shocks={day: change} moves the fundamental value by that fraction at the
+# start of that day (e.g. -0.05 = a policy surprise that cuts value 5%).
+# No shocks -> bit-identical. Shocks use no random numbers, so paired runs
+# differ only through the shock.
+
+def test_no_shocks_is_bit_identical():
+    a = model.simulate_full(500, seed=5)
+    b = model.simulate_full(500, seed=5, shocks={})
+    assert np.array_equal(a["r"], b["r"]) and np.array_equal(a["lf"], b["lf"])
+
+
+@pytest.mark.parametrize("seed", SEEDS[:3])
+def test_shock_moves_value_by_exact_amount(seed):
+    # Same seed -> same news; the value path must differ by exactly log(1 - 0.05)
+    # from the shock day on, and not at all before it
+    a = model.simulate_full(400, herding=False, seed=seed)
+    b = model.simulate_full(400, herding=False, seed=seed, shocks={200: -0.05})
+    d = b["lf"] - a["lf"]
+    assert np.allclose(d[:201], 0) and np.allclose(d[201:], np.log(0.95))
+
+
+def test_without_chartists_price_follows_the_shock_fully():
+    # Fundamentalists alone: the price ends up exactly as far down as the value
+    a = model.simulate_full(400, herding=False, seed=1)
+    b = model.simulate_full(400, herding=False, seed=1, shocks={200: -0.05})
+    gap = (b["lp"] - a["lp"])[230:]
+    assert np.allclose(gap, np.log(0.95), atol=1e-3)
+
+
+def test_several_shocks_add_up():
+    a = model.simulate_full(300, herding=False, seed=2)
+    b = model.simulate_full(300, herding=False, seed=2, shocks={50: -0.05, 100: 0.10})
+    assert np.allclose((b["lf"] - a["lf"])[101:], np.log(0.95) + np.log(1.10))
+
+
+@pytest.mark.parametrize("bad", [{-1: -0.05}, {500: -0.05}, {10: -1.0}, {10: -1.5},
+                                 {10: float("nan")}, {2.5: -0.05}, {10: "big"}])
+def test_rejects_bad_shocks(bad):
+    with pytest.raises(ValueError, match="shock"):
+        model.simulate(300, seed=0, shocks=bad)

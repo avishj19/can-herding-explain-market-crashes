@@ -1,4 +1,4 @@
-import sys, warnings; sys.path.insert(0, "/Users/avishjain/02-120 Project")
+import sys, warnings; from pathlib import Path; sys.path.insert(0, str(Path(__file__).resolve().parent.parent))   # project folder
 import types
 import numpy as np
 from herding import model, stats
@@ -6,7 +6,8 @@ main = types.SimpleNamespace(**{**vars(model), **vars(stats)})   # these probes 
 from multiprocessing import Pool
 def job(a):
     key, val, seed, herding = a
-    r, f, lp, lf = main.simulate(2200, herding, dict(main.P, **{key: val}), seed=seed, paths=True)
+    r, f, lp, lf = main.simulate(2200, herding, dict(main.P, **{key: val}), seed=seed, paths=True,
+                                 max_mispricing=None)   # research: explore unstable settings too
     r, f, mis = r[200:], f[200:], np.abs(lp - lf)[200:]
     x = r - r.mean()
     return key, val, seed, herding, dict(std=r.std(), mis=mis.mean(), frac=f.mean(),

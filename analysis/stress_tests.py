@@ -1,6 +1,6 @@
 """Stress tests for model.py across seeds and parameter combinations.
 
-Run:  python3 tests/experiments.py
+Run:  python3 analysis/stress_tests.py
 Saves figures/test_*.png and prints a results table.
 """
 import sys

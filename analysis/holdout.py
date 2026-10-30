@@ -1,4 +1,4 @@
-import sys; sys.path.insert(0, "/Users/avishjain/02-120 Project")
+import sys; from pathlib import Path; sys.path.insert(0, str(Path(__file__).resolve().parent.parent))   # project folder
 import numpy as np
 from herding import model, stats, calibrate
 from multiprocessing import Pool

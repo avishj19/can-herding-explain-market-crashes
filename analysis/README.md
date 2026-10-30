@@ -14,6 +14,8 @@ folder, e.g. `python3 analysis/typical.py`.
 | `fresh.py`, `lag2.py`, `lags.py` | Day-to-day and multi-day return correlations on seeds never used in tests |
 | `holdout.py`, `holdout2.py` | Calibrated vs paper settings on held-out seeds |
 | `typical.py` | Does the real S&P 500 look like a typical history of the model? |
+| `out_of_sample.py` | Do markets the calibration never saw (S&P since 1928, Nasdaq-100, 20 market-beta-matched stocks) look typical? |
+| `circuit_breakers.py` | Policy experiment: do US-style circuit breakers make crashes rarer, or just delay them? (paired seeds) |
 
 `history/` keeps earlier versions for comparison: the original single-file
 `main.py` and its tests, and the calibrations fitted to 8 targets

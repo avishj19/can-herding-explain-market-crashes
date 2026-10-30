@@ -5,33 +5,25 @@ Test: python3 -m pytest tests/ -q          (quick: add  -m "not slow")
 """
 import numpy as np
 
-from herding import calibrate, model, plots, stats
+from herding import calibrate, experiments, model, plots, stats
 from herding import market_data as data
+from herding.experiments import BURN, DAYS
 
 FIGURES = data.ROOT / "figures"
-DAYS, BURN = 19300, 300         # same length as the S&P 500 sample; drop start-up transient
 HISTORIES = 20                  # the model has randomness: judge it over many histories
+SEEDS = range(600, 600 + HISTORIES)   # held out: never used by the calibration
 
 
 def run_model(p=model.P, herding=True, seed=1, days=DAYS):
+    """One history: returns and chartist share, after the burn-in."""
     r, frac = model.simulate(days + BURN, herding=herding, p=p, seed=seed)
     return r[BURN:], frac[BURN:]
 
 
-def compare(series):
-    """Table of stylized facts, one column per named return series."""
-    facts = {name: stats.stylized_facts(r) for name, r in series.items()}
-    rows = list(next(iter(facts.values())))
-    lines = [f"{'':<12}" + "".join(f"{n:>16}" for n in facts)]
-    for k in rows:
-        lines.append(f"{k:<12}" + "".join(f"{facts[n][k]:>16.3f}" for n in facts))
-    return "\n".join(lines)
-
-
-def ensemble(p, seeds, days=DAYS):
-    """Returns and stylized facts of several simulated histories."""
-    runs = [run_model(p, seed=s, days=days) for s in seeds]
-    return runs, [stats.stylized_facts(r) for r, _ in runs]
+def ensemble(p, seeds, days=DAYS, pool=None):
+    """Returns (in parallel) and stylized facts of several simulated histories."""
+    runs = experiments.ensemble(p, seeds, days, pool=pool)
+    return runs, [stats.stylized_facts(r) for r in runs]
 
 
 def ensemble_table(target, cal, paper):
@@ -59,14 +51,15 @@ def main(p=None, out=FIGURES / "draft.png", histories=HISTORIES, days=DAYS):
     print(f"S&P 500: {len(real)} daily returns")
     print(f"Black Monday 1987: {np.expm1(bm):.1%} (log return {bm:.3f}) = "
           f"{abs(bm) / real.std():.1f} standard deviations")
-    seeds = range(1, histories + 1)
-    runs, cal = ensemble(p, seeds, days)
-    _, paper = ensemble(model.P, seeds, days)
+    seeds = SEEDS[:histories]
+    with experiments.Pool() as pool:
+        runs, cal = ensemble(p, seeds, days, pool)
+        _, paper = ensemble(model.P, seeds, days, pool)
     target = stats.stylized_facts(real)
     print(f"\n{histories} simulated histories of {days} days each:")
     print(ensemble_table(target, cal, paper))
     i = calibrate.representative(cal, target)
-    herd, frac = runs[i]
+    herd, frac = run_model(p, seed=seeds[i], days=days)    # rerun it to get its chartist share
     base, _ = run_model(p, herding=False, seed=0, days=days)
     print(f"no-chartist base case: kurtosis {stats.kurtosis(base):.3f} (bell curve = 0)")
     plots.comparison(real, herd, frac, base, out)

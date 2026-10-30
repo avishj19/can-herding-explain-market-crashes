@@ -1,4 +1,4 @@
-import sys, json; sys.path.insert(0, "/Users/avishjain/02-120 Project")
+import sys, json; from pathlib import Path; sys.path.insert(0, str(Path(__file__).resolve().parent.parent))   # project folder
 import types
 import numpy as np
 from herding import model, stats

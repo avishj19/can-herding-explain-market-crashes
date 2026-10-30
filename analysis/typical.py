@@ -1,9 +1,9 @@
-import sys, json; sys.path.insert(0, "/Users/avishjain/02-120 Project")
+import sys, json; from pathlib import Path; sys.path.insert(0, str(Path(__file__).resolve().parent.parent))   # project folder
 import numpy as np
 from herding import model, stats, calibrate
 from multiprocessing import Pool
 from pathlib import Path
-V1 = json.loads(Path("/Users/avishjain/02-120 Project/analysis/history/calibration_8_targets.json").read_text())["params"]
+V1 = json.loads((Path(__file__).resolve().parent / "history" / "calibration_8_targets.json").read_text())["params"]
 def job(a):
     which, seed = a
     p = {"v1": V1, "v2": calibrate.load()}[which]
