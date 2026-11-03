@@ -112,3 +112,20 @@ def test_strong_herding_is_u_shaped(N, eps, delta):
     pi = kirman.stationary(N, eps, delta)
     half = pi[: N // 2 + 1]
     assert kirman.herds(N, eps, delta) and np.all(np.diff(half) <= 1e-15)
+
+
+@pytest.mark.parametrize("N, eps, delta", [(20, 0.6, 0.0), (20, 0.9, 0.0), (100, 0.51, 0.0)])
+def test_rejects_eps_so_large_that_moves_exceed_probability_one(N, eps, delta):
+    # Bug fix: these settings used to run, but the simulation could not follow the
+    # rates (up + down > 1), so it disagreed with stationary() by 0.2-0.6
+    with pytest.raises(ValueError, match="too large"):
+        kirman.simulate(N, eps, delta, steps=10)
+
+
+def test_largest_allowed_eps_still_matches_exact_answer():
+    # Right at the limit (up + down = 1 in the middle state) the rules still hold
+    N, delta = 20, 0.0
+    eps = 1 - 2 * 10 * 10 / (N * (N - 1))
+    k = kirman.simulate(N, eps, delta, steps=2_000_000, seed=1)
+    hist = np.bincount(k, minlength=N + 1) / len(k)
+    assert 0.5 * np.abs(hist - kirman.stationary(N, eps, delta)).sum() < 0.01

@@ -66,7 +66,10 @@ def stock_tickers():
 
 
 def stock_returns(ticker):
-    """Daily log returns of one saved stock (split- and dividend-adjusted)."""
+    """Daily log returns of one saved stock (split-adjusted, not dividend-adjusted,
+    the same as the index files; see data/stocks/README.md)."""
+    if ticker not in stock_tickers():
+        raise ValueError(f"unknown stock {ticker!r}; saved stocks: {stock_tickers()}")
     return _log_returns(load_prices(STOCKS / f"{ticker}.csv")).rename(ticker)
 
 

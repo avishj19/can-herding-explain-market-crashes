@@ -24,7 +24,11 @@ except ImportError:                       # e.g. a web host without numba
 # model does not depend on the price level (pf0 only sets the starting price).
 P = dict(N=500, v1=3.0, v2=2.0, beta=50.0, tc=0.1, gamma=0.1,
          a1=0.6, a2=2.0, a3=0.5, R=0.0004, s=0.75, sigma_news=0.01,
-         pf0=10.0, dt=0.02, min_chartists=4, tau=0.2)
+         pf0=10.0, dt=0.01, min_chartists=4, tau=0.2)
+# dt = 0.01 (100 trading steps a day) is part of the model's definition: the
+# calibration was fitted at it. Results still shift a little at smaller dt (tail
+# exponent 2.96 at 0.01, 2.60 at 0.005), so do not change dt without refitting.
+# See test_calibrated_results_do_not_depend_on_time_step (a known limitation).
 
 U_MAX = 30.0           # cap on switching exponents (prevents overflow)
 N_STABLE = 250         # below this the price swings wildly (tested)
@@ -58,10 +62,17 @@ def check_settings(p):
             raise ValueError(f"setting {key} must be a whole number, got {v}")
 
 
+def _is_number(x):
+    return not isinstance(x, (bool, np.bool_)) and isinstance(x, (int, float, np.number))
+
+
 def check_inputs(days, herding, p):
     """Raise ValueError for inputs that would give silently wrong results."""
     check_settings(p)
-    if days < 0 or int(days) != days:
+    # Bug fix: herding="no" used to count as True (any non-empty string does)
+    if not isinstance(herding, (bool, np.bool_)):
+        raise ValueError(f"herding must be True or False, got {herding!r}")
+    if not _is_number(days) or not np.isfinite(days) or days < 0 or int(days) != days:
         raise ValueError(f"days must be a whole number >= 0, got {days}")
     dt = p["dt"]
     if round(1 / dt) < 1 or abs(round(1 / dt) * dt - 1) > 1e-9:
@@ -95,8 +106,12 @@ def initial_counts(N, herding, min_chartists):
 # ------------------------------------------------------------------ the model
 
 def _prob(rate):
-    """A switching rate per step as a probability in [0, 1]."""
-    return min(1.0, max(0.0, rate))
+    """Chance that a trader with switching rate `rate` (per step, = rate per day * dt)
+    switches within the step: 1 - exp(-rate), exact for a constant rate.
+    Bug fix: this used to be min(1, rate). In crashes the rate gets so large that the
+    cap at 1 was hit, so how many traders could switch depended on the step size dt,
+    and the results did too (tail exponent 2.1 at dt=0.01 vs 4.1 at dt=0.04)."""
+    return 1.0 - np.exp(-max(0.0, rate))
 
 
 def _clip(u):
@@ -202,18 +217,21 @@ def check_breakers(breakers):
     and l1, l2 pause trading for m minutes of a 390-minute day; l3 closes the day."""
     if breakers is None:
         return
-    if set(breakers) != {"levels", "halt_minutes"}:
-        raise ValueError(f"breakers needs exactly 'levels' and 'halt_minutes', got {sorted(breakers)}")
+    if not isinstance(breakers, dict) or set(breakers) != {"levels", "halt_minutes"}:
+        raise ValueError(f"breakers needs exactly 'levels' and 'halt_minutes', got {breakers!r}")
     lv = tuple(breakers["levels"])
-    if len(lv) != 3 or not all(0 < x < 1 for x in lv) or not lv[0] < lv[1] < lv[2]:
+    if len(lv) != 3 or not all(_is_number(x) and 0 < x < 1 for x in lv) or not lv[0] < lv[1] < lv[2]:
         raise ValueError(f"breakers levels must be 3 increasing falls between 0 and 1, got {lv}")
-    if not breakers["halt_minutes"] > 0:
-        raise ValueError(f"breakers halt_minutes must be > 0, got {breakers['halt_minutes']}")
+    m = breakers["halt_minutes"]
+    if not _is_number(m) or not np.isfinite(m) or not m > 0:
+        raise ValueError(f"breakers halt_minutes must be a finite number > 0, got {m!r}")
 
 
 def check_shocks(shocks, days):
     """Policy shocks: {day: fractional change of the fundamental value}, e.g.
     {200: -0.05} = on day 200 a surprise cuts the value by 5%."""
+    if shocks is not None and not isinstance(shocks, dict):
+        raise ValueError(f"shocks must be a dict {{day: fraction}}, got {shocks!r}")
     for day, x in (shocks or {}).items():
         if isinstance(day, bool) or not isinstance(day, (int, np.integer)) or not 0 <= day < days:
             raise ValueError(f"shock day must be a whole number from 0 to {days - 1}, got {day!r}")
@@ -232,6 +250,11 @@ def simulate_full(days, herding=True, p=P, seed=None, max_mispricing=MAX_MISPRIC
     check_inputs(days, herding, p)
     check_breakers(breakers)
     check_shocks(shocks, days)
+    # Bug fix: 0, negative or NaN used to switch the guard off silently
+    if max_mispricing is not None and not (_is_number(max_mispricing)
+                                           and np.isfinite(max_mispricing) and max_mispricing > 0):
+        raise ValueError(f"max_mispricing must be a number > 0, or None to switch the guard "
+                         f"off, got {max_mispricing!r}")
     shock = np.zeros(int(days))
     for day, x in (shocks or {}).items():
         shock[day] += np.log1p(x)

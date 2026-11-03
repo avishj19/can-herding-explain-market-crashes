@@ -200,3 +200,17 @@ def test_refine_never_returns_worse_than_its_start():
     final = calibrate.refine.__defaults__[3]
     p, l, _, _ = calibrate.refine(start, n=8, top=2, seed=9)
     assert l <= calibrate.loss(calibrate.model_facts(start, final), target) + 1e-9
+
+
+def test_percentiles_and_representative_reject_empty_ensembles():
+    # percentiles([]) used to return NaN silently, which read as "typical"
+    with pytest.raises(ValueError, match="at least one"):
+        calibrate.percentiles({"x": 1.0}, [], ["x"])
+    with pytest.raises(ValueError, match="at least one"):
+        calibrate.representative([], {"x": 1.0})
+
+
+def test_calibration_uses_the_models_time_step():
+    # dt is part of the model's definition (results shift at other dt), so the
+    # saved calibration must have been fitted at the default dt
+    assert calibrate.load()["dt"] == model.P["dt"] == 0.01

@@ -160,3 +160,9 @@ def test_stocks_are_price_only_like_the_indexes():
     assert s.loc["2000-01-03"] == pytest.approx(58.28, abs=0.01)
     readme = (data.STOCKS / "README.md").read_text()
     assert "not dividend-adjusted" in readme
+
+
+def test_unknown_stock_gives_clear_error():
+    # used to suggest downloading the S&P 500 into ZZZZ.csv
+    with pytest.raises(ValueError, match="unknown stock"):
+        data.stock_returns("ZZZZ")
