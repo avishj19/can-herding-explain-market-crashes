@@ -25,6 +25,12 @@ def check(N, eps, delta):
         raise ValueError(f"eps must be in (0, 1], got {eps}")
     if not 0 <= delta <= 1:
         raise ValueError(f"delta must be in [0, 1], got {delta}")
+    # Bug fix: a step moves the count up OR down, so the two chances must add to
+    # at most 1. Their sum, eps + (1-delta)*2k(N-k)/(N(N-1)), peaks at k = N//2.
+    k = N // 2
+    if eps + (1 - delta) * 2 * k * (N - k) / (N * (N - 1)) > 1 + 1e-12:
+        raise ValueError(f"eps={eps} is too large for N={N}, delta={delta}: the chance "
+                         f"of a move up plus a move down would exceed 1")
 
 
 def up_prob(k, N, eps, delta):

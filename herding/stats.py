@@ -55,6 +55,9 @@ def acf(r, lags):
     """Autocorrelation of r at each lag (Pearson correlation of r_t and r_t+lag)."""
     z = _standardize(r)
     lags = np.atleast_1d(lags)
+    if lags.size == 0 or not np.all(lags == np.round(lags)):
+        raise ValueError(f"lags must be whole numbers, got {lags}")
+    lags = lags.astype(int)
     if np.any(lags < 1) or np.any(lags >= len(z) - 1):
         raise ValueError(f"lags must be between 1 and {len(z) - 2}")
     return np.array([np.corrcoef(z[:-k], z[k:])[0, 1] for k in lags])

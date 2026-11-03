@@ -1,7 +1,7 @@
 """Stress tests for model.py across seeds and parameter combinations.
 
 Run:  python3 analysis/stress_tests.py
-Saves figures/test_*.png and prints a results table.
+Saves figures/diagnostics/test_*.png and prints a results table.
 """
 import sys
 from itertools import product
@@ -20,7 +20,7 @@ from herding import model  # noqa: E402
 from herding import stats  # noqa: E402
 from herding import calibrate  # noqa: E402
 
-FIG = ROOT / "figures"
+FIG = ROOT / "figures" / "diagnostics"
 
 
 def acf(x, lags):
@@ -86,7 +86,7 @@ def main_experiments():
           f"ac1={acf(real, [1])[0]:.3f} ac1_abs={acf(np.abs(real), [1])[0]:.3f}")
 
     # ---- Figures
-    FIG.mkdir(exist_ok=True)
+    FIG.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots(1, 2, figsize=(10, 4))
     for i, (col, ref, lab) in enumerate([("kurt", stats.kurtosis(real), "S&P 500"),
@@ -151,7 +151,7 @@ def main_experiments():
     ax.set_xscale("log"); ax.set_xlabel("fraction of data used as 'tail'"); ax.set_ylabel("Hill α")
     ax.set_title("How much does α depend on the tail cut?"); ax.legend(fontsize=8)
     fig.tight_layout(); fig.savefig(FIG / "test_hill_tail_choice.png", dpi=110)
-    print("\nSaved figures/test_*.png")
+    print("\nSaved figures/diagnostics/test_*.png")
 
 
 if __name__ == "__main__":

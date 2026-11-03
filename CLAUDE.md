@@ -39,7 +39,7 @@ The final product is a web app where users can tune herding strength and watch c
   - `plots.py`: figures (reusable by the future web app)
   - `experiments.py`: shared helpers for running many histories (ensembles, worst falls, breaker scaling)
 - `tests/`: one test file per module; `python3 -m pytest tests/ -q` (quick: add `-m "not slow"`);
-  `analysis/stress_tests.py` makes `figures/test_*.png`; `make_figures.py` makes `figures/fig*.png` + `RESULTS.md`
+  `analysis/stress_tests.py` makes `figures/diagnostics/test_*.png`; `make_figures.py` makes `figures/fig1-7*.png` (explained in `figures/RESULTS.md`)
 - `analysis/`: exploration scripts behind each finding, plus `history/` (earlier versions)
 - `data/`: S&P 500 daily closes 1950-today and 1928-today (Yahoo ^GSPC), Nasdaq-100 (^NDX, 1985-),
   `stocks/` (20 large stocks with market beta 0.9-1.1, 2000-), VIX, NBER recessions (FRED USREC)

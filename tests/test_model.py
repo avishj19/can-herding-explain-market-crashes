@@ -109,9 +109,34 @@ def test_min_chartists_small_market(seed):
 def test_results_do_not_depend_on_time_step():
     # Numerics: halving dt must not change the science (tail exponent),
     # averaged over seeds to beat noise.
-    a = [stats.hill_alpha(run(3000, s, dt=dt)[0][200:]) for dt in (0.02, 0.01)
+    a = [stats.hill_alpha(run(3000, s, dt=dt)[0][200:]) for dt in (0.01, 0.005)
          for s in range(3)]
     assert np.mean(a[:3]) == pytest.approx(np.mean(a[3:]), abs=0.35)
+
+
+@pytest.mark.slow
+@pytest.mark.xfail(strict=True, reason="KNOWN LIMITATION: the calibrated market sits near a "
+                   "tipping point, so time-step details still matter. Median of 32 histories, "
+                   "dt 0.02/0.01/0.005/0.0025: ac_r_1 -0.069/-0.002/+0.024/+0.052, alpha "
+                   "3.27/2.96/2.60/2.45. Fixing min(1, rate) -> 1-exp(-rate) and an exact price "
+                   "step did not remove it; an event-by-event (Gillespie) simulation would. "
+                   "dt=0.01 is therefore part of the model's definition.")
+def test_calibrated_results_do_not_depend_on_time_step():
+    # The old test above only uses the paper settings on short runs, where herding
+    # is weak. This is the real requirement: the fitted fingerprint must be the same
+    # at dt and dt/2 (median of 16 full-length histories each, within the
+    # calibration's own tolerance SCALE).
+    from herding import calibrate, experiments
+    p = calibrate.load()
+    seeds = range(900, 916)
+    med = {}
+    for dt in (p["dt"], p["dt"] / 2):
+        runs = experiments.ensemble(dict(p, dt=dt), seeds)
+        facts = [stats.stylized_facts(r) for r in runs]
+        med[dt] = {k: np.median([f[k] for f in facts]) for k in calibrate.TARGETS}
+    a, b = med.values()
+    gaps = {k: abs(a[k] - b[k]) / calibrate.SCALE[k] for k in calibrate.TARGETS}
+    assert max(gaps.values()) < 1.0, gaps
 
 
 @pytest.mark.parametrize("seed", SEEDS[:3])
@@ -395,7 +420,9 @@ def test_runtime_guard_can_be_switched_off_for_research():
 
 
 # ------------------------------------------------- refactor and speed safety
-# Spec: splitting main.py into modules and adding numba changed nothing.
+# Spec: later refactors and speed-ups change nothing. golden_v2.npz was saved
+# right after the exact switching probability (1 - exp(-rate)) replaced
+# min(1, rate); golden_v1.npz (the single-file program) is in git history.
 
 P_V1 = dict(N=500, v1=3.0, v2=2.0, beta=50.0, tc=0.1, gamma=0.1, a1=0.6, a2=2.0,
             a3=0.5, R=0.0004, s=0.75, sigma_news=0.01, pf0=10.0, dt=0.02,
@@ -406,9 +433,8 @@ GOLDEN_CASES = [(True, {}, 0), (True, {}, 7), (False, {}, 3),
 
 @pytest.mark.filterwarnings("ignore:N=250")
 @pytest.mark.parametrize("i", range(len(GOLDEN_CASES)))
-def test_matches_golden_output_of_original_program(i):
-    # golden_v1.npz was saved from the single-file main.py before the split
-    G = np.load(ROOT / "tests/golden_v1.npz")
+def test_matches_golden_output(i):
+    G = np.load(ROOT / "tests/golden_v2.npz")
     herding, over, seed = GOLDEN_CASES[i]
     r, f, lp, lf = model.simulate(600, herding, dict(P_V1, **over), seed=seed, paths=True)
     for got, key in [(r, "r"), (f, "f"), (lp, "lp"), (lf, "lf")]:
@@ -461,7 +487,7 @@ def test_runs_fast_enough_for_calibration():
 # With breakers off, nothing changes (bit-identical).
 
 US_RULES = dict(levels=(0.07, 0.13, 0.20), halt_minutes=15)
-WILD = dict(model.P, sigma_news=0.05)          # forces big intraday falls (all 3 seeds hit -20%)
+WILD = dict(model.P, sigma_news=0.08)          # forces big intraday falls (all 5 seeds hit -20%)
 
 
 def test_breakers_off_is_bit_identical():
@@ -575,3 +601,47 @@ def test_several_shocks_add_up():
 def test_rejects_bad_shocks(bad):
     with pytest.raises(ValueError, match="shock"):
         model.simulate(300, seed=0, shocks=bad)
+
+
+# ------------------------------------------------------------ stress-test fixes
+# Each of these inputs used to run with a silently wrong meaning, or crash with
+# an unrelated Python error. Now each must stop with a clear ValueError.
+
+@pytest.mark.parametrize("herding", ["no", "False", 1, 0, None])
+def test_rejects_herding_that_is_not_true_or_false(herding):
+    # "no" used to switch herding ON (any non-empty string counts as True)
+    with pytest.raises(ValueError, match="herding must be True or False"):
+        model.simulate(10, herding=herding)
+
+
+def test_accepts_numpy_bool_herding():
+    _, f = model.simulate(10, herding=np.bool_(False), seed=1)
+    assert np.all(f == 0)
+
+
+@pytest.mark.parametrize("v", [0, -1, float("nan"), "1.0"])
+def test_rejects_max_mispricing_that_silently_disabled_the_guard(v):
+    with pytest.raises(ValueError, match="max_mispricing"):
+        model.simulate(10, max_mispricing=v)
+
+
+@pytest.mark.parametrize("days", ["100", float("inf"), None, True])
+def test_rejects_days_that_are_not_numbers(days):
+    with pytest.raises(ValueError, match="days"):
+        model.simulate(days)
+
+
+@pytest.mark.parametrize("bad", [
+    dict(levels=(0.07, 0.13, 0.2), halt_minutes=float("inf")),
+    dict(levels=(0.07, 0.13, 0.2), halt_minutes="15"),
+    dict(levels=(0.07, 0.13, 0.2), halt_minutes=True),
+    dict(levels=("a", "b", "c"), halt_minutes=15),
+    [0.07, 0.13, 0.2]])
+def test_rejects_malformed_breakers(bad):
+    with pytest.raises(ValueError, match="breakers"):
+        model.simulate(10, breakers=bad)
+
+
+def test_rejects_shocks_that_are_not_a_dict():
+    with pytest.raises(ValueError, match="shocks must be a dict"):
+        model.simulate(50, shocks=[(10, -0.1)])

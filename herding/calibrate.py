@@ -107,11 +107,15 @@ def refine(center, n=200, spread=0.3, seeds=(3, 4, 5), final_seeds=tuple(range(2
 
 def percentiles(target, sims, keys):
     """Where the real value of each fact falls among simulated histories (0-100)."""
+    if len(sims) == 0:                         # bug fix: used to return NaN silently
+        raise ValueError("need at least one simulated history")
     return {k: 100.0 * float(np.mean([s[k] < target[k] for s in sims])) for k in keys}
 
 
 def representative(sims, target):
     """Index of the history with the median mismatch: typical, not cherry-picked."""
+    if len(sims) == 0:
+        raise ValueError("need at least one simulated history")
     losses = [loss(s, target) for s in sims]
     return int(np.argsort(losses)[len(losses) // 2])
 

@@ -266,3 +266,14 @@ def test_fingerprint_has_all_calibration_targets():
     from herding import calibrate
     f = stats.stylized_facts(np.random.default_rng(0).standard_normal(5000))
     assert set(calibrate.TARGETS) <= set(f) and set(calibrate.SCALE) == set(calibrate.TARGETS)
+
+
+@pytest.mark.parametrize("lag", [2.5, [1, 1.5], []])
+def test_acf_rejects_lags_that_are_not_whole_numbers(lag):
+    with pytest.raises(ValueError, match="whole numbers"):
+        stats.acf(np.random.default_rng(0).standard_normal(100), lag)
+
+
+def test_acf_accepts_whole_float_lags():
+    r = np.random.default_rng(0).standard_normal(500)
+    assert np.array_equal(stats.acf(r, 2.0), stats.acf(r, 2))
