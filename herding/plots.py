@@ -1,11 +1,18 @@
-"""Figures comparing the model with the real market.
+"""Drawing helpers shared by main.py, make_figures.py and (later) the web app.
 
-Each function draws one figure, saves it, and returns the saved path, so the
-same figures can later be reused by the web app.
+One palette everywhere, checked for colour-blind safety (the dataviz validator:
+blue, orange and aqua pass as a set of three in light mode):
+    real market data         INK (near-black)
+    S&P-calibrated model     BLUE
+    paper-matched model      ORANGE
+    no chartists / news      AQUA
+Aqua is low-contrast on white, so it is always labelled (legend or text), never
+identified by colour alone.
 """
 from pathlib import Path
 
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,49 +20,95 @@ from scipy.stats import norm
 
 from . import stats
 
-# One palette for every figure (validated colorblind-safe): real data = ink,
-# calibrated model = blue, default settings = orange, no chartists = aqua.
 INK, SECOND, MUTED, GRID = "#0b0b0b", "#52514e", "#898781", "#e1e0d9"
-BLUE, ORANGE, AQUA, RED = "#2a78d6", "#eb6834", "#1baf7a", "#e34948"
-BLUE_LIGHT = "#b7d3f6"
+BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"
+BLUE_LIGHT, ORANGE_LIGHT = "#b7d3f6", "#f7c4ae"
+REAL, SPX_MODEL, PAPER_MODEL, NEWS = INK, BLUE, ORANGE, AQUA
+
+STYLE = {
+    "figure.facecolor": "white", "axes.facecolor": "white",
+    "axes.edgecolor": MUTED, "axes.labelcolor": SECOND, "axes.titlecolor": INK,
+    "axes.titlesize": 10.5, "axes.labelsize": 9.5, "axes.titleweight": "bold",
+    "axes.spines.top": False, "axes.spines.right": False,
+    "axes.grid": True, "grid.color": GRID, "grid.linewidth": 0.6,
+    "xtick.color": SECOND, "ytick.color": SECOND, "xtick.labelsize": 8.5, "ytick.labelsize": 8.5,
+    "legend.fontsize": 8.5, "legend.frameon": False, "lines.linewidth": 1.6,
+    "font.family": "DejaVu Sans",
+}
 
 
-def comparison(real, herd, frac, base, path):
-    """2x2 figure: S&P vs model returns, return tails (log-log), chartist share."""
+def style():
+    plt.rcParams.update(STYLE)
+
+
+def save(fig, path, title, caption):
+    """Title on top, a plain-language caption underneath, save, close."""
     path = Path(path)
-    for name, r in [("real", real), ("herd", herd), ("base", base)]:
-        try:
-            stats._standardize(r)                  # reject empty/constant/NaN before drawing
-        except ValueError as e:
-            raise ValueError(f"{name} returns: {e}") from None
-    fig, ax = plt.subplots(2, 2, figsize=(12, 8))
+    fig.suptitle(title, x=0.01, ha="left", fontsize=12.5, fontweight="bold", color=INK)
+    fig.text(0.01, 0.005, caption, ha="left", va="bottom", fontsize=8.6, color=SECOND, wrap=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        _draw_comparison(ax, real, herd, frac, base)
-        fig.tight_layout()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(path, dpi=120)
+        fig.savefig(path, dpi=130, bbox_inches="tight")
     finally:
-        plt.close(fig)                             # never leave figures open, even on error
+        plt.close(fig)
     return path
 
 
-def _draw_comparison(ax, real, herd, frac, base):
-    n = min(len(real), len(herd))
-    for a, r, c, title in [(ax[0, 0], real[-n:], INK, f"S&P 500 (last {n} days)"),
-                           (ax[0, 1], herd[-n:], BLUE, f"Model, typical calibrated history (last {n} days)")]:
-        a.plot(r / r.std(), lw=0.4, color=c)
-        a.set_title(title); a.set_ylabel("return / std"); a.set_ylim(-25, 25)
+def ccdf(ax, r, label, color, **kw):
+    """Log-log tail plot: share of days whose |standardized return| exceeds x."""
+    z, cc = stats.ccdf(r)
+    keep = z > 0
+    ax.loglog(z[keep], cc[keep], color=color, label=label, **kw)
+
+
+def gaussian_ccdf(ax, label="bell curve N(0,1)"):
+    g = np.geomspace(0.05, 6, 200)
+    ax.loglog(g, 2 * norm.sf(g), "--", color=MUTED, lw=1.2, label=label)
+
+
+def dfa(ax, x, scales, label, color, marker="o", shift=1.0):
+    """DFA fluctuation F(n) vs window n (log-log), with the fitted slope H in the label."""
+    s, F = stats.dfa(x, scales)
+    H = np.polyfit(np.log(s), np.log(F), 1)[0]
+    ax.loglog(s, F * shift, marker, color=color, ms=4.5, lw=0,
+              label=f"{label}: H = {H:.2f}")
+    fit = np.exp(np.polyval(np.polyfit(np.log(s), np.log(F), 1), np.log(s)))
+    ax.loglog(s, fit * shift, "-", color=color, lw=1.0)
+    return H
+
+
+def standardized(r):
+    r = np.asarray(r, dtype=float)
+    return (r - r.mean()) / r.std()
+
+
+def comparison(real, model_r, z, no_chartists, path):
+    """main.py's quick 2x2 overview: S&P vs model returns, tails, chartist share."""
+    style()
+    fig, ax = plt.subplots(2, 2, figsize=(12, 7.5))
+    n = min(len(real), len(model_r))
+    for a, r, c, name in [(ax[0, 0], real[-n:], REAL, "S&P 500"),
+                          (ax[0, 1], model_r[-n:], SPX_MODEL, "model (S&P-calibrated)")]:
+        a.plot(standardized(r), lw=0.35, color=c)
+        a.set_ylim(-25, 25)
+        a.set_title(f"{name}: daily returns ({n:,} days)")
+        a.set_ylabel("return / standard deviation")
     a = ax[1, 0]
-    for r, lab, c in [(real, "S&P 500", INK), (herd, "model (calibrated)", BLUE),
-                      (base, "no chartists", AQUA)]:
-        z, cc = stats.ccdf(r)
-        a.loglog(z, cc, lw=1.5, label=lab, color=c)
-    g = np.linspace(1, 8, 100)
-    a.loglog(g, 2 * norm.sf(g), "--", color=MUTED, label="Gaussian")
-    a.loglog(g, 0.5 * g ** -3.0, ":", color=MUTED, label="slope -3 (inverse cubic)")
-    a.set_ylim(1e-5, 1); a.set_xlim(0.5, 30)
-    a.set_xlabel("|return| / std"); a.set_ylabel("P(|r| > x)")
-    a.set_title("Tail of the return distribution"); a.legend(fontsize=8)
-    ax[1, 1].fill_between(np.arange(len(frac)), 0, frac, color=BLUE, lw=0)
-    ax[1, 1].set_ylim(0, 1)
-    ax[1, 1].set_title("Fraction of chartists (herding model)"); ax[1, 1].set_xlabel("day")
+    ccdf(a, real, "S&P 500", REAL)
+    ccdf(a, model_r, "model", SPX_MODEL)
+    ccdf(a, no_chartists, "model, no chartists", NEWS)
+    gaussian_ccdf(a)
+    a.set_xlim(0.3, 30)
+    a.set_ylim(1e-5, 1.2)
+    a.set_xlabel("|return| / standard deviation")
+    a.set_ylabel("share of days with a bigger move")
+    a.set_title("Tails: fat for the S&P and the model, thin without chartists")
+    a.legend(loc="lower left")
+    a = ax[1, 1]
+    a.fill_between(np.arange(len(z)), 0, z, color=SPX_MODEL, lw=0)
+    a.set_ylim(0, 1)
+    a.set_title("Share of traders who are chartists (model)")
+    a.set_xlabel("day")
+    fig.tight_layout(rect=(0, 0.04, 1, 0.95))
+    return save(fig, path, "S&P 500 vs the herding model",
+                "Model settings fitted to the S&P 500 (settings/spx.json); one held-out history shown.")

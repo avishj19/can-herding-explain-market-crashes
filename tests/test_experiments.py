@@ -1,52 +1,53 @@
-"""Tests for herding/experiments.py (shared helpers for running many histories)."""
+"""Tests for herding/experiments.py."""
+from multiprocessing import Pool
+
 import numpy as np
 import pytest
 
 from herding import experiments, model
 
 
-def test_history_is_simulate_minus_burn_in():
-    full, _ = model.simulate(500 + 100, seed=7)
-    assert np.array_equal(experiments.history(seed=7, days=500, burn=100), full[100:])
+def test_histories_drop_the_burn_in_and_match_a_direct_run():
+    p = dict(model.SET_I)
+    with Pool(2) as pool:
+        out = experiments.histories(p, [2, 3], 200, keep=("r", "z"), pool=pool)
+    direct = model.simulate(p, 200 + experiments.BURN, seed=2)
+    assert np.array_equal(out[0]["r"], direct["r"][experiments.BURN:])
+    assert np.array_equal(out[0]["z"], direct["z"][experiments.BURN:])
+    assert len(out[1]["r"]) == 200
 
 
-def test_history_passes_options_through():
-    a = experiments.history(seed=3, days=300, breakers=dict(levels=(0.9, 0.95, 0.99), halt_minutes=15))
-    assert np.array_equal(a, experiments.history(seed=3, days=300))   # breakers never fire
+def test_a_runaway_history_is_reported_not_lost():
+    p = dict(model.SET_I)            # seed 1 runs away on day 28,511
+    out = experiments.histories(p, [1, 2], 29000 - experiments.BURN)
+    assert out[0] is None and out[1] is not None
+    with pytest.raises(model.RunawayError, match=r"\[1\]"):
+        experiments.returns(p, [1, 2], 29000 - experiments.BURN)
 
 
-def test_ensemble_keeps_seed_order_and_matches_single_runs():
-    seeds = [11, 5, 8]
-    runs = experiments.ensemble(model.P, seeds, days=400)
-    for s, r in zip(seeds, runs):
-        assert np.array_equal(r, experiments.history(model.P, s, 400))
-
-
-def test_ensemble_with_shared_pool_gives_same_result():
-    with experiments.Pool(2) as pool:
-        a = experiments.ensemble(model.P, [1, 2], days=300, pool=pool)
-    b = experiments.ensemble(model.P, [1, 2], days=300)
-    assert all(np.array_equal(x, y) for x, y in zip(a, b))
-
-
-def test_ensemble_no_chartists():
-    r = experiments.ensemble(model.P, [4], days=300, herding=False)[0]
-    assert np.array_equal(r, experiments.history(model.P, 4, 300, herding=False))
+def test_percentile_by_hand():
+    sims = [1, 2, 3, 4]
+    assert experiments.percentile(0, sims) == 0
+    assert experiments.percentile(5, sims) == 100
+    assert experiments.percentile(2.5, sims) == 50
+    assert experiments.percentile(2, sims) == 37.5      # 1 below, 1 tie -> (1 + 0.5) / 4
+    with pytest.raises(ValueError):
+        experiments.percentile(1, [])
 
 
 def test_worst_fall_by_hand():
-    r = np.array([0.1, -0.2, -0.3, 0.4, -0.1])
-    # 1 day: -0.3; 2 days: -0.2-0.3 = -0.5; 3 days: -0.2-0.3+0.4 = -0.1 vs 0.1-0.2-0.3 = -0.4
-    assert experiments.worst_fall(r, 1) == pytest.approx(0.3)
-    assert experiments.worst_fall(r, 2) == pytest.approx(0.5)
-    assert experiments.worst_fall(r, 3) == pytest.approx(0.4)
+    r = [0.01, -0.02, -0.03, 0.04, -0.01]
+    assert experiments.worst_fall(r, 1) == pytest.approx(0.03)
+    assert experiments.worst_fall(r, 2) == pytest.approx(0.05)
+    assert experiments.worst_fall(r, 5) == pytest.approx(0.01)
+    with pytest.raises(ValueError):
+        experiments.worst_fall(r, 6)
 
 
-def test_worst_fall_of_a_rising_market_is_negative():
-    assert experiments.worst_fall(np.full(10, 0.01), 3) == pytest.approx(-0.03)
-
-
-def test_scaled_breakers_by_hand():
-    rules, scale = experiments.scaled_breakers(0.02, 0.01)
-    assert scale == 2 and rules == dict(levels=(0.14, 0.26, 0.40), halt_minutes=15)
-    model.check_breakers(rules)                               # valid rules for the model
+def test_typical_picks_the_median_mismatch_not_the_best():
+    target = {"a": 0.0, "b": 0.0}
+    prints = [{"a": d, "b": d} for d in (5.0, 0.1, 3.0, 1.0, 2.0)]   # distances by hand
+    assert experiments.typical(prints, target) == 4                  # the 2.0 one (median)
+    assert experiments.typical(prints[:1], target) == 0
+    with pytest.raises(ValueError):
+        experiments.typical([], target)

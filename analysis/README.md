@@ -1,27 +1,16 @@
-# Analysis scripts (exploration behind the findings)
+# Analysis scripts
 
-One-off probes run while testing and calibrating the model. They are not part of
-the program; each backs up a finding in the build journal. Run from the project
-folder, e.g. `python3 analysis/typical.py`.
+Each script answers one question about the rebuilt model and prints the numbers
+quoted in `figures/RESULTS.md` and `KEY_POINTS.md`. They use the fitted settings
+in `settings/` and held-out seeds only. Run from the project folder, e.g.
+`python3 analysis/stability.py`.
 
-| Script | Question it answered |
+| Script | Question |
 |---|---|
-| `probe.py` | How do kurtosis, tail exponent and autocorrelations change with a given setting? |
-| `knobs.py` | Does each setting move the model in the direction the science predicts? |
-| `a1.py` | Does stronger opinion herding (a1) fatten the tails? (No: it thins them.) |
-| `regime.py` | How far does the price drift from its value in healthy vs runaway settings? (sets the guardrail at 1.0) |
-| `audit.py` | Which bad inputs were silently accepted, and how often are probabilities clipped? |
-| `fresh.py`, `lag2.py`, `lags.py` | Day-to-day and multi-day return correlations on seeds never used in tests |
-| `holdout.py`, `holdout2.py` | Calibrated vs paper settings on held-out seeds |
-| `typical.py` | Does the real S&P 500 look like a typical history of the model? |
-| `out_of_sample.py` | Do markets the calibration never saw (S&P since 1928, Nasdaq-100, 20 market-beta-matched stocks) look typical? |
-| `circuit_breakers.py` | Policy experiment: do US-style circuit breakers make crashes rarer, or just delay them? (paired seeds) |
-| `efficiency_claims.py` | Lux & Marchesi (1999)'s efficient-market claims: price = value on average, no persistent mispricing, volatility vs chartist share |
-| `crowded_episodes.py` | How long crowded episodes (over 50% chartists) last |
-| `crash_shape.py` | Why 5-day returns are fatter-tailed than daily ones: model crashes are multi-day slides |
+| `efficiency_claims.py` | Lux & Marchesi's efficient-market claims: price = value on average, no persistent mispricing, volatility vs chartist share |
+| `crash_shape.py` | After a big move, does the price bounce back (like the S&P) or keep sliding? |
+| `dt_check.py` | Do results change with the time step dt? |
+| `stability.py` | How often do the fitted settings run away over 100,000 days? |
 
-Earlier versions (the original single-file `main.py` and its tests, and older
-calibrations) were removed from the folder; they are still in git history.
-
-Most probes were run while the code was still one file (`main.py`); they now
-reach the same functions in `herding/` through a small adapter at the top.
+Earlier exploration scripts (for the model before the November 2026 rebuild)
+are in git history.

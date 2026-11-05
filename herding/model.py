@@ -1,303 +1,254 @@
-"""Lux-Marchesi (1999) agent-based market model, with guardrails.
+"""The Lux-Marchesi (1999) market model, built from the equations in notes/SPEC.md.
 
-N traders are fundamentalists (buy below the fundamental value, sell above) or
-chartists: optimists (buy) and pessimists (sell) who follow the crowd and the
-trend, Kirman-style. Traders switch groups by comparing profits, and every
-switch is a recruitment: the more members a group has, the faster it grows.
-News moves the fundamental value with plain Gaussian noise.
+N traders are in one of three groups:
+    fundamentalists  buy when the price is below the fundamental value, sell above it
+    optimists        chartists who buy
+    pessimists       chartists who sell
+Traders switch groups at random, at rates that depend on the crowd (herding), the
+price trend and the profits of each strategy. Excess demand (buyers minus sellers)
+moves the price one tick at a time. News moves the fundamental value as Gaussian
+noise, so any fat tails or volatility clustering must come from the traders.
 
-Prices are logs, so only *relative* mispricing matters. The inner loop runs
-under numba when it is installed (about 20x faster) and as plain Python
-otherwise; both use the same random numbers and give identical results.
+Section numbers (sec. 1-5) refer to notes/SPEC.md.
 """
 import os
-import warnings
 
 import numpy as np
 
 try:
     import numba
-except ImportError:                       # e.g. a web host without numba
+except ImportError:                    # still works without numba, just ~50x slower
     numba = None
 
-# Default settings, based on Lux & Marchesi (2000) and rewritten in log-price units
-# so the model does not depend on the price level (pf0 only sets the starting price).
-# beta, tc, gamma and a2 were changed from the 2000 paper's values during that
-# rewrite, so these are NOT the paper's exact settings (the 1999 Nature letter gives
-# no parameter values at all). Figures call them "default settings".
-P = dict(N=500, v1=3.0, v2=2.0, beta=50.0, tc=0.1, gamma=0.1,
-         a1=0.6, a2=2.0, a3=0.5, R=0.0004, s=0.75, sigma_news=0.01,
-         pf0=10.0, dt=0.01, min_chartists=4, tau=0.2)
-# dt = 0.01 (100 trading steps a day) is part of the model's definition: the
-# calibration was fitted at it. Results still shift a little at smaller dt (tail
-# exponent 2.96 at 0.01, 2.60 at 0.005), so do not change dt without refitting.
-# See test_calibrated_results_do_not_depend_on_time_step (a known limitation).
+# Settings. Every one has a fixed meaning in SPEC.md; rates are per unit of time
+# (one unit = one trading day).
+SETTINGS = {
+    "N": "number of traders",
+    "v1": "how often chartists reconsider their mood (sec. 1)",
+    "v2": "how often traders reconsider their strategy (sec. 2)",
+    "a1": "herding: weight of the majority mood (sec. 1)",
+    "a2": "trend following: weight of the price trend (sec. 1)",
+    "a3": "sensitivity to profit differences (sec. 2)",
+    "s": "discount on fundamentalists' future profits, below 1 (sec. 2)",
+    "R": "return on other investments per day; dividend yield r/p_f = R (sec. 2)",
+    "tc": "trading volume of one chartist (sec. 3)",
+    "gamma": "reaction strength of one fundamentalist (sec. 3)",
+    "beta": "price speed: relative price change per day per unit of excess demand (sec. 3)",
+    "sigma_mu": "standard deviation of the noise in excess demand (sec. 3)",
+    "sigma_eps": "daily standard deviation of the news (sec. 4)",
+    "tick": "size of one price tick, as a fraction of the price (sec. 3)",
+    "dt": "time step, as a fraction of a day (sec. 5)",
+    "floor": "minimum number of chartists and of fundamentalists (sec. 5)",
+}
 
-U_MAX = 30.0           # cap on switching exponents (prevents overflow)
-N_STABLE = 250         # below this the price swings wildly (tested)
-MAX_MISPRICING = 1.0   # healthy runs stay below 0.6 (measured); runaways reach 5-16
-POSITIVE = ("v1", "v2", "beta", "gamma", "tc", "sigma_news", "tau", "pf0", "dt")
-NON_NEGATIVE = ("a1", "a2", "a3", "s", "R")
-WHOLE = ("N", "min_chartists")
+# Parameter set I as remembered from Lux & Marchesi (2000), UNVERIFIED (SPEC.md).
+# T_c = N tc = 10 and T_f = N gamma = 5.
+SET_I = dict(N=500, v1=3.0, v2=2.0, a1=0.6, a2=0.2, a3=0.5, s=0.75, R=0.0004,
+             tc=0.02, gamma=0.01, beta=6.0, sigma_mu=0.05, sigma_eps=0.005,
+             tick=0.001, dt=0.01, floor=4)
 
-
-class ModelRegimeError(RuntimeError):
-    """The simulated market left the range where the model is meaningful."""
-
-
-# ------------------------------------------------------------------ guardrails
-
-def check_settings(p):
-    """Every setting present, spelled right, a finite number, with a sensible sign."""
-    unknown, missing = set(p) - set(P), set(P) - set(p)
-    if unknown:
-        raise ValueError(f"unknown setting(s) {sorted(unknown)} -- typo? valid: {sorted(P)}")
-    if missing:
-        raise ValueError(f"missing setting(s) {sorted(missing)}")
-    for key, v in p.items():
-        if isinstance(v, bool) or not isinstance(v, (int, float, np.number)) or not np.isfinite(v):
-            raise ValueError(f"setting {key} must be a finite number, got {v!r}")
-        if key in POSITIVE and v <= 0:
-            raise ValueError(f"setting {key} must be > 0, got {v}")
-        if key in NON_NEGATIVE and v < 0:
-            raise ValueError(f"setting {key} must be >= 0, got {v}")
-        if key in WHOLE and float(v) != int(v):
-            raise ValueError(f"setting {key} must be a whole number, got {v}")
+TREND_WINDOW = 0.1     # dp/dt is measured over the last 0.1 day (= 10 steps of 0.01) [S]
+REFERENCE_DT = 0.01    # the time step of Lux & Marchesi's own simulations [S]
+U_CAP = 30.0           # cap on the exponents U, so exp(U) cannot overflow
+MAX_GAP = 1.0          # a runaway: the price more than e = 2.7x away from its value...
+MAX_DAYS = 250         # ...for a whole year of trading days in a row,
+HARD_GAP = 20.0        # or ever more than e^20 (5 hundred million) times away
+START_CHARTISTS = 0.1  # share of chartists at the start, split evenly into the two moods
 
 
-def _is_number(x):
-    return not isinstance(x, (bool, np.bool_)) and isinstance(x, (int, float, np.number))
+# ------------------------------------------------------------------ checks
+
+class RunawayError(RuntimeError):
+    """The price left its value for good (all traders became chartists)."""
+
+    def __init__(self, message, day):
+        super().__init__(message)
+        self.day = day
 
 
-def check_inputs(days, herding, p):
-    """Raise ValueError for inputs that would give silently wrong results."""
-    check_settings(p)
-    # Bug fix: herding="no" used to count as True (any non-empty string does)
-    if not isinstance(herding, (bool, np.bool_)):
-        raise ValueError(f"herding must be True or False, got {herding!r}")
-    if not _is_number(days) or not np.isfinite(days) or days < 0 or int(days) != days:
-        raise ValueError(f"days must be a whole number >= 0, got {days}")
-    dt = p["dt"]
-    if round(1 / dt) < 1 or abs(round(1 / dt) * dt - 1) > 1e-9:
-        raise ValueError(f"dt must divide one day exactly (e.g. 0.01, 0.02, 0.05), got {dt}")
-    if dt > 1 / (p["beta"] * p["gamma"]) + 1e-12:
-        raise ValueError(f"dt={dt} breaks stability: price would overshoot; "
-                         f"need dt <= 1/(beta*gamma) = {1 / (p['beta'] * p['gamma']):.3g}")
-    m = p["min_chartists"]
-    if herding:
-        if m < 2 or m % 2:
-            raise ValueError(f"min_chartists must be even and >= 2, got {m}")
-        if p["N"] < 10 * m:
-            raise ValueError(f"N={p['N']} is too small: need N >= {10 * m} "
-                             f"so every group can keep its minimum members")
-        if p["N"] < N_STABLE:
-            warnings.warn(f"N={p['N']} < {N_STABLE}: too few fundamentalists to anchor "
-                          f"the price; expect unrealistically wild swings", UserWarning)
-    elif p["N"] < 1:
-        raise ValueError(f"N must be >= 1, got {p['N']}")
+def check(p):
+    """Raise ValueError unless p has exactly the known settings with sensible values."""
+    if not isinstance(p, dict):
+        raise ValueError(f"settings must be a dict, got {type(p).__name__}")
+    unknown, missing = set(p) - set(SETTINGS), set(SETTINGS) - set(p)
+    if unknown or missing:
+        raise ValueError(f"unknown settings {sorted(unknown)}, missing settings {sorted(missing)}")
+    for k, v in p.items():
+        if isinstance(v, (bool, np.bool_)) or not isinstance(v, (int, float, np.number)) \
+                or not np.isfinite(v):
+            raise ValueError(f"setting {k} must be a finite number, got {v!r}")
+        if v < 0:
+            raise ValueError(f"setting {k} must not be negative, got {v}")
+    for k in ("N", "v1", "v2", "beta", "tick", "dt"):
+        if p[k] <= 0:
+            raise ValueError(f"setting {k} must be above 0, got {p[k]}")
+    for k in ("N", "floor"):
+        if int(p[k]) != p[k]:
+            raise ValueError(f"setting {k} must be a whole number, got {p[k]}")
+    if not p["s"] < 1:
+        raise ValueError(f"s must be below 1 (the paper's discount factor), got {p['s']}")
+    if not p["tick"] < 1:
+        raise ValueError(f"tick must be below 1 (a fraction of the price), got {p['tick']}")
+    steps = round(1 / p["dt"])
+    if abs(steps * p["dt"] - 1) > 1e-9:
+        raise ValueError(f"dt must split one day into whole steps (0.01, 0.005, ...), got {p['dt']}")
+    if TREND_WINDOW / p["dt"] < 1 - 1e-9:
+        raise ValueError(f"dt must be at most {TREND_WINDOW} (the trend window), got {p['dt']}")
+    if p["N"] < 4 * p["floor"]:
+        raise ValueError(f"N={p['N']} is too small for floor={p['floor']}: need N >= 4*floor")
 
 
-def initial_counts(N, herding, min_chartists):
-    """Starting (fundamentalists, optimists, pessimists): about 10% chartists,
-    split evenly, never below the floors."""
-    if not herding:
-        return N, 0, 0
-    each = max(N // 20, min_chartists // 2)
-    return N - 2 * each, each, each
+# ------------------------------------------------------------------ one time step
+
+def _leave(g, n, rate_a, rate_b, dt):
+    """Of n traders each leaving at rate_a (to A) or rate_b (to B) per day, how many
+    go to A and to B within dt. Exact for constant rates: a trader leaves with
+    probability 1 - exp(-(rate_a + rate_b) dt), then picks A with chance
+    rate_a / (rate_a + rate_b)."""
+    total = rate_a + rate_b
+    if n <= 0 or total <= 0.0:
+        return 0, 0
+    k = g.binomial(n, 1.0 - np.exp(-total * dt))
+    to_a = g.binomial(k, rate_a / total)
+    return to_a, k - to_a
 
 
-# ------------------------------------------------------------------ the model
-
-def _prob(rate):
-    """Chance that a trader with switching rate `rate` (per step, = rate per day * dt)
-    switches within the step: 1 - exp(-rate), exact for a constant rate.
-    Bug fix: this used to be min(1, rate). In crashes the rate gets so large that the
-    cap at 1 was hit, so how many traders could switch depended on the step size dt,
-    and the results did too (tail exponent 2.1 at dt=0.01 vs 4.1 at dt=0.04)."""
-    return 1.0 - np.exp(-max(0.0, rate))
+def _cap(u):
+    return min(U_CAP, max(-U_CAP, u))
 
 
-def _clip(u):
-    return min(U_MAX, max(-U_MAX, u))
-
-
-def _run_impl(g, days, steps, herding, N, nf, npl, nmi, m2, mF, lp, v1, v2, beta,
-              tc, gamma, a1, a2, a3, R, s, sigma, tau, max_mis, cb1, cb2, cb3, halt_steps,
-              shock):
-    """The simulation loop. Returns (log price, log value, chartist fraction,
-    halt level per day, intraday low per day, largest one-step price move,
-    status, day): status 0 = ok, 1 = diverged (NaN), 2 = left realistic regime.
-    Circuit breakers: cb1..cb3 are log-return trigger levels (< 0), or 0 for off.
-    shock[day]: log change of the fundamental value at the start of that day."""
+def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
+              beta, sigma_mu, sigma_eps, tick, floor, n_plus, n_minus, max_gap, max_days,
+              hard_gap):
+    """The simulation loop (see SPEC.md). Returns per-day log price, log value,
+    chartist share and opinion at each day's close, and the number of days
+    completed (fewer than `days` if the price ran away: |log price - log value|
+    above max_gap for max_days days in a row, or ever above hard_gap)."""
     dt = 1.0 / steps
-    lf = lp
-    trend = 0.0                                # smoothed d(log price)/dt per day
+    window = int(round(TREND_WINDOW * steps))
+    up_step, down_step = np.log(1.0 + tick), np.log(1.0 - tick)
+    # mu is drawn fresh each step; scaled so its effect per day does not depend on
+    # dt (identical to [S] at their dt = 0.01)
+    mu_sd = sigma_mu * np.sqrt(REFERENCE_DT / dt)
+    lp = 0.0                                   # log price; starts at the value
+    lf = 0.0                                   # log fundamental value
+    n_f = N - n_plus - n_minus
+    past = np.zeros(window)                    # log prices of the last `window` steps
     out_lp = np.empty(days + 1)
     out_lf = np.empty(days + 1)
-    frac = np.empty(days)
-    halts = np.zeros(days, dtype=np.int64)     # 0 none, 1-2 pauses, 3 closed for the day
-    low = np.empty(days)                       # lowest log price vs previous close
-    max_step = 0.0
-    out_lp[0] = lp
-    out_lf[0] = lf
+    out_z = np.empty(days + 1)
+    out_x = np.empty(days + 1)
+    out_lp[0], out_lf[0] = lp, lf
+    nc = n_plus + n_minus
+    out_z[0] = nc / N
+    out_x[0] = (n_plus - n_minus) / nc if nc > 0 else 0.0
+    t = 0
+    outside = 0                                # days in a row beyond max_gap
     for day in range(days):
-        lf += shock[day]                       # policy surprise (0 on ordinary days)
-        prev_close = lp
-        day_low = 0.0
-        paused = 0                             # steps of pause left
-        closed = False
         for _ in range(steps):
-            if herding:
-                nc = npl + nmi
-                # optimist <-> pessimist: herding (a1 * opinion) + trend (a2)
-                U1 = _clip(a1 * (npl - nmi) / nc + a2 * trend / v1)
-                rate = v1 * nc / N * dt
-                up = min(g.binomial(nmi, _prob(rate * np.exp(U1))), nmi - m2)
-                down = min(g.binomial(npl, _prob(rate * np.exp(-U1))), npl - m2)
-                npl, nmi = npl + up - down, nmi - up + down
-                # chartist <-> fundamentalist: compare expected profits
-                mis = abs(lf - lp)                       # relative mispricing
-                yld = R * np.exp(min(lf - lp, U_MAX))    # dividend yield
-                U21 = _clip(a3 * (yld + trend / v2 - R - s * mis))
-                U22 = _clip(a3 * (R - yld - trend / v2 - s * mis))
-                r2 = v2 * dt / N
-                # floors: someone must remain in every group, or nobody could
-                # ever be recruited back into it (Kirman-style switching)
-                f2o = min(g.binomial(nf, _prob(r2 * npl * np.exp(U21))), nf - mF)
-                f2p = min(g.binomial(nf - f2o, _prob(r2 * nmi * np.exp(U22))), nf - f2o - mF)
-                o2f = min(g.binomial(npl, _prob(r2 * nf * np.exp(-U21))), npl - m2)
-                p2f = min(g.binomial(nmi, _prob(r2 * nf * np.exp(-U22))), nmi - m2)
-                npl += f2o - o2f
-                nmi += f2p - p2f
-                nf += o2f + p2f - f2o - f2p
-            # market maker: log price moves with excess demand (frozen while halted)
-            if closed or paused > 0:
-                dlp = 0.0
-                paused = max(0, paused - 1)
+            # dp/dt / p: relative price change per day over the trend window
+            trend = (np.exp(lp - past[t % window]) - 1.0) / TREND_WINDOW
+            past[t % window] = lp
+            t += 1
+            gap = np.exp(lf - lp) - 1.0        # (p_f - p) / p
+            if chartists:
+                nc = n_plus + n_minus
+                # sec. 1: mood. sec. 2: strategy (profit of chartists vs fundamentalists)
+                U1 = _cap(a1 * (n_plus - n_minus) / nc + a2 / v1 * trend)
+                gain = R * (1.0 + gap) + trend / v2    # (r + (dp/dt)/v2) / p, r = R p_f
+                U21 = _cap(a3 * (gain - R - s * abs(gap)))
+                U22 = _cap(a3 * (R - gain - s * abs(gap)))
+                mood = v1 * nc / N
+                # every rate below is per trader per day (first: where they go)
+                p_to_m, p_to_f = _leave(g, n_plus, mood * np.exp(-U1),
+                                        v2 * n_f / N * np.exp(-U21), dt)
+                m_to_p, m_to_f = _leave(g, n_minus, mood * np.exp(U1),
+                                        v2 * n_f / N * np.exp(-U22), dt)
+                f_to_p, f_to_m = _leave(g, n_f, v2 * n_plus / N * np.exp(U21),
+                                        v2 * n_minus / N * np.exp(U22), dt)
+                # floors (sec. 5): undo just enough moves to keep both groups alive
+                short_f = floor - (n_f - f_to_p - f_to_m + p_to_f + m_to_f)
+                while short_f > 0:
+                    if f_to_p >= f_to_m:
+                        f_to_p -= 1
+                    else:
+                        f_to_m -= 1
+                    short_f -= 1
+                short_c = floor - (nc - p_to_f - m_to_f + f_to_p + f_to_m)
+                while short_c > 0:
+                    if p_to_f >= m_to_f:
+                        p_to_f -= 1
+                    else:
+                        m_to_f -= 1
+                    short_c -= 1
+                n_plus += m_to_p - p_to_m + f_to_p - p_to_f
+                n_minus += p_to_m - m_to_p + f_to_m - m_to_f
+                n_f += p_to_f + m_to_f - f_to_p - f_to_m
+            # sec. 3: excess demand -> random up and down ticks
+            ed = (n_plus - n_minus) * tc + n_f * gamma * gap
+            # ticks per day = beta (ED + mu) / tick, so that on average
+            # d(ln p)/dt = beta (ED + mu), SPEC eq. 25
+            push = beta * (ed + mu_sd * g.standard_normal()) / tick
+            if push > 0.0:
+                lp += g.poisson(push * dt) * up_step
             else:
-                ed = (npl - nmi) * tc + nf * gamma * (lf - lp)
-                dlp = beta * ed / N * dt
-            lp += dlp
-            trend += (dlp / dt - trend) * min(1.0, dt / tau)   # smoothed
-            max_step = max(max_step, abs(dlp))
-            fall = lp - prev_close
-            day_low = min(day_low, fall)
-            # circuit breakers: each level fires at most once a day
-            if cb3 < 0 and not closed and fall <= cb3:
-                closed = True
-                halts[day] = 3
-            elif cb2 < 0 and halts[day] < 2 and fall <= cb2:
-                halts[day] = 2
-                paused = halt_steps
-            elif cb1 < 0 and halts[day] < 1 and fall <= cb1:
-                halts[day] = 1
-                paused = halt_steps
-            # Gaussian news moves the fundamental value
-            lf += sigma * np.sqrt(dt) * g.standard_normal()
-        out_lp[day + 1] = lp
-        out_lf[day + 1] = lf
-        frac[day] = (npl + nmi) / N
-        low[day] = day_low
-        if not np.isfinite(lp):
-            return out_lp, out_lf, frac, halts, low, max_step, 1, day
-        if max_mis > 0 and abs(lp - lf) > max_mis:
-            return out_lp, out_lf, frac, halts, low, max_step, 2, day
-    return out_lp, out_lf, frac, halts, low, max_step, 0, days
+                lp += g.poisson(-push * dt) * down_step
+            # sec. 4: news
+            lf += sigma_eps * np.sqrt(dt) * g.standard_normal()
+        nc = n_plus + n_minus
+        out_lp[day + 1], out_lf[day + 1] = lp, lf
+        out_z[day + 1] = nc / N
+        out_x[day + 1] = (n_plus - n_minus) / nc if nc > 0 else 0.0
+        outside = outside + 1 if abs(lp - lf) > max_gap else 0
+        if outside >= max_days or abs(lp - lf) > hard_gap:
+            return out_lp, out_lf, out_z, out_x, day + 1
+    return out_lp, out_lf, out_z, out_x, days
 
 
-USE_JIT = numba is not None and os.environ.get("MODEL_NO_JIT") != "1"
-if USE_JIT:
-    _prob = numba.njit(cache=True)(_prob)
-    _clip = numba.njit(cache=True)(_clip)
-    _run = numba.njit(cache=True)(_run_impl)
-else:
-    _run = _run_impl
+USE_NUMBA = numba is not None and os.environ.get("MODEL_NO_NUMBA") != "1"
+if USE_NUMBA:
+    _leave = numba.njit(cache=True)(_leave)
+    _cap = numba.njit(cache=True)(_cap)
+    _simulate = numba.njit(cache=True)(_simulate)
 
 
-def check_breakers(breakers):
-    """Circuit-breaker rules: dict(levels=(l1, l2, l3), halt_minutes=m), where the
-    levels are price falls below the previous close (e.g. 0.07 = 7%), increasing,
-    and l1, l2 pause trading for m minutes of a 390-minute day; l3 closes the day."""
-    if breakers is None:
-        return
-    if not isinstance(breakers, dict) or set(breakers) != {"levels", "halt_minutes"}:
-        raise ValueError(f"breakers needs exactly 'levels' and 'halt_minutes', got {breakers!r}")
-    lv = tuple(breakers["levels"])
-    if len(lv) != 3 or not all(_is_number(x) and 0 < x < 1 for x in lv) or not lv[0] < lv[1] < lv[2]:
-        raise ValueError(f"breakers levels must be 3 increasing falls between 0 and 1, got {lv}")
-    m = breakers["halt_minutes"]
-    if not _is_number(m) or not np.isfinite(m) or not m > 0:
-        raise ValueError(f"breakers halt_minutes must be a finite number > 0, got {m!r}")
+def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_DAYS):
+    """Run the market for `days` trading days with settings p.
 
+    Returns a dict of daily series (one value per day's close, days + 1 values):
+        lp, lf  log price and log fundamental value (both start at 0)
+        z       share of traders who are chartists
+        x       chartists' opinion, (optimists - pessimists) / chartists
+    plus r, the daily log returns (days values).
+    chartists=False runs the "no chartists" check: everybody is a fundamentalist.
 
-def check_shocks(shocks, days):
-    """Policy shocks: {day: fractional change of the fundamental value}, e.g.
-    {200: -0.05} = on day 200 a surprise cuts the value by 5%."""
-    if shocks is not None and not isinstance(shocks, dict):
-        raise ValueError(f"shocks must be a dict {{day: fraction}}, got {shocks!r}")
-    for day, x in (shocks or {}).items():
-        if isinstance(day, bool) or not isinstance(day, (int, np.integer)) or not 0 <= day < days:
-            raise ValueError(f"shock day must be a whole number from 0 to {days - 1}, got {day!r}")
-        if isinstance(x, bool) or not isinstance(x, (int, float, np.number)) or not np.isfinite(x) \
-                or x <= -1:
-            raise ValueError(f"shock on day {day} must be a number > -1 (a fraction), got {x!r}")
-
-
-def simulate_full(days, herding=True, p=P, seed=None, max_mispricing=MAX_MISPRICING,
-                  breakers=None, shocks=None):
-    """Simulate and return everything as a dict:
-    r (daily log returns), frac (chartist share at each close), lp, lf (log price
-    and log value, days + 1 values), halts (0 none, 1-2 pause levels, 3 closed),
-    low (each day's lowest log price vs the previous close), max_step (largest
-    one-step log price move). See simulate() for the guardrails."""
-    check_inputs(days, herding, p)
-    check_breakers(breakers)
-    check_shocks(shocks, days)
-    # Bug fix: 0, negative or NaN used to switch the guard off silently
-    if max_mispricing is not None and not (_is_number(max_mispricing)
-                                           and np.isfinite(max_mispricing) and max_mispricing > 0):
-        raise ValueError(f"max_mispricing must be a number > 0, or None to switch the guard "
-                         f"off, got {max_mispricing!r}")
-    shock = np.zeros(int(days))
-    for day, x in (shocks or {}).items():
-        shock[day] += np.log1p(x)
-    N, steps = int(p["N"]), int(round(1 / p["dt"]))
-    m = int(p["min_chartists"])
-    nf, npl, nmi = initial_counts(N, herding, m)
-    if breakers is None:
-        cb, halt_steps = (0.0, 0.0, 0.0), 0
-    else:
-        cb = tuple(float(np.log(1 - x)) for x in breakers["levels"])
-        halt_steps = max(1, int(round(breakers["halt_minutes"] / 390 * steps)))
-    lp, lf, frac, halts, low, max_step, status, day = _run(
-        np.random.default_rng(seed), int(days), steps, bool(herding), N, nf, npl, nmi,
-        m // 2 if herding else 0, m, float(np.log(p["pf0"])),
-        *(float(p[k]) for k in ("v1", "v2", "beta", "tc", "gamma", "a1", "a2", "a3",
-                                "R", "s", "sigma_news", "tau")),
-        -1.0 if max_mispricing is None else float(max_mispricing), *cb, halt_steps, shock)
-    if status == 1:
-        raise FloatingPointError("simulation diverged; try a smaller dt")
-    if status == 2:
-        gap = abs(lp[day + 1] - lf[day + 1])
-        raise ModelRegimeError(
-            f"day {day}: price is {np.exp(gap):.1f}x away from its value "
-            f"with {frac[day]:.0%} chartists. These settings are outside the "
-            f"model's realistic range (known causes: N < {N_STABLE}, s < 0.5, v2 < 1). "
-            f"Pass max_mispricing=None to run anyway.")
-    return dict(r=np.diff(lp), frac=frac, lp=lp, lf=lf, halts=halts, low=low,
-                max_step=float(max_step))
-
-
-def simulate(days, herding=True, p=P, seed=None, paths=False,
-             max_mispricing=MAX_MISPRICING, breakers=None, shocks=None):
-    """Simulate the market for `days` trading days.
-
-    Returns daily log returns and the chartist fraction at each day's close;
-    with paths=True also the daily log price and log fundamental value.
-    Raises ModelRegimeError if |log price - log value| ever exceeds
-    max_mispricing (pass None to explore unrealistic settings anyway).
-    breakers: optional circuit-breaker rules (see check_breakers).
-    shocks: optional policy surprises to the fundamental value (see check_shocks).
+    Raises RunawayError if the price runs away: more than a factor e^max_gap from
+    its value for max_days trading days in a row, or ever more than e^HARD_GAP
+    (the paper: no *persistent* pathological mispricing). Bubbles that burst on
+    their own are kept. max_gap=None switches the check off.
     """
-    o = simulate_full(days, herding, p, seed, max_mispricing, breakers, shocks)
-    return (o["r"], o["frac"], o["lp"], o["lf"]) if paths else (o["r"], o["frac"])
+    check(p)
+    if isinstance(days, (bool, np.bool_)) or not isinstance(days, (int, np.integer)) or days < 1:
+        raise ValueError(f"days must be a whole number >= 1, got {days!r}")
+    if not isinstance(chartists, (bool, np.bool_)):
+        raise ValueError(f"chartists must be True or False, got {chartists!r}")
+    N, floor = int(p["N"]), int(p["floor"])
+    each = max(int(N * START_CHARTISTS) // 2, floor) if chartists else 0
+    if max_gap is not None and not (isinstance(max_gap, (int, float, np.number))
+                                    and not isinstance(max_gap, (bool, np.bool_)) and max_gap > 0):
+        raise ValueError(f"max_gap must be a number above 0, or None, got {max_gap!r}")
+    if isinstance(max_days, (bool, np.bool_)) or not isinstance(max_days, (int, np.integer)) \
+            or max_days < 1:
+        raise ValueError(f"max_days must be a whole number >= 1, got {max_days!r}")
+    lp, lf, z, x, done = _simulate(
+        np.random.default_rng(seed), int(days), int(round(1 / p["dt"])), bool(chartists),
+        N, *(float(p[k]) for k in ("v1", "v2", "a1", "a2", "a3", "s", "R", "tc", "gamma",
+                                   "beta", "sigma_mu", "sigma_eps", "tick")),
+        floor, each, each, np.inf if max_gap is None else float(max_gap), int(max_days),
+        np.inf if max_gap is None else HARD_GAP)
+    if done < days:
+        ratio = np.exp(min(abs(lp[done] - lf[done]), 700.0))   # 700: largest safe exponent
+        raise RunawayError(f"day {done}: the price is {ratio:.3g}x away from its value with "
+                           f"{z[done]:.0%} chartists and has not come back (a runaway "
+                           f"{'bubble' if lp[done] > lf[done] else 'crash'})", done)
+    return dict(r=np.diff(lp), lp=lp, lf=lf, z=z, x=x)

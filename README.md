@@ -25,23 +25,28 @@ Requires Python 3.10 or newer.
 ```bash
 pip install -r requirements.txt
 python3 main.py                      # S&P 500 vs the model -> figures/draft.png
-python3 make_figures.py              # all figures fig1-fig9 (about 4 minutes)
+python3 make_figures.py              # all figures fig1-fig10 (1-2 minutes on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests
-python3 -m pytest tests/ -q          # all tests (about 7 minutes)
-python3 -m herding.calibrate         # refit the model to the S&P 500 (about an hour)
+python3 -m pytest tests/ -q          # all tests
+python3 -m herding.calibrate paper   # refit to the paper's numbers (add --refine to polish)
+python3 -m herding.calibrate spx     # refit to the S&P 500 (about 1.5 hours)
+python3 data/download.py             # re-download every data file (ends 2026-10-30)
 ```
+
+The model's equations, each with its source, are in [`notes/SPEC.md`](notes/SPEC.md).
 
 ## What is where
 
 | Path | What it holds |
 |---|---|
-| `herding/` | The program: the model, statistics, data loading, Kirman's ant model, calibration, plots |
+| `herding/` | The program: the model, statistics, data loading, Kirman's ant model, fitting, plots |
+| `settings/` | The two fitted settings: paper-matched and S&P-calibrated |
 | `main.py`, `make_figures.py` | Scripts that produce the figures |
 | `figures/` | Figures and `RESULTS.md`, which explains them |
 | `tests/` | One test file per module |
 | `analysis/` | Exploration scripts behind individual findings |
-| `data/` | S&P 500, Nasdaq-100, 20 large stocks, VIX (Yahoo Finance) and US recessions (FRED) |
-| `paper/`, `notes/` | Sources and my study notes |
+| `data/` | S&P 500, Nasdaq-100, 20 large stocks, VIX (Yahoo Finance) and US recessions (FRED), from `data/download.py` |
+| `paper/`, `notes/` | Sources, the model specification and my study notes |
 | `proposal.pdf` | My project proposal |
 | `journal/` | Build journal (Claude Code session logs, copied automatically) |
 
