@@ -26,12 +26,12 @@ def test_ensemble_figures(out):
     p = calibrate.load()
     spx = market_data.spx_returns().values
     cal = experiments.ensemble(p, range(600, 604), days=3000)
-    paper = experiments.ensemble(model.P, range(600, 604), days=3000)
+    default = experiments.ensemble(model.P, range(600, 604), days=3000)
     base = experiments.history(p, seed=600, days=3000, herding=False)
-    pct = mf.fig_fingerprint(spx, cal, paper)
+    pct = mf.fig_fingerprint(spx, cal, default)
     assert set(pct) == set(calibrate.TARGETS) and all(0 <= v <= 100 for v in pct.values())
     mf.fig_tails(spx, cal, base)
-    mf.fig_memory(spx, cal, paper)
+    mf.fig_memory(spx, cal, default)
     for name in ["fig1_fingerprint.png", "fig2_tails.png", "fig3_memory.png"]:
         _png(out / name)
 
@@ -88,3 +88,28 @@ def test_black_monday_is_the_largest_spx_move():
     # Fig 2 labels the right end of the S&P curve as Black Monday
     r = market_data.spx_returns()
     assert r.abs().idxmax().strftime("%Y-%m-%d") == "1987-10-19"
+
+
+@pytest.mark.slow
+def test_paper_check_figure(out, monkeypatch):
+    monkeypatch.setattr(mf, "LONG", 20_000)
+    monkeypatch.setattr(mf, "LONG_SCALES", (16, 32, 64, 128, 256, 512, 1024, 2048, 4096))
+    p = calibrate.load()
+    spx = market_data.spx_returns().values
+    cal = experiments.ensemble(p, range(600, 602), days=3000)
+    default = experiments.ensemble(model.P, range(600, 602), days=3000)
+    med = mf.fig_paper_check(_SerialPool(), p, spx, cal, default, seeds=range(1100, 1102))
+    assert set(med) == {"default", "calibrated", "S&P 500"}
+    for name, m in med.items():
+        assert 1 < m["alpha"] < 6 and 0 < m["H_r"] < 1 and 0 < m["H_abs"] < 1.2, (name, m)
+    assert abs(med["calibrated"]["H_news"] - 0.5) < 0.1     # the news has no memory
+    _png(out / "fig8_paper_check.png")
+
+
+@pytest.mark.slow
+def test_robustness_figure(out):
+    ok, base, tails, memory = mf.fig_robustness(_SerialPool(), market_data.spx_returns().values,
+                                                n=12, n_base=6)
+    assert len(base) == 6 and 0 < len(ok) <= 12 and len(tails) == len(memory) == len(ok)
+    assert np.all(base[:, 2] < 1.0)                          # no chartists: bell curve
+    _png(out / "fig9_robustness.png")

@@ -22,7 +22,8 @@ def test_scripts_are_valid_python(path):
 
 QUICK = ["fresh.py", "lag2.py", "a1.py", "probe.py", "audit.py", "knobs.py", "regime.py",
          "lags.py", "holdout.py", "holdout2.py", "typical.py", "out_of_sample.py",
-         "circuit_breakers.py", "policy_shocks.py"]
+         "circuit_breakers.py", "policy_shocks.py", "efficiency_claims.py", "crowded_episodes.py",
+         "crash_shape.py"]
 
 
 @pytest.mark.slow

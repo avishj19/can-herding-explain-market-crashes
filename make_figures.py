@@ -3,7 +3,7 @@
 Run:  python3 make_figures.py      (~1-2 min with numba)
 All model checks use held-out seeds the calibration never saw.
 Colors (validated colorblind-safe): S&P/real data = ink, calibrated = blue,
-paper settings = orange, no chartists = aqua, references = muted gray dashes.
+default settings (model.P, based on Lux & Marchesi 2000) = orange, no chartists = aqua, references = muted gray dashes.
 """
 from multiprocessing import Pool
 
@@ -63,10 +63,10 @@ def ensemble(pool, p, seeds=HELD_OUT, days=DAYS, herding=True):
 
 # ----------------------------------------------------------------- figure 1
 @styled
-def fig_fingerprint(spx, cal_runs, paper_runs):
+def fig_fingerprint(spx, cal_runs, default_runs):
     target = stats.stylized_facts(spx)
     cal = [stats.stylized_facts(r) for r in cal_runs]
-    paper = [stats.stylized_facts(r) for r in paper_runs]
+    default = [stats.stylized_facts(r) for r in default_runs]
     pct = calibrate.percentiles(target, cal, calibrate.TARGETS)
     fig, axes = plt.subplots(2, 5, figsize=(15, 5.6))
     for ax, k in zip(axes.flat, calibrate.TARGETS):
@@ -74,8 +74,8 @@ def fig_fingerprint(spx, cal_runs, paper_runs):
         lo, med, hi = np.percentile(v, [5, 50, 95])
         ax.plot([0, 0], [lo, hi], color=BLUE, lw=6, solid_capstyle="round", alpha=0.35)
         ax.plot(0, med, "o", color=BLUE, ms=8, label="calibrated model (median, 5-95%)")
-        ax.plot(0.25, np.median([f[k] for f in paper]), "X", color=ORANGE, ms=9,
-                label="paper settings (median)")
+        ax.plot(0.25, np.median([f[k] for f in default]), "X", color=ORANGE, ms=9,
+                label="default settings (median)")
         ax.plot(-0.25, target[k], "D", color=INK, ms=8, label="S&P 500 1950-2026")
         ax.set_xlim(-0.6, 0.6); ax.set_xticks([])
         flag = "UNUSUAL" if unusual(pct[k]) else "typical"
@@ -92,8 +92,8 @@ def fig_fingerprint(spx, cal_runs, paper_runs):
     save(fig, "fig1_fingerprint.png",
          f"Each panel is one measure. Blue bar: the range covering 90% of 20 simulated 77-year histories "
          f"(seeds 600-619, never used in calibration); blue dot: their median. Black diamond: the real "
-         f"S&P 500. Orange X: the original paper settings. The S&P falls inside the model's typical "
-         f"range on {n_typ} of 10 measures; the paper settings miss volatility memory badly.")
+         f"S&P 500. Orange X: the default settings (model.P, based on Lux & Marchesi 2000; the 1999 letter gives no values). The S&P falls inside the model's typical "
+         f"range on {n_typ} of 10 measures; the default settings miss volatility memory badly.")
     return pct
 
 
@@ -129,7 +129,7 @@ def fig_tails(spx, cal_runs, base):
 
 # ----------------------------------------------------------------- figure 3
 @styled
-def fig_memory(spx, cal_runs, paper_runs):
+def fig_memory(spx, cal_runs, default_runs):
     lags = np.arange(1, 101)
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.8), gridspec_kw=dict(width_ratios=[2, 1]))
     for ax, lg, f, title in [(axes[0], lags, np.abs, "Volatility memory: does a big move predict big moves later?"),
@@ -138,8 +138,8 @@ def fig_memory(spx, cal_runs, paper_runs):
         lo, med, hi = np.percentile(cal, [5, 50, 95], axis=0)
         ax.fill_between(lg, lo, hi, color=BLUE_LIGHT, alpha=0.6, lw=0, label="calibrated model, 5-95%")
         ax.plot(lg, med, color=BLUE, label="calibrated model, median")
-        ax.plot(lg, np.median([stats.acf(f(r), lg) for r in paper_runs], axis=0), color=ORANGE,
-                label="paper settings, median")
+        ax.plot(lg, np.median([stats.acf(f(r), lg) for r in default_runs], axis=0), color=ORANGE,
+                label="default settings, median")
         ax.plot(lg, stats.acf(f(spx), lg), color=INK, label="S&P 500 (real)")
         ax.axhline(0, color="#c3c2b7", lw=1)
         ax.set_xlabel("days apart (lag)"); ax.set_title(title, fontsize=10)
@@ -150,8 +150,8 @@ def fig_memory(spx, cal_runs, paper_runs):
     fig.tight_layout()
     save(fig, "fig3_memory.png",
          "Left: correlation between the SIZE of moves k days apart. The S&P still remembers a wild "
-         "period after 100 days; the paper settings forget within ~30 days; the calibrated model tracks "
-         "the S&P. Right: correlation of DIRECTION. The real market is unpredictable (≈0). The model "
+         "period after 100 days; the default settings forget within ~30 days; the calibrated model runs "
+         "slightly above the S&P, which stays inside its 5-95% band at every lag. Right: correlation of DIRECTION. The real market is unpredictable (≈0). The model "
          "has a small 2-day reversal (the S&P is outside its typical range here: its known weak spot).")
 
 
@@ -343,23 +343,185 @@ def fig_policy(pool, p, cal_runs, spx):
     return res, frac, over
 
 
+# ----------------------------------------------------------------- figure 8
+LONG = 100_000          # Lux & Marchesi's Fig 3 spans 10^2 to 10^5 steps
+LONG_SCALES = (16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384)
+SPX_SCALES = LONG_SCALES[:-2]                    # the S&P has 19,314 days
+
+
+def _long_run(args):
+    """One 100,000-day history: returns, and the news (daily change of log value)."""
+    p, seed = args
+    o = model.simulate_full(LONG + BURN, p=p, seed=seed)
+    return o["r"][BURN:], np.diff(o["lf"])[BURN:]
+
+
+def paper_measures(r, news=None, scales=None):
+    """The numbers Lux & Marchesi (1999) report: tail alpha (their regression
+    method), H of returns and of absolute returns, and kurtosis at tau = 1, 5, 15, 25."""
+    scales = LONG_SCALES if scales is None else scales
+    out = dict(alpha=stats.alpha_regression(r), H_r=stats.hurst(r, scales),
+               H_abs=stats.hurst(np.abs(r), scales),
+               **{f"kurt_{t}": stats.kurtosis(stats.aggregate(r, t)) for t in (1, 5, 15, 25)})
+    if news is not None:
+        out["H_news"] = stats.hurst(news, scales)
+    return out
+
+
+@styled
+def fig_paper_check(pool, p, spx, cal_runs, default_runs, seeds=range(1100, 1108)):
+    """Our model measured the way Lux & Marchesi (1999) measure theirs (their Figs 1-3)."""
+    longs = {name: pool.map(_long_run, [(q, s) for s in seeds])
+             for name, q in [("default", model.P), ("calibrated", p)]}
+    meas = {name: [paper_measures(r, n) for r, n in runs] for name, runs in longs.items()}
+    meas["S&P 500"] = [paper_measures(spx, scales=SPX_SCALES)]
+    med = {name: {k: float(np.median([m[k] for m in ms])) for k in ms[0]} for name, ms in meas.items()}
+
+    fig = plt.figure(figsize=(16, 11))
+    gs = fig.add_gridspec(3, 3, hspace=0.55, wspace=0.28)
+    # column 1: the paper's Fig 1 (a 4,000-day snapshot), default settings
+    o = model.simulate_full(4000 + BURN, p=model.P, seed=seeds[0])
+    t = np.arange(4000)
+    lp, lf = o["lp"][BURN + 1:], o["lf"][BURN + 1:]
+    ax = fig.add_subplot(gs[0, 0])
+    ax.plot(t, np.exp(lp), color=ORANGE, lw=1, label="price")
+    ax.plot(t, np.exp(lf), color=INK, lw=1, ls="--", label="fundamental value")
+    ax.set_title("a. Price tracks its value (default settings)", fontsize=10, loc="left")
+    ax.legend(fontsize=8)
+    for row, (y, c, title) in enumerate([(o["r"][BURN:], ORANGE, "b. 'Output': daily returns, in bursts"),
+                                         (np.diff(o["lf"])[BURN:], INK, "c. 'Input': news, no bursts")], 1):
+        ax = fig.add_subplot(gs[row, 0])
+        ax.plot(t, y, color=c, lw=0.4)
+        lim = 1.1 * np.abs(o["r"][BURN:]).max()
+        ax.set_ylim(-lim, lim); ax.set_title(title, fontsize=10, loc="left")
+        ax.set_ylabel("log change")
+    ax.set_xlabel("day")
+    # column 2: the paper's Fig 2 (tails at tau = 1, 5, 15, 25 days)
+    ramp = ["#0b0b0b", "#3d6fb3", "#7ea9e0", "#c3d9f5"]
+    for row, (name, runs) in enumerate([("S&P 500", [spx]), ("default", default_runs), ("calibrated", cal_runs)]):
+        ax = fig.add_subplot(gs[row, 1])
+        for tau, c in zip((1, 5, 15, 25), ramp):
+            pooled = np.concatenate([stats._standardize(stats.aggregate(r, tau)) for r in runs])
+            z, cc = stats.ccdf(pooled)
+            ax.loglog(z, cc, color=c, lw=1.8, label=f"τ = {tau} days, kurtosis {med[name][f'kurt_{tau}']:.1f}")
+        g = np.linspace(0.3, 6, 100)
+        ax.loglog(g, 2 * norm.sf(g), "--", color=MUTED, lw=1.2, label="bell curve")
+        ax.set_xlim(0.3, 30); ax.set_ylim(1e-5, 1.2)
+        ax.set_title(f"{'def'[row]}. Tails over longer horizons: {name}", fontsize=10, loc="left")
+        ax.set_ylabel("share bigger"); ax.legend(fontsize=7, loc="lower left")
+    ax.set_xlabel("size of move (std of that horizon)")
+    # column 3: the paper's Fig 3 (DFA fluctuation functions) + the numbers
+    sr, Fs = {}, {}
+    for name, (r, n) in [("calibrated", longs["calibrated"][0]), ("default", longs["default"][0])]:
+        sr[name] = (stats.dfa(np.abs(r), LONG_SCALES), stats.dfa(r, LONG_SCALES), stats.dfa(n, LONG_SCALES))
+    spx_abs, spx_raw = stats.dfa(np.abs(spx), SPX_SCALES), stats.dfa(spx, SPX_SCALES)
+    for row, (k, title) in enumerate([(0, "g. Memory of move SIZES (DFA)"), (1, "h. Memory of DIRECTION (DFA)")]):
+        ax = fig.add_subplot(gs[row, 2])
+        spx_curve = spx_abs if k == 0 else spx_raw
+        key = "H_abs" if k == 0 else "H_r"
+        ax.loglog(*spx_curve, "D-", color=INK, ms=3, lw=1, label=f"S&P 500, H = {med['S&P 500'][key]:.2f}")
+        for name, c in [("calibrated", BLUE), ("default", ORANGE)]:
+            s, F = sr[name][k]
+            ax.loglog(s, F / F[0] * spx_curve[1][0], "o-", color=c, ms=3, lw=1,
+                      label=f"{name}, H = {med[name][key]:.2f}")
+        s, F = sr["calibrated"][2]
+        ax.loglog(s, F / F[0] * spx_curve[1][0], ":", color=MUTED, lw=1.5,
+                  label=f"news (input), H = {med['calibrated']['H_news']:.2f}")
+        ax.set_title(title, fontsize=10, loc="left"); ax.legend(fontsize=7)
+        ax.set_ylabel("fluctuation F(n), aligned at n=16")
+    ax.set_xlabel("window n (days)")
+    ax = fig.add_subplot(gs[2, 2]); ax.axis("off")
+    rows = [("", "paper", "S&P", "default", "calib."),
+            ("tail α (top 30%)", "2.64", *(f"{med[n]['alpha']:.2f}" for n in ("S&P 500", "default", "calibrated"))),
+            ("H of returns", "0.48", *(f"{med[n]['H_r']:.2f}" for n in ("S&P 500", "default", "calibrated"))),
+            ("H of |returns|", "0.85", *(f"{med[n]['H_abs']:.2f}" for n in ("S&P 500", "default", "calibrated"))),
+            ("kurtosis 1→5 d", "falls", *(f"{med[n]['kurt_1']:.0f}→{med[n]['kurt_5']:.0f}" for n in ("S&P 500", "default", "calibrated")))]
+    tab = ax.table(cellText=rows, loc="center", cellLoc="center", colWidths=[0.32, 0.15, 0.17, 0.18, 0.18])
+    tab.auto_set_font_size(False); tab.set_fontsize(9); tab.scale(1, 1.8)
+    for (i, j), cell in tab.get_celld().items():
+        cell.set_edgecolor(GRID)
+        if i == 0 or j == 0:
+            cell.set_text_props(fontweight="bold", color=INK)
+    ax.set_title(f"i. Paper vs ours (model: median of {len(seeds)} runs of {LONG:,} days)\nH: 0.5 = no memory, > 0.5 = memory, < 0.5 = reversals", fontsize=10, loc="left")
+    fig.suptitle("Fig 8. Our model measured the way Lux & Marchesi (1999) measured theirs",
+                 y=0.95, fontsize=13, fontweight="bold")
+    save(fig, "fig8_paper_check.png",
+         "a-c: like the paper's Fig 1, the price tracks its value while returns come in bursts the bell-curve news "
+         "does not have. d-f: like its Fig 2, tails at 1, 5, 15, 25-day horizons; the S&P and the default settings "
+         "return to a bell curve as τ grows, but the calibrated model's 5-day tail is FATTER than its daily one, "
+         "because its crashes are multi-day slides. g-h: like its Fig 3, memory exponents H from detrended "
+         "fluctuation analysis. Note: with the paper's α method even a bell curve scores about 3.7.")
+    return med
+
+
+# ----------------------------------------------------------------- figure 9
+def _robust_one(args):
+    p, seed, herding = args
+    try:
+        r = experiments.history(p, seed, herding=herding)
+    except model.ModelRegimeError:
+        return None
+    f = stats.stylized_facts(r)
+    return f["alpha_5pct"], f["ac_abs_20"], f["kurtosis"]
+
+
+@styled
+def fig_robustness(pool, spx, n=200, n_base=40):
+    """The paper's claim that fat tails and volatility memory appear for an open set
+    of settings: random settings from the calibration ranges, one history each."""
+    cands = [q for q in calibrate.sample(n, seed=9) if q["dt"] <= 1 / (q["beta"] * q["gamma"])]
+    res = pool.map(_robust_one, [(q, 8000 + i, True) for i, q in enumerate(cands)])
+    base = [x for x in pool.map(_robust_one, [(model.P, 8500 + i, False) for i in range(n_base)]) if x]
+    ok = np.array([x for x in res if x is not None])
+    base = np.array(base)
+    a_cut, m_cut = base[:, 0].min(), base[:, 1].max()          # outside every no-chartist run
+    tails, memory = ok[:, 0] < a_cut, ok[:, 1] > m_cut
+    fat = tails & memory
+    fig, ax = plt.subplots(figsize=(9, 6))
+    ax.axvspan(a_cut, 8, color=AQUA, alpha=0.08, lw=0)
+    ax.axhspan(-0.02, m_cut, color=AQUA, alpha=0.08, lw=0)
+    ax.scatter(ok[:, 0], ok[:, 1], s=22, color=BLUE, alpha=0.6, lw=0,
+               label=f"random settings with herding ({len(ok)} that stayed realistic)")
+    ax.scatter(base[:, 0], base[:, 1], s=22, color=AQUA, lw=0, label=f"no chartists ({len(base)} runs)")
+    f = stats.stylized_facts(spx)
+    ax.plot(f["alpha_5pct"], f["ac_abs_20"], "D", color=INK, ms=9, label="S&P 500")
+    ax.set_xlabel("tail exponent α (5% tail; smaller = fatter tails)")
+    ax.set_ylabel("volatility memory, 20 days")
+    ax.set_xlim(1.5, 8); ax.set_ylim(-0.02, max(0.45, ok[:, 1].max() + 0.02))
+    ax.legend(fontsize=8.5, loc="upper right")
+    ax.set_title(f"Fig 9. Robustness across {len(ok)} random settings: fatter tails than every no-chartist run in "
+                 f"{tails.mean():.0%},\nlonger volatility memory in {memory.mean():.0%}, both in {fat.mean():.0%}",
+                 fontsize=11)
+    save(fig, "fig9_robustness.png",
+         f"Each blue dot is one 77-year history with settings drawn at random from the calibration ranges "
+         f"({len(cands) - len(ok)} of {len(cands)} settings left the realistic range and are not shown). "
+         f"Aqua dots: the same model with no chartists. Shaded bands: the range the no-chartist runs reach "
+         f"(α ≥ {a_cut:.1f} or memory ≤ {m_cut:.3f}). Lux & Marchesi (1999) report that fat tails and volatility "
+         f"memory appear for many settings; here fat tails do ({tails.mean():.0%}), but long memory needs "
+         f"particular settings (only {np.mean(ok[:, 1] > 0.05):.0%} exceed 0.05; the S&P is "
+         f"{f['ac_abs_20']:.2f}).")
+    return ok, base, tails, memory
+
+
 def main():
     FIG.mkdir(exist_ok=True)
     p = calibrate.load()
     spx = market_data.spx_returns().values
     with Pool() as pool:
         cal_runs = ensemble(pool, p)
-        paper_runs = ensemble(pool, model.P)
+        default_runs = ensemble(pool, model.P)
         base = experiments.history(p, seed=600, herding=False)
-        fig_fingerprint(spx, cal_runs, paper_runs)
+        fig_fingerprint(spx, cal_runs, default_runs)
         fig_tails(spx, cal_runs, base)
-        fig_memory(spx, cal_runs, paper_runs)
+        fig_memory(spx, cal_runs, default_runs)
         target = stats.stylized_facts(spx)
         typical = HELD_OUT[calibrate.representative([stats.stylized_facts(r) for r in cal_runs], target)]
         fig_mechanism(p, typical)
         fig_kirman()
         fig_out_of_sample(pool, p, cal_runs)
         fig_policy(pool, p, cal_runs, spx)
+        fig_paper_check(pool, p, spx, cal_runs, default_runs)
+        fig_robustness(pool, spx)
 
 
 if __name__ == "__main__":

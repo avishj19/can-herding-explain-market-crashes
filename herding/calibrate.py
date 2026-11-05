@@ -21,9 +21,11 @@ TARGETS = ["alpha_5pct", "alpha_1pct", "share_4sd", "ac_r_1", "ac_r_2", "ac_r_2t
 # How far off counts as "one unit" of mismatch (about the seed-to-seed noise)
 SCALE = dict(alpha_5pct=0.25, alpha_1pct=0.5, share_4sd=0.002, ac_r_1=0.03, ac_r_2=0.03,
              ac_r_2to10=0.01, ac_abs_1=0.05, ac_abs_20=0.04, ac_abs_50=0.03, ac_abs_100=0.03)
-# Search ranges (low, high) for each setting that shapes the fingerprint
+# Search ranges (low, high) for each setting that shapes the fingerprint.
+# s < 1: Lux & Marchesi (1999) discount fundamentalists' future profits by a factor
+# below 1; s < 0.5 is unstable (tested), so s is searched in [0.5, 1].
 RANGES = dict(a1=(0.0, 1.5), a2=(0.0, 6.0), a3=(0.02, 2.0), v1=(0.5, 6.0), v2=(1.0, 6.0),
-              tc=(0.02, 0.3), gamma=(0.03, 0.8), s=(0.5, 2.0), beta=(20.0, 100.0),
+              tc=(0.02, 0.3), gamma=(0.03, 0.8), s=(0.5, 1.0), beta=(20.0, 100.0),
               tau=(0.05, 1.0))
 # Every seed search() and refine() score candidates on. Any check of the fitted
 # model must use OTHER seeds, or it is graded on its own homework.

@@ -68,6 +68,59 @@ def tail_share(r, k=4.0):
     return float(np.mean(np.abs(_standardize(r)) > k))
 
 
+def aggregate(r, tau):
+    """Returns over tau days: sums of tau consecutive daily log returns
+    (a leftover partial block at the end is dropped)."""
+    r = _returns(r)
+    if int(tau) != tau or tau < 1 or tau > len(r):
+        raise ValueError(f"tau must be a whole number from 1 to {len(r)}, got {tau}")
+    tau = int(tau)
+    n = len(r) // tau
+    return r[:n * tau].reshape(n, tau).sum(axis=1)
+
+
+def alpha_regression(r, top=0.30):
+    """Tail exponent the way Lux & Marchesi (1999, Fig 2) measure it: the slope of
+    log(share of days with a bigger move) against log(move size), fitted over the
+    largest `top` share of days. Unlike hill_alpha, this window also covers the
+    bell-shaped middle of the distribution, so the two estimates differ."""
+    if not 0 < top < 1:
+        raise ValueError(f"top must be between 0 and 1, got {top}")
+    z, cc = ccdf(r)
+    k = int(len(z) * (1 - top))
+    z, cc = z[k:], cc[k:]
+    keep = z > 0
+    if keep.sum() < 10 or np.ptp(np.log(z[keep])) == 0:
+        raise ValueError("need at least 10 distinct nonzero moves in the fitted window")
+    return float(-np.polyfit(np.log(z[keep]), np.log(cc[keep]), 1)[0])
+
+
+def dfa(x, scales=(16, 32, 64, 128, 256, 512, 1024, 2048)):
+    """Detrended fluctuation analysis (Peng et al. 1994), as in Lux & Marchesi (1999,
+    Fig 3): integrate x, cut it into windows of n days, remove a straight-line trend
+    in each, and measure the leftover spread F(n). Returns (scales, F)."""
+    x = _returns(x)
+    scales = np.asarray(scales, dtype=int)
+    if np.any(scales < 4) or np.any(scales > len(x) // 4):
+        raise ValueError(f"scales must be between 4 and {len(x) // 4} (a quarter of the data)")
+    y = np.cumsum(x - x.mean())
+    F = []
+    for n in scales:
+        seg = y[:len(y) // n * n].reshape(-1, n)
+        t = np.arange(n)
+        slope, icept = np.polyfit(t, seg.T, 1)
+        F.append(np.sqrt(np.mean((seg - (np.outer(slope, t) + icept[:, None])) ** 2)))
+    return scales, np.array(F)
+
+
+def hurst(x, scales=(16, 32, 64, 128, 256, 512, 1024, 2048)):
+    """Self-similarity exponent H: the slope of log F(n) against log n from dfa().
+    H = 0.5 means no memory; H > 0.5 means memory (persistence); H < 0.5 means
+    reversals. Lux & Marchesi (1999): returns 0.48, absolute returns 0.85."""
+    s, F = dfa(x, scales)
+    return float(np.polyfit(np.log(s), np.log(F), 1)[0])
+
+
 def stylized_facts(r):
     """The fingerprint of a market: tails, predictability, clustering.
 

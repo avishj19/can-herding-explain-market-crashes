@@ -214,3 +214,12 @@ def test_calibration_uses_the_models_time_step():
     # dt is part of the model's definition (results shift at other dt), so the
     # saved calibration must have been fitted at the default dt
     assert calibrate.load()["dt"] == model.P["dt"] == 0.01
+
+
+def test_discount_factor_follows_the_paper():
+    # Lux & Marchesi (1999): fundamentalists' arbitrage profits are discounted by a
+    # factor < 1. The search range and the saved calibration must respect that.
+    lo, hi = calibrate.RANGES["s"]
+    assert 0 < lo and hi <= 1
+    assert lo <= calibrate.load()["s"] <= hi
+    assert all(p["s"] <= 1 for p in calibrate.sample(200, seed=0))

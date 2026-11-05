@@ -29,22 +29,24 @@ The final product is a web app where users can tune herding strength and watch c
 - Later: reproduce Kirman's ant model first as a check against his math.
 
 ## Where things live
-- `main.py`: runs the comparison (S&P 500 vs 20 calibrated histories vs paper settings), saves `figures/draft.png`
+- `KEY_POINTS.md`: self-contained guide to the project for someone new to it (ideas, figures, findings, limits)
+- `main.py`: runs the comparison (S&P 500 vs 20 calibrated histories vs default settings `model.P`), saves `figures/draft.png`
 - `herding/`: the program, one module per job
   - `model.py`: the Lux-Marchesi simulation, guardrails, optional circuit breakers (numba-accelerated)
-  - `stats.py`: tail exponent, kurtosis, autocorrelation, the "stylized facts" fingerprint
+  - `stats.py`: tail exponent, kurtosis, autocorrelation, the "stylized facts" fingerprint, and the
+    Lux & Marchesi (1999) measures (regression tail exponent, DFA/Hurst H, multi-day returns)
   - `market_data.py`: loads and checks `data/spx_daily.csv`
   - `kirman.py`: Kirman's ant model with its exact solution (the herding check from the proposal)
   - `calibrate.py`: fits settings to the S&P 500 (`python3 -m herding.calibrate`) -> `calibrated_params.json`
   - `plots.py`: figures (reusable by the future web app)
   - `experiments.py`: shared helpers for running many histories (ensembles, worst falls, breaker scaling)
 - `tests/`: one test file per module; `python3 -m pytest tests/ -q` (quick: add `-m "not slow"`);
-  `analysis/stress_tests.py` makes `figures/diagnostics/test_*.png`; `make_figures.py` makes `figures/fig1-7*.png` (explained in `figures/RESULTS.md`)
+  `analysis/stress_tests.py` makes `figures/diagnostics/test_*.png`; `make_figures.py` makes `figures/fig1-9*.png` (explained in `figures/RESULTS.md`)
 - `analysis/`: exploration scripts behind each finding, plus `history/` (earlier versions)
 - `data/`: S&P 500 daily closes 1950-today and 1928-today (Yahoo ^GSPC), Nasdaq-100 (^NDX, 1985-),
   `stocks/` (20 large stocks with market beta 0.9-1.1, 2000-), VIX, NBER recessions (FRED USREC)
-- `paper/`: sources. The Lux & Marchesi Nature paper (doi:10.1038/17290) is paywalled
-  and still needs to be added via CMU library access.
+- `paper/`: sources. The Lux & Marchesi Nature paper (doi:10.1038/17290) is `paper/LuxMarchesi1999_Nature.pdf`,
+  kept locally only (git-ignored: copyrighted, and this repo is public). Its Supplementary Information (the exact equations) is still needed via CMU library access.
 - `notes/`: my own notes from tutoring sessions
 - `scratch/`: temporary files (git-ignored)
 - `journal/`: build journal logs (copied automatically; don't edit by hand)
