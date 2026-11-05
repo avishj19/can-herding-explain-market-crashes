@@ -14,7 +14,7 @@ from scipy.stats import norm
 from . import stats
 
 # One palette for every figure (validated colorblind-safe): real data = ink,
-# calibrated model = blue, paper settings = orange, no chartists = aqua.
+# calibrated model = blue, default settings = orange, no chartists = aqua.
 INK, SECOND, MUTED, GRID = "#0b0b0b", "#52514e", "#898781", "#e1e0d9"
 BLUE, ORANGE, AQUA, RED = "#2a78d6", "#eb6834", "#1baf7a", "#e34948"
 BLUE_LIGHT = "#b7d3f6"

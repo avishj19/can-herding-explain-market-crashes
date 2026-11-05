@@ -16,6 +16,9 @@ folder, e.g. `python3 analysis/typical.py`.
 | `typical.py` | Does the real S&P 500 look like a typical history of the model? |
 | `out_of_sample.py` | Do markets the calibration never saw (S&P since 1928, Nasdaq-100, 20 market-beta-matched stocks) look typical? |
 | `circuit_breakers.py` | Policy experiment: do US-style circuit breakers make crashes rarer, or just delay them? (paired seeds) |
+| `efficiency_claims.py` | Lux & Marchesi (1999)'s efficient-market claims: price = value on average, no persistent mispricing, volatility vs chartist share |
+| `crowded_episodes.py` | How long crowded episodes (over 50% chartists) last |
+| `crash_shape.py` | Why 5-day returns are fatter-tailed than daily ones: model crashes are multi-day slides |
 
 `history/` keeps earlier versions for comparison: the original single-file
 `main.py` and its tests, and the calibrations fitted to 8 targets

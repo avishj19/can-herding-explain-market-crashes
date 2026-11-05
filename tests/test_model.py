@@ -645,3 +645,31 @@ def test_rejects_malformed_breakers(bad):
 def test_rejects_shocks_that_are_not_a_dict():
     with pytest.raises(ValueError, match="shocks must be a dict"):
         model.simulate(50, shocks=[(10, -0.1)])
+
+
+# ------------------------------------------- Lux & Marchesi (1999), Fig 2
+# Spec (paper, Fig 2; also true of the S&P 500): returns summed over longer
+# horizons look more and more like a bell curve, so kurtosis falls as tau grows.
+
+def _median_kurtosis(p, tau, seeds=range(600, 612)):
+    from herding import experiments
+    runs = experiments.ensemble(p, seeds)
+    return float(np.median([stats.kurtosis(stats.aggregate(r, tau)) for r in runs]))
+
+
+@pytest.mark.slow
+def test_default_settings_cross_over_to_a_bell_curve():
+    k = [_median_kurtosis(model.P, t) for t in (1, 5, 25)]
+    assert k[0] > k[1] > k[2] and k[2] < 1.0, k
+
+
+@pytest.mark.slow
+@pytest.mark.xfail(strict=True, reason="KNOWN LIMITATION: in the calibrated model a crash is a "
+                   "slow-motion slide (the day after a >3-std move continues it, corr +0.31 vs "
+                   "S&P -0.19; 4.5 of 5 days in the worst week move together), so 5-day returns "
+                   "are FATTER-tailed than daily ones (kurtosis 17.3 vs 10.5), unlike the paper "
+                   "and the S&P (25.2 -> 5.3). It crosses over by 15 days (1.4).")
+def test_calibrated_model_crosses_over_to_a_bell_curve():
+    from herding import calibrate
+    p = calibrate.load()
+    assert _median_kurtosis(p, 5) < _median_kurtosis(p, 1)

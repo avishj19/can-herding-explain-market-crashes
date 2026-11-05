@@ -20,8 +20,11 @@ try:
 except ImportError:                       # e.g. a web host without numba
     numba = None
 
-# Parameters after Lux & Marchesi (2000), rewritten in log-price units so the
-# model does not depend on the price level (pf0 only sets the starting price).
+# Default settings, based on Lux & Marchesi (2000) and rewritten in log-price units
+# so the model does not depend on the price level (pf0 only sets the starting price).
+# beta, tc, gamma and a2 were changed from the 2000 paper's values during that
+# rewrite, so these are NOT the paper's exact settings (the 1999 Nature letter gives
+# no parameter values at all). Figures call them "default settings".
 P = dict(N=500, v1=3.0, v2=2.0, beta=50.0, tc=0.1, gamma=0.1,
          a1=0.6, a2=2.0, a3=0.5, R=0.0004, s=0.75, sigma_news=0.01,
          pf0=10.0, dt=0.01, min_chartists=4, tau=0.2)

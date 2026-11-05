@@ -277,3 +277,75 @@ def test_acf_rejects_lags_that_are_not_whole_numbers(lag):
 def test_acf_accepts_whole_float_lags():
     r = np.random.default_rng(0).standard_normal(500)
     assert np.array_equal(stats.acf(r, 2.0), stats.acf(r, 2))
+
+
+# ------------------------------------------- Lux & Marchesi (1999) measures
+
+def test_aggregate_sums_blocks_by_hand():
+    r = np.array([0.01, 0.02, -0.03, 0.04, 0.05, 0.06, 0.07])
+    assert np.allclose(stats.aggregate(r, 3), [0.0, 0.15])      # last partial block dropped
+    assert np.array_equal(stats.aggregate(r, 1), r)
+
+
+@pytest.mark.parametrize("tau", [0, 2.5, 8, -1])
+def test_aggregate_rejects_bad_tau(tau):
+    with pytest.raises(ValueError):
+        stats.aggregate(np.ones(7) * 0.01, tau)
+
+
+def _symmetric_pareto(alpha, n=200_000, seed=0):
+    # exact Pareto quantiles with random signs: P(|x| > s) = s^-alpha for s >= 1
+    u = (np.arange(n) + 0.5) / n
+    g = np.random.default_rng(seed)
+    return g.choice([-1.0, 1.0], n) * (1 - u) ** (-1 / alpha)
+
+
+@pytest.mark.parametrize("alpha", [2.5, 3.0, 4.0])
+def test_alpha_regression_recovers_a_pure_power_law(alpha):
+    # a pure power law is a straight line on log-log axes, so any window gives alpha
+    assert stats.alpha_regression(_symmetric_pareto(alpha)) == pytest.approx(alpha, abs=0.15)
+
+
+def test_alpha_regression_is_steeper_for_a_bell_curve():
+    # Measured: even a bell curve scores about 3.7 with the paper's 30% window,
+    # because the window covers the curved middle. So the paper's 2.64 is
+    # "fatter than 3.7", not "fatter than a bell curve's infinite exponent".
+    g = np.random.default_rng(1).standard_normal(200_000)
+    a = stats.alpha_regression(g)
+    assert 3.4 < a < 4.0 and a > stats.alpha_regression(_symmetric_pareto(3.0)) + 0.4
+
+
+def test_alpha_regression_rejects_bad_window():
+    with pytest.raises(ValueError):
+        stats.alpha_regression(np.random.default_rng(0).standard_normal(100), top=1.5)
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_hurst_of_white_noise_is_one_half(seed):
+    # no memory at all -> H = 0.5 (the paper's news series: 0.49-0.51)
+    x = np.random.default_rng(seed).standard_normal(100_000)
+    assert stats.hurst(x) == pytest.approx(0.5, abs=0.04)
+
+
+def test_hurst_of_a_random_walk_is_three_halves():
+    # DFA of an integrated (random-walk) series has slope 1.5
+    x = np.cumsum(np.random.default_rng(3).standard_normal(100_000))
+    assert stats.hurst(x) == pytest.approx(1.5, abs=0.06)
+
+
+def test_hurst_does_not_depend_on_units():
+    x = np.random.default_rng(4).standard_normal(20_000)
+    assert stats.hurst(100 * x) == pytest.approx(stats.hurst(x), abs=1e-9)
+
+
+def test_hurst_sees_memory_in_clustered_volatility():
+    # sizes of moves that come in long calm/wild regimes have H > 0.5
+    g = np.random.default_rng(5)
+    regime = np.repeat(g.choice([0.5, 2.0], 200), 500)          # 200 regimes of 500 days
+    r = regime * g.standard_normal(regime.size)
+    assert stats.hurst(np.abs(r)) > 0.7 and stats.hurst(r) == pytest.approx(0.5, abs=0.06)
+
+
+def test_dfa_rejects_scales_too_large_for_the_data():
+    with pytest.raises(ValueError, match="scales"):
+        stats.dfa(np.random.default_rng(0).standard_normal(1000), scales=(16, 512))

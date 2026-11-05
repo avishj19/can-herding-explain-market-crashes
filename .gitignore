@@ -2,3 +2,6 @@
 __pycache__/
 .coverage
 scratch/
+
+# Copyrighted paper (Nature 1999): kept locally, never pushed to the public repo
+paper/LuxMarchesi1999_Nature.pdf

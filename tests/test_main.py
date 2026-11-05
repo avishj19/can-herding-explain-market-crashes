@@ -23,7 +23,7 @@ def test_main_table_has_every_fact_and_columns(tmp_path, capsys):
     main.main(out=tmp_path / "f.png", histories=3, days=3000)
     text = capsys.readouterr().out
     lines = text.split("simulated histories")[1].splitlines()[1:]
-    assert all(c in lines[0] for c in ["S&P 500", "calibrated", "S&P pct", "paper set"])
+    assert all(c in lines[0] for c in ["S&P 500", "calibrated", "S&P pct", "default"])
     for fact in stats.stylized_facts(np.random.default_rng(0).standard_normal(500)):
         assert any(l.startswith(fact) for l in lines), fact
 

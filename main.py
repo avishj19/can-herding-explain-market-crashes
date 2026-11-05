@@ -26,23 +26,23 @@ def ensemble(p, seeds, days=DAYS, pool=None):
     return runs, [stats.stylized_facts(r) for r in runs]
 
 
-def ensemble_table(target, cal, paper):
-    """S&P value, calibrated median [5-95% range], S&P percentile, paper median."""
+def ensemble_table(target, cal, default):
+    """S&P value, calibrated median [5-95% range], S&P percentile, default-settings median."""
     pct = calibrate.percentiles(target, cal, target)
     lines = [f"{'fact':<12}{'S&P 500':>9}{'calibrated (5-95% range)':>30}"
-             f"{'S&P pct':>9}{'paper set':>11}"]
+             f"{'S&P pct':>9}{'default':>11}"]
     for k in target:
         v = np.array([f[k] for f in cal])
         lo, med, hi = np.percentile(v, [5, 50, 95])
         flag = "" if 5 <= pct[k] <= 95 else " <- unusual"
         lines.append(f"{k:<12}{target[k]:>9.3f}{med:>12.3f} ({lo:7.3f} to {hi:7.3f})"
-                     f"{pct[k]:>8.0f}%{np.median([f[k] for f in paper]):>11.3f}{flag}")
+                     f"{pct[k]:>8.0f}%{np.median([f[k] for f in default]):>11.3f}{flag}")
     return "\n".join(lines)
 
 
 def main(p=None, out=FIGURES / "draft.png", histories=HISTORIES, days=DAYS):
     """Compare the S&P 500 with many histories of the calibrated model and the
-    paper's original settings, plus the no-chartist base case; save a figure
+    default settings (model.P, based on Lux & Marchesi 2000), plus the no-chartist base case; save a figure
     of the most typical calibrated history (median mismatch, not the best)."""
     p = calibrate.load() if p is None else p
     real = data.spx_returns()
@@ -54,10 +54,10 @@ def main(p=None, out=FIGURES / "draft.png", histories=HISTORIES, days=DAYS):
     seeds = SEEDS[:histories]
     with experiments.Pool() as pool:
         runs, cal = ensemble(p, seeds, days, pool)
-        _, paper = ensemble(model.P, seeds, days, pool)
+        _, default = ensemble(model.P, seeds, days, pool)
     target = stats.stylized_facts(real)
     print(f"\n{histories} simulated histories of {days} days each:")
-    print(ensemble_table(target, cal, paper))
+    print(ensemble_table(target, cal, default))
     i = calibrate.representative(cal, target)
     herd, frac = run_model(p, seed=seeds[i], days=days)    # rerun it to get its chartist share
     base, _ = run_model(p, herding=False, seed=0, days=days)
