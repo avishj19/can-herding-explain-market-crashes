@@ -42,7 +42,8 @@ The final product is a web app where users can tune herding strength and watch c
   - `experiments.py`: shared helpers for running many histories (ensembles, worst falls, breaker scaling)
 - `tests/`: one test file per module; `python3 -m pytest tests/ -q` (quick: add `-m "not slow"`);
   `analysis/stress_tests.py` makes `figures/diagnostics/test_*.png`; `make_figures.py` makes `figures/fig1-9*.png` (explained in `figures/RESULTS.md`)
-- `analysis/`: exploration scripts behind each finding, plus `history/` (earlier versions)
+- `analysis/`: exploration scripts behind each finding (earlier versions are in git history)
+- `proposal.pdf`: my project proposal; `notes/course_project_guide.pdf`: the course's project handout
 - `data/`: S&P 500 daily closes 1950-today and 1928-today (Yahoo ^GSPC), Nasdaq-100 (^NDX, 1985-),
   `stocks/` (20 large stocks with market beta 0.9-1.1, 2000-), VIX, NBER recessions (FRED USREC)
 - `paper/`: sources. The Lux & Marchesi Nature paper (doi:10.1038/17290) is `paper/LuxMarchesi1999_Nature.pdf`,

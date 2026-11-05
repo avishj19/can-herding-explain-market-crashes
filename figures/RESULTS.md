@@ -1,6 +1,6 @@
 # Results: Can herding explain market crashes?
 
-**Model version:** calibration v3 (November 2026). The switching chance is the exact `1 − e^(−rate)` instead of `min(1, rate)`, and the time step is `dt = 0.01` (100 trading steps a day), refitted to the S&P 500. The previous version (v2, `dt = 0.02`) is in `analysis/history/calibration_v2_dt002.json`. See limitation 6.
+**Model version:** calibration v3 (November 2026). The switching chance is the exact `1 − e^(−rate)` instead of `min(1, rate)`, and the time step is `dt = 0.01` (100 trading steps a day), refitted to the S&P 500. The previous version (v2, `dt = 0.02`) is in git history (`analysis/history/calibration_v2_dt002.json` before commit fc3fdce). See limitation 6.
 
 All figures are made by `python3 make_figures.py` (about 4 minutes). `figures/draft.png` is the quick overview made by `python3 main.py`. Every model check
 uses **held-out seeds** that the calibration never saw, so the model is not graded on
