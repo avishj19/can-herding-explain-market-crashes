@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from conftest import ROOT, SEEDS
+from conftest import ROOT
 from herding import market_data as data
 
 

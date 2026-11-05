@@ -2,8 +2,9 @@
 
 **Model version:** the rebuild of November 2026. The model's equations are in
 [`notes/SPEC.md`](../notes/SPEC.md), each with its source. Figures come from
-`python3 make_figures.py` (about 1–2 minutes on 8 cores). Every model check uses
-**held-out seeds** (1000–1039) that neither fit ever saw.
+`python3 make_figures.py` (about 2 minutes on 8 cores). Every model check uses
+**held-out seeds** that neither fit ever saw (mostly 1000–1039; Fig 9 and Fig 11 use
+other unused seeds, named there).
 
 ## Two fitted settings
 
@@ -13,10 +14,46 @@ Marchesi 2000) is not in hand. So the settings are **fitted**, not copied
 
 | | Fitted to | Score | Key settings |
 |---|---|---|---|
-| **Paper-matched** (orange), `settings/paper.json` | the paper's own numbers: α 2.64, H 0.48, H\|r\| 0.85, back to a bell curve by 25 days | 0.06 (in units of the paper's error bars, squared) | a1 0.54, a2 1.58, a3 2.21, v1 1.91, v2 1.16; chartist push T_c = 0.48, fundamentalist pull T_f = 17.1 |
+| **Paper-matched** (orange), `settings/paper.json` | the paper's own numbers: α 2.64, H 0.48, H\|r\| 0.85, back to a bell curve by 25 days | training 0.06 (8 training seeds, 50,000 days); held-out 2.0 (8 held-out seeds, 100,000 days; 1.7 over 40). Squared gaps in units of the project's tolerances (α ± 0.15, H ± 0.03, H\|r\| ± 0.03), which are wider than the paper's error bars (± 0.077, 0.003, 0.010; see below); almost all of the held-out score is H\|r\| | a1 0.54, a2 1.58, a3 2.21, v1 1.91, v2 1.16; chartist push T_c = 0.48, fundamentalist pull T_f = 17.1 |
 | **S&P-calibrated** (blue), `settings/spx.json` | the S&P 500's 11-number fingerprint, 1950–2026 | 2.94 (mean squared gap, in units of the S&P's own uncertainty) | a1 1.08, a2 0.13, a3 0.76, v1 2.02, v2 0.21; T_c = 6.07, T_f = 7.77 |
 
 The news is the same in both: Gaussian, 0.5% a day, no memory.
+
+**The paper-matched fit does not reproduce H of |returns|.** Its score of 0.06 is a
+*training* score. Measured the way the figures are (held-out seeds, 100,000-day
+runs), the score is about 2.0, and nearly all of it is one number: H of |returns| is
+**0.81 ± 0.02** (mean ± spread between runs) against the paper's **0.85 ± 0.01**. That
+gap is about 4 of the paper's error bars, so H|r| is not reproduced; α (2.62) and
+H (0.47) are, within the project's tolerances. Model outputs and settings are
+unchanged; this is only how the score is reported.
+
+**The tolerances are the project's, not the paper's.** The score divides each gap by
+a yardstick this project chose: α ± 0.15, H ± 0.03, H|r| ± 0.03. The paper's own
+error bars are much smaller: α ± 0.077, H ± 0.003, H|r| ± 0.010 (Figs 2 and 3). Those
+are regression errors from one long run, smaller than how much the numbers change
+from one run of the model to the next (H|r| varies by about 0.02 between runs), so
+no setting could match them on every seed. Measured against the paper's bars, H
+(0.47 vs 0.48) is also several error bars off; only α is inside them.
+
+**Recalibration (November 2026).** Both fits were rerun with a wider search
+(3,000 random settings instead of 1,200) and a new **stability screen**: every
+finalist is run for 100,000 days on 20 extra seeds (2000–2019), and settings that
+run away lose. Then old and new settings were compared on the same 8 training
+seeds and the same screen. **Both fitted settings above were kept**:
+- **Paper-matched:** the new fit scored 0.55, the old 0.06 (lower is better); neither
+  ever ran away. The old one stays.
+- **S&P-calibrated:** the new fit scored better in training (1.51 vs 2.94) and never
+  ran away (the old one: 2 of 20). **But on held-out seeds the S&P was typical on
+  only 6 of 11 measures** (old: 9 of 11). The new fit had thin tails (kurtosis 4.0
+  vs the S&P's 25; 25-day kurtosis 0.4 vs 3.3) and almost no herding (a1 0.18, chartists
+  trading 20 times less). Its training score barely noticed, because the S&P's
+  kurtosis is so uncertain (it hinges on Black Monday) that missing it costs almost
+  nothing. A model of herding that does not herd answers a different question, so
+  the old settings stay (the rejected fit: `scratch/recalibration/`, not in the repository).
+- **Lesson:** the S&P score treats every measure by its own uncertainty, so it can
+  trade away fat tails, the very thing this project is about. A better score would
+  weigh the tails more (a decision for later).
+- Rerunning `make_figures.py` with the kept settings reproduced figures 1–10 pixel for pixel.
 
 | Colour | Means |
 |---|---|
@@ -56,19 +93,26 @@ share of model histories below the real value; under 5% or over 95% = unusual.
 ## Fig 3 — No memory of direction, long memory of size (paper's Fig 3)
 `fig3_memory.png`. Detrended fluctuation analysis (Peng et al. 1994).
 
-| | Paper | Paper-matched (mean of 8 held-out runs) | S&P 500 | S&P-calibrated (median of 20) |
+| | Paper | Paper-matched (mean of 8 held-out runs) | S&P 500 | S&P-calibrated (median of the 40 Fig 7 histories) |
 |---|---|---|---|---|
 | H of returns | 0.48 | 0.47 | 0.50 | **0.39** |
-| H of \|returns\| | 0.85 | 0.81 | 0.90 | 0.88 |
+| H of \|returns\| | 0.85 | 0.81 | 0.90 | 0.87 |
 | H of news / \|news\| | 0.49 / 0.51 | 0.50 / 0.49 | — | — |
 
+The figure itself shows **one run of each**, so its printed values differ a little
+from these averages: paper-matched H 0.45, H|r| 0.78, news 0.47 (seed 1000);
+S&P-calibrated H 0.38, H|r| 0.92 (one history). One run varies; the table is the
+better summary.
+
 The long memory in move sizes is created by the traders: the news has none.
+The paper-matched H of |returns| (0.81 ± 0.02 between runs) is below the paper's 0.85 ± 0.01: not reproduced, though still far above the news's 0.49.
 The S&P-calibrated model's returns **reverse** a little from day to day
 (H 0.39), while the S&P's do not (0.50). This is its clearest miss (Fig 7).
 
 ## Fig 4 — The proposal's checks
 `fig4_checks.png`.
-- **No chartists → bell curve:** median kurtosis **0.01** over 40 histories,
+- **No chartists → bell curve:** median kurtosis **0.01** over 40 histories (`main.py`
+  prints 0.04: one history, so a little noisier),
   Hill α 6.6 (thin tails). Check passed.
 - **With herding → α near 3:** Hill α median **3.10** (S&P-calibrated) and **2.90**
   (paper-matched); S&P 500: 2.92. The inverse cubic law holds. Check passed.
@@ -103,18 +147,31 @@ chartist group in Lux–Marchesi.
   next-day correlation 92%, clustering 82% (1 day) and 60% (50 days), H|r| 78%,
   5-day kurtosis 57%, 25-day kurtosis 92%.
 - **Unusual:** H of returns (100%: model returns reverse more) and the
-  paper-style α (0%: the S&P's tail is fatter in the middle-to-large range).
+  paper-style α (0%: the S&P's 2.35 is below all 40 histories, median 2.64; its tail
+  is fatter in the middle-to-large range).
+- "9 of 11" is fragile: kurtosis sits exactly on the 95% edge (38 of 40 histories
+  below), and sd, next-day correlation and 25-day kurtosis are at 90–92%. With 40
+  histories one more or fewer moves a measure across the line.
 - One of the 40 histories has a freak event (kurtosis about 5,000): a bubble that
   burst.
 
 ## Fig 8 — Markets the model never saw
 `fig8_out_of_sample.png`. Percentile of each real market among 20 model
-histories of the same length. 49 of 220 cells are unusual. The 20 single stocks
-have **fatter tails than an index-calibrated model** (kurtosis 75–100%, Hill α
-mostly 0–15%), which is expected: companies have their own jumps (earnings,
-lawsuits) on top of the market's. The S&P since 1928 is unusual on memory (H
-and H|r| both at 100%) and the paper-style α (0%), with clustering at the 95%
-edge: the 1930s were far wilder and longer-lasting than anything since.
+histories of the same length: the two indexes against seeds 1000–1019, the 20
+stocks against their own seeds 1020–1039 (until November 2026 a length check was
+off by one day and the stocks reused the index seeds; fixing it changed 49 unusual
+cells to 43). **43 of 220 cells are unusual**: 6 of 20 for the indexes, 37 of 200 for
+the stocks.
+- **Stocks:** kurtosis is high (percentiles 70–100, median 95; 7 of 20 unusual), as
+  expected: companies have their own jumps (earnings, lawsuits) on top of the
+  market's. But their Hill tail exponent is typical (5–50, none unusual). The
+  clearest miss is H of returns: 11 of 20 stocks sit at 100%, because the model's
+  returns reverse from day to day and stocks' do not.
+- **S&P since 1928:** unusual on memory (H and H|r| both 100%) and the paper-style α
+  (0%), with clustering and 25-day kurtosis at the 95% edge: the 1930s were far
+  wilder and longer-lasting than anything since.
+- **Nasdaq-100 since 1985:** unusual on 3 of 10: 50-day clustering, H and 25-day
+  kurtosis (all 100%).
 
 ## Fig 9 — How robust is it? (paper: "an open set of parameter values")
 `fig9_robustness.png`. 400 random settings, one 20,000-day run each.
@@ -127,14 +184,72 @@ edge: the 1930s were far wilder and longer-lasting than anything since.
 ## Fig 10 — Turning the herding dial
 `fig10_herding.png`. Only a1 (copying the majority mood) is changed.
 - **Paper-matched:** kurtosis peaks at a1 = 0.6 (fitted 0.54) and **collapses to a
-  bell curve for a1 ≥ 1**. More herding does *not* simply mean more crashes. Below
-  1, moods keep flipping, and the crowd swings hardest near the critical point.
-  Above 1, the chartists lock into one mood, so they push the price steadily
-  instead of in bursts.
-- **S&P-calibrated:** a1 below 0.8 makes most histories run away (endless
-  bubbles). These settings only work in a narrow band of herding strength.
+  bell curve for a1 ≥ 1**. More herding does *not* simply mean more crashes. Two
+  things happen together above 1 (one history, 20,000 days, a1 0.6 → 1.2): the
+  chartists lock into one mood (mood flips fall from 0.22 to 0.05 a day), *and* there
+  are far fewer chartists (23% → 8% of traders). Either could thin the tails; this
+  figure cannot tell which. Linking the peak to the paper's "criticality" is a
+  hypothesis: the paper's critical point is a share of chartists, not a herding strength.
+- **S&P-calibrated:** there is a **lower limit**, not a band: below a1 ≈ 0.8 most
+  histories run away (12 of 12 at a1 ≤ 0.2, 11 of 12 at 0.4–0.6, 7 of 12 at 0.8); from
+  a1 = 1.2 all survive, and the tails thin out as a1 grows (kurtosis 3.8 at 1.2, 1.8
+  at 1.4). Points with fewer than 5 surviving histories are not drawn (they were
+  medians of a single history before November 2026).
 
 ---
+
+## Fig 11 — Policy experiments (an extension, not in the paper)
+`fig11_policy.png`. S&P-calibrated settings; code in `herding/policy.py`; the rules in
+`notes/SPEC.md` ("Policy experiments").
+
+**Circuit breakers.** The US rules since 2013 (NYSE Rule 7.12): trading pauses for
+15 minutes when the market is 7% or 13% below the previous close, **but only before
+3:25 pm**; at 20% it closes for the day at any time. Scaled ×0.91 to the model's
+volatility. Each of 200 histories is run twice, with and without breakers; the two
+runs are identical until the first pause, so that day is a fair comparison (180
+histories had one; none ran away).
+- **No detectable effect.** Change from the previous close, with minus without
+  breakers: **−0.16** percentage points on the halt day (95% interval −0.42 to +0.08),
+  **−0.4** after 5 days, counting the halt day (−1.3 to +0.5), **−0.7** after 20 days
+  (−2.0 to +0.7). All three intervals include zero; they rule out effects larger
+  than about 2 percentage points, but cannot show the effect is exactly zero.
+- On the halt day breakers did better in 101 histories and worse in 79, with no
+  measurable difference on average.
+- **A modeling choice that leans toward "no effect":** while trading is paused, the
+  buy and sell orders of that time are dropped, not queued up for the reopening.
+- Pauses fire on about 4 days per 77-year history; a full-day close almost never.
+- With the 3:25 pm cutoff left out (the first version of this experiment), the
+  results were the same within the intervals (−0.1, +0.4, −0.5).
+
+**A policy surprise** (like an unexpected rate hike): the fundamental value drops
+10% at once, on a random day, in 400 histories. Measured: the price's largest fall
+within 10 days, in units of the surprise (1 = the price fell exactly as much as the
+value), next to a placebo (the same history without the surprise: ordinary wobble).
+
+| Chartists the day before | Histories | Largest fall (median) | Placebo (median) | After 10 days |
+|---|---|---|---|---|
+| under 5% | 311 | 1.10 | 1.06 | 1.03 |
+| 5–10% | 70 | 1.27 | 1.15 | 1.08 |
+| 10–20% | 18 | 1.48 | 1.22 | 1.30 |
+
+(One more history had over 20% chartists; one history is too few for a row.)
+
+- **The more crowded the market, the more a surprise overshoots.** In a calm market
+  a 10% surprise moves the price about 10% (a 4% overshoot beyond the wobble). With
+  10–20% chartists the overshoot beyond the wobble is about 26%. These gaps are the
+  difference of the two medians in the table, a shortcut: a history's largest fall and
+  its placebo's are not taken on the same day. Pairing each history with its own placebo
+  and taking the median of the differences gives 0.02 (95% interval 0.01 to 0.03) under 5%,
+  0.11 (95% interval 0.06 to 0.17) at 5–10%, and 0.29 (95% interval 0.14 to 0.41) at
+  10–20% chartists (bootstrap over histories, `policy.median_overshoot`). The crowded row
+  rests on only 18 histories, so "about a quarter" is a rough size, not a precise one;
+  what holds firmly is the direction (more crowding, more overshoot). After 10 days the
+  price has fallen about 1.3 times the surprise (about 3 percentage points more than the
+  value), in 18 histories. There is no placebo for the 10-day number, so part of that
+  extra fall may be ordinary wobble (the placebo for the largest fall is 1.22 in this row).
+- **In this model the same surprise has a bigger effect when it lands in a crowded
+  market.** Only one size (a 10% drop) was tested, so this does not say how timing
+  compares with the size of the surprise.
 
 ## Limitations (honest list)
 1. **Parameters are fitted, not the paper's.** The paper's parameter tables
@@ -149,13 +264,18 @@ edge: the 1930s were far wilder and longer-lasting than anything since.
    (next-day correlation −0.19). The model doesn't (+0.02; S&P at the 0th
    percentile, `analysis/crash_shape.py`). The old model's slow-motion slides
    (+0.31) are gone.
-5. **Stability:** the S&P-calibrated settings run away in 2 of 40 histories of
-   100,000 days (about 400 years each). The paper-matched settings: 0 of 40
-   (`analysis/stability.py`).
+5. **Stability:** the S&P-calibrated settings run away in 2 of 40 held-out histories
+   of 100,000 days (about 400 years each; `analysis/stability.py`) and 2 of 20 on
+   the stability-screen seeds. The paper-matched settings: 0 of 40 and 0 of 20.
+   (The rejected stability-first refit: 0 of 40, but it lost the fat tails.)
 6. **Long-horizon tails:** the real S&P keeps fat tails at 25 days (kurtosis 3.3);
    both models return to the bell curve faster.
-7. **Fits rejected bursting bubbles:** both fits treated any 2.7× bubble as a
-   failure, which favours calm settings. The finished model keeps bubbles that
-   burst on their own (SPEC.md, "Runaways").
-8. **The time step is no longer a problem:** results at dt = 0.01 and 0.005 agree
+7. **The S&P score can trade away fat tails** (see "Recalibration" above): a
+   stability-first refit fitted better by its own score but lost the tails, so it
+   was not used.
+8. **The S&P fit rejected bursting bubbles:** it treats any day with the price 2.7×
+   away from its value as a failure (the S&P never was), which favours calm settings.
+   The paper fit only rejects bubbles that last 250 days, like the finished model,
+   which keeps bubbles that burst on their own (SPEC.md, "Runaways").
+9. **The time step is no longer a problem:** results at dt = 0.01 and 0.005 agree
    within about one seed-to-seed spread on every measure (`analysis/dt_check.py`).

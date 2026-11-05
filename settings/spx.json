@@ -41,5 +41,14 @@
   "tick": 0.001,
   "dt": 0.01,
   "floor": 4
- }
+ },
+ "stability": {
+  "seeds": [
+   2000,
+   2019
+  ],
+  "days": 100000,
+  "runaways": 2
+ },
+ "note": "kept from the first rebuild fit. The recalibration of November 2026 (3,000 draws + stability screen, scratch/recalibration/spx_new_rejected.json) scored 1.508 in training and never ran away, but on held-out seeds the S&P was typical on only 6 of 11 measures (this fit: 9 of 11): its tails were far thinner (kurtosis 4.0, 25-day 0.4) and its herding weak (a1 0.18)."
 }

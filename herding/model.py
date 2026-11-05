@@ -58,9 +58,11 @@ MAX_GAP = 1.0          # a runaway: the price more than e = 2.7x away from its v
 MAX_DAYS = 250         # ...for a whole year of trading days in a row,
 HARD_GAP = 20.0        # or ever more than e^20 (5 hundred million) times away
 START_CHARTISTS = 0.1  # share of chartists at the start, split evenly into the two moods
-# US market-wide circuit breakers since 2013 (SEC Rule 80B / NYSE 7.12): a 15-minute
-# pause when the S&P 500 is 7% or 13% below the previous close, closed for the day at 20%
-US_BREAKERS = dict(levels=(0.07, 0.13, 0.20), halt_minutes=15)
+# US market-wide circuit breakers since 2013 (NYSE Rule 7.12, formerly Rule 80B;
+# SEC-approved): a 15-minute pause when the S&P 500 is 7% or 13% below the previous
+# close, but only before 3:25 pm (minute 355 of the day); closed for the day at 20%
+# at any time.
+US_BREAKERS = dict(levels=(0.07, 0.13, 0.20), halt_minutes=15, last_pause_minute=355)
 MINUTES_PER_DAY = 390  # 9:30 to 16:00
 
 
@@ -127,16 +129,17 @@ def _cap(u):
 
 def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
               beta, sigma_mu, sigma_eps, tick, floor, n_plus, n_minus, max_gap, max_days,
-              hard_gap, cb1, cb2, cb3, halt_steps, shock):
+              hard_gap, cb1, cb2, cb3, halt_steps, pause_end, shock):
     """The simulation loop (see SPEC.md). Returns per-day log price, log value,
     chartist share and opinion at each day's close, the circuit-breaker level of
     each day, and the number of days completed (fewer than `days` if the price ran
     away: |log price - log value| above max_gap for max_days days in a row, or ever
     above hard_gap).
     Circuit breakers: 0 > cb1 > cb2 > cb3 are log falls from the previous close
-    (-inf = off). Falling to cb1 or cb2 freezes the price for
-    halt_steps steps (once each per day); falling to cb3 freezes it for the rest of
-    the day. Traders keep switching while the price is frozen.
+    (-inf = off). Falling to cb1 or cb2 within the first pause_end steps of the day
+    freezes the price for halt_steps steps (once each per day; later in the day
+    nothing happens); falling to cb3 freezes it for the rest of the day, at any time.
+    Traders keep switching while the price is frozen.
     shock[day]: log change of the value at the start of that day (policy surprise)."""
     dt = 1.0 / steps
     window = int(round(TREND_WINDOW * steps))
@@ -163,7 +166,7 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
         lf += shock[day]
         prev_close = lp
         paused = 0                             # steps of pause left
-        for _ in range(steps):
+        for k in range(steps):
             # dp/dt / p: relative price change per day over the trend window
             trend = (np.exp(lp - past[t % window]) - 1.0) / TREND_WINDOW
             past[t % window] = lp
@@ -218,10 +221,10 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
                 fall = lp - prev_close
                 if fall <= cb3:
                     halts[day] = 3
-                elif fall <= cb2 and halts[day] < 2:
+                elif fall <= cb2 and halts[day] < 2 and k < pause_end:
                     halts[day] = 2
                     paused = halt_steps
-                elif fall <= cb1 and halts[day] < 1:
+                elif fall <= cb1 and halts[day] < 1 and k < pause_end:
                     halts[day] = 1
                     paused = halt_steps
             # sec. 4: news
@@ -244,13 +247,20 @@ if USE_NUMBA:
 
 
 def check_breakers(breakers):
-    """Circuit-breaker rules: dict(levels=(l1, l2, l3), halt_minutes=m). The levels
-    are falls below the previous close (0.07 = 7%), increasing; l1 and l2 pause
-    trading for m minutes of a 390-minute day, l3 closes it. None = no breakers."""
+    """Circuit-breaker rules: dict(levels=(l1, l2, l3), halt_minutes=m), and optionally
+    last_pause_minute=c. The levels are falls below the previous close (0.07 = 7%),
+    increasing; l1 and l2 pause trading for m minutes of a 390-minute day, but only
+    before minute c (no limit if c is left out); l3 closes the day at any time.
+    None = no breakers."""
     if breakers is None:
         return
-    if not isinstance(breakers, dict) or set(breakers) != {"levels", "halt_minutes"}:
-        raise ValueError(f"breakers needs exactly 'levels' and 'halt_minutes', got {breakers!r}")
+    if not isinstance(breakers, dict) or not {"levels", "halt_minutes"} <= set(breakers) \
+            or not set(breakers) <= {"levels", "halt_minutes", "last_pause_minute"}:
+        raise ValueError("breakers needs 'levels' and 'halt_minutes' (and optionally "
+                         f"'last_pause_minute'), got {breakers!r}")
+    c = breakers.get("last_pause_minute", MINUTES_PER_DAY)
+    if not _is_number(c) or not 0 <= c <= MINUTES_PER_DAY:
+        raise ValueError(f"last_pause_minute must be a number from 0 to {MINUTES_PER_DAY}, got {c!r}")
     lv = tuple(breakers["levels"])
     if len(lv) != 3 or not all(_is_number(x) and 0 < x < 1 for x in lv) \
             or not lv[0] < lv[1] < lv[2]:
@@ -278,6 +288,12 @@ def check_shocks(shocks, days):
 def pause_steps(minutes, dt):
     """A pause of `minutes` (of a 390-minute day) in time steps of dt days: at least 1."""
     return max(1, int(round(minutes / MINUTES_PER_DAY / dt)))
+
+
+def minute_to_step(minute, dt):
+    """The time step (counting from 0 at 9:30) that a minute of the day falls in:
+    steps 0 .. minute_to_step(c) - 1 are the ones before minute c."""
+    return int(round(minute / MINUTES_PER_DAY / dt))
 
 
 def _is_number(x):
@@ -320,10 +336,11 @@ def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_D
     check_breakers(breakers)
     check_shocks(shocks, days)
     if breakers is None:
-        cb, halt_steps = (-np.inf, -np.inf, -np.inf), 0
+        cb, halt_steps, pause_end = (-np.inf, -np.inf, -np.inf), 0, 0
     else:
         cb = tuple(float(np.log(1.0 - x)) for x in breakers["levels"])
         halt_steps = pause_steps(breakers["halt_minutes"], p["dt"])
+        pause_end = minute_to_step(breakers.get("last_pause_minute", MINUTES_PER_DAY), p["dt"])
     shock = np.zeros(int(days))
     for day, frac in (shocks or {}).items():
         shock[day] += np.log1p(frac)
@@ -332,7 +349,7 @@ def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_D
         N, *(float(p[k]) for k in ("v1", "v2", "a1", "a2", "a3", "s", "R", "tc", "gamma",
                                    "beta", "sigma_mu", "sigma_eps", "tick")),
         floor, each, each, np.inf if max_gap is None else float(max_gap), int(max_days),
-        np.inf if max_gap is None else HARD_GAP, *cb, int(halt_steps), shock)
+        np.inf if max_gap is None else HARD_GAP, *cb, int(halt_steps), int(pause_end), shock)
     if done < days:
         ratio = np.exp(min(abs(lp[done] - lf[done]), 700.0))   # 700: largest safe exponent
         raise RunawayError(f"day {done}: the price is {ratio:.3g}x away from its value with "

@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from herding import calibrate, model, stats
+from helpers import SerialPool
 
 
 def test_vector_round_trip_is_exact():
@@ -152,9 +153,6 @@ def test_saved_file_records_the_seeds_the_fit_really_used(tmp_path, monkeypatch)
 
 
 def test_parallel_scoring_gives_exactly_the_plain_loss():
-    class SerialPool:
-        def map(self, fn, jobs):
-            return [fn(j) for j in jobs]
     p = dict(model.SET_I, tc=0.002, gamma=0.02)
     plain = calibrate.Fit("paper")
     plain.days, plain.seeds = 3000, (100, 101)
@@ -168,9 +166,36 @@ def test_spx_fit_rejects_even_a_bubble_that_bursts():
     assert calibrate.Fit("paper").max_days == model.MAX_DAYS
 
 
-class SerialPool:
-    def map(self, fn, jobs, chunksize=None):
-        return [fn(j) for j in jobs]
+def _square(x):
+    return (x * x, {"x": x})
+
+
+def test_checkpointed_saves_each_result_and_resumes_without_recomputing(tmp_path):
+    path = tmp_path / "c.jsonl"
+    jobs = [1.5, 2.0, 3.0, 4.0]
+    first = calibrate.checkpointed(SerialPool(), _square, jobs[:2] + [0.0, 0.0], path)
+    assert first == [(2.25, {"x": 1.5}), (4.0, {"x": 2.0}), (0.0, {"x": 0.0}), (0.0, {"x": 0.0})]
+    # Pretend the run stopped after two jobs, the second line cut off mid-write
+    lines = path.read_text().splitlines()
+    path.write_text(lines[0] + "\n" + lines[1][:7])
+    calls = []
+
+    def counting(x):
+        calls.append(x)
+        return _square(x)
+
+    out = calibrate.checkpointed(SerialPool(), counting, jobs, path)
+    assert calls == [2.0, 3.0, 4.0]                  # job 0 came from the file
+    assert out == [_square(x) for x in jobs]
+    again = calibrate.checkpointed(SerialPool(), counting, jobs, path)
+    assert again == out and calls == [2.0, 3.0, 4.0]  # nothing recomputed
+
+
+def test_checkpointed_round_trips_settings_exactly(tmp_path):
+    p = calibrate.draw(np.random.default_rng(5), calibrate.SPX_RANGES)
+    out = calibrate.checkpointed(SerialPool(), lambda _: (0.123456789012345, p), [0], tmp_path / "c")
+    back = calibrate.checkpointed(SerialPool(), lambda _: 1 / 0, [0], tmp_path / "c")
+    assert back == out and back[0][1] == p and back[0][0] == 0.123456789012345
 
 
 def test_runaways_counts_the_histories_that_run_away():
@@ -194,3 +219,74 @@ def test_save_records_the_stability_screen(tmp_path, monkeypatch):
     out = json.loads(path.read_text())
     assert out["draws"] == 3000
     assert out["stability"] == dict(seeds=[2000, 2019], days=100_000, runaways=0)
+
+
+def test_saved_loss_replays_a_stopped_nelder_mead_exactly(tmp_path):
+    from scipy.optimize import minimize
+    calls = []
+
+    def bowl(v):
+        calls.append(1)
+        return float(np.sum((v - np.array([0.3, -1.2])) ** 2))
+
+    path = tmp_path / "scores.jsonl"
+    full = minimize(bowl, [1.0, 1.0], method="Nelder-Mead", options=dict(maxfev=60))
+    n_full = len(calls)
+    # A run that "stopped" after 25 scores (the last line cut off mid-write)...
+    calls.clear()
+    minimize(calibrate.SavedLoss(bowl, path), [1.0, 1.0], method="Nelder-Mead",
+             options=dict(maxfev=25))
+    lines = path.read_text().splitlines()
+    path.write_text("\n".join(lines[:-1]) + "\n" + lines[-1][:9])
+    # ...then restarted: same answer, and only the scores not saved are computed
+    calls.clear()
+    again = minimize(calibrate.SavedLoss(bowl, path), [1.0, 1.0], method="Nelder-Mead",
+                     options=dict(maxfev=60))
+    assert np.array_equal(again.x, full.x) and again.fun == full.fun
+    assert len(calls) == n_full - (len(lines) - 1)
+
+
+# ------------------------------------------------------------------ honest reporting
+# The paper fit's saved loss (0.06) is a training score: 50,000-day runs on training
+# seeds. The documents must also give the score on held-out seeds and long runs,
+# where H of |returns| comes out about 0.81, not the paper's 0.85.
+
+DOCS = calibrate.SETTINGS_DIR.parent
+
+
+def test_results_reports_the_held_out_paper_score_next_to_the_training_score():
+    results = (DOCS / "figures" / "RESULTS.md").read_text()
+    row = next(line for line in results.splitlines() if line.startswith("| **Paper-matched**"))
+    assert "training" in row and "held-out" in row
+    assert "2.0" in row          # 8 held-out 100,000-day runs (see the slow test below)
+    assert "not reproduced" in results
+
+
+def test_key_points_does_not_claim_the_whole_paper_is_reproduced():
+    key = (DOCS / "KEY_POINTS.md").read_text()
+    assert "**1. The rebuilt model reproduces the paper**" not in key
+    assert "not reproduced" in key
+
+
+@pytest.mark.slow
+def test_held_out_paper_score_matches_what_the_documents_say():
+    """8 held-out seeds x 100,000 days, the runs behind Figs 2-3 (about 2 minutes)."""
+    fp = calibrate.ensemble(calibrate.load("paper"), calibrate.HELD_OUT_SEEDS[:8], 100_000)
+    assert np.mean(fp["H_abs"]) == pytest.approx(0.81, abs=0.005)
+    assert calibrate.paper_loss(fp) == pytest.approx(2.0, abs=0.05)
+    saved = json.loads((calibrate.SETTINGS_DIR / "paper.json").read_text())["loss"]
+    assert calibrate.paper_loss(fp) > 10 * saved     # far worse than the training score
+
+
+def test_paper_fit_tolerances_are_not_called_the_papers_error_bars():
+    """The paper fit divides by the project's own yardsticks (0.15, 0.03, 0.03), which
+    are wider than the paper's error bars (0.077, 0.003, 0.010). The documents must say
+    so, and must not call the score 'in units of the paper's error bars'."""
+    paper_error_bars = {"alpha_reg": 0.077, "H": 0.003, "H_abs": 0.010}   # its Fig 2-3 captions
+    for k, (_, tol) in calibrate.PAPER_TARGETS.items():
+        assert tol > paper_error_bars[k]
+    for doc in (DOCS / "figures" / "RESULTS.md", DOCS / "notes" / "SPEC.md"):
+        text = doc.read_text()
+        assert "units of the paper's error bars" not in text
+        for bar in ("0.077", "0.003", "0.010"):
+            assert bar in text, f"{doc.name} should give the paper's error bar {bar}"

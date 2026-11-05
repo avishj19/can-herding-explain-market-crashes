@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 import main
-from herding import calibrate, experiments, model, stats
+from herding import calibrate, experiments, stats
 
 
 def test_table_flags_unusual_measures_by_percentile():

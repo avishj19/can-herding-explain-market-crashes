@@ -25,11 +25,11 @@ Requires Python 3.10 or newer.
 ```bash
 pip install -r requirements.txt
 python3 main.py                      # S&P 500 vs the model -> figures/draft.png
-python3 make_figures.py              # all figures fig1-fig10 (1-2 minutes on 8 cores)
+python3 make_figures.py              # all figures fig1-fig11 (about 2 minutes on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests
 python3 -m pytest tests/ -q          # all tests
 python3 -m herding.calibrate paper   # refit to the paper's numbers (add --refine to polish)
-python3 -m herding.calibrate spx     # refit to the S&P 500 (about 1.5 hours)
+python3 -m herding.calibrate spx     # refit to the S&P 500 (1.5-2.5 hours; rerun to resume if stopped)
 python3 data/download.py             # re-download every data file (ends 2026-10-30)
 ```
 
@@ -39,7 +39,7 @@ The model's equations, each with its source, are in [`notes/SPEC.md`](notes/SPEC
 
 | Path | What it holds |
 |---|---|
-| `herding/` | The program: the model, statistics, data loading, Kirman's ant model, fitting, plots |
+| `herding/` | The program: the model, statistics, data loading, Kirman's ant model, fitting, policy experiments, plots |
 | `settings/` | The two fitted settings: paper-matched and S&P-calibrated |
 | `main.py`, `make_figures.py` | Scripts that produce the figures |
 | `figures/` | Figures and `RESULTS.md`, which explains them |

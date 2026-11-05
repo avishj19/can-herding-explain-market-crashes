@@ -9,6 +9,11 @@ HERD = dict(N=100, eps=0.002, delta=0.01)    # eps < (1-delta)/(N-1) = 0.01 -> h
 SPLIT = dict(N=100, eps=0.05, delta=0.01)    # eps > 0.01 -> about 50/50
 
 
+def herds(N, eps, delta):
+    """Kirman's condition: True if the ants crowd at one source (bimodal)."""
+    return eps < (1 - delta) / (N - 1)
+
+
 def test_transition_probabilities_by_hand():
     # N=4, eps=0.1, delta=0.5, k=1: up = 3/4*(0.1 + 0.5*1/3) = 0.2; down = 1/4*(0.1 + 0.5*3/3) = 0.15
     assert kirman.up_prob(1, 4, 0.1, 0.5) == pytest.approx(0.2)
@@ -40,8 +45,8 @@ def test_kirman_condition_shapes_the_distribution():
     # Kirman's prediction is about SHAPE: herding -> the most likely states are
     # "everyone at one source"; no herding -> the most likely state is 50/50.
     h, s = kirman.stationary(**HERD), kirman.stationary(**SPLIT)
-    assert kirman.herds(**HERD) and np.argmax(h) in (0, 100) and h[50] < h[0]
-    assert not kirman.herds(**SPLIT) and np.argmax(s) == 50 and s[0] < s[50] / 1000
+    assert herds(**HERD) and np.argmax(h) in (0, 100) and h[50] < h[0]
+    assert not herds(**SPLIT) and np.argmax(s) == 50 and s[0] < s[50] / 1000
 
 
 @pytest.mark.parametrize("N, eps, delta", [(100, 0.05, 0.01), (50, 0.01, 0.2),
@@ -58,7 +63,7 @@ def test_matches_beta_distribution_in_large_N_limit(N, eps, delta):
     approx /= approx.sum()
     tv = 0.5 * np.abs(approx - kirman.stationary(N, eps, delta)).sum()
     assert tv < 0.06, f"total variation {tv:.3f}"
-    assert (a < 1) == kirman.herds(N, eps, delta)      # Beta is U-shaped iff a < 1
+    assert (a < 1) == herds(N, eps, delta)      # Beta is U-shaped iff a < 1
 
 
 @pytest.mark.parametrize("params", [HERD, SPLIT])
@@ -111,7 +116,7 @@ def test_strong_herding_is_u_shaped(N, eps, delta):
     # a < 1: probability rises toward both walls (U shape), as Kirman predicts
     pi = kirman.stationary(N, eps, delta)
     half = pi[: N // 2 + 1]
-    assert kirman.herds(N, eps, delta) and np.all(np.diff(half) <= 1e-15)
+    assert herds(N, eps, delta) and np.all(np.diff(half) <= 1e-15)
 
 
 @pytest.mark.parametrize("N, eps, delta", [(20, 0.6, 0.0), (20, 0.9, 0.0), (100, 0.51, 0.0)])

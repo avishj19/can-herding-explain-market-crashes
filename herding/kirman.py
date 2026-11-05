@@ -53,12 +53,6 @@ def stationary(N, eps, delta):
     return pi / pi.sum()
 
 
-def herds(N, eps, delta):
-    """Kirman's condition: True if the ants crowd at one source (bimodal)."""
-    check(N, eps, delta)
-    return eps < (1 - delta) / (N - 1)
-
-
 def _run_impl(g, N, eps, delta, steps, k):
     out = np.empty(steps + 1, dtype=np.int64)
     out[0] = k

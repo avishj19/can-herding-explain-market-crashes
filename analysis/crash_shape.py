@@ -21,15 +21,17 @@ def after_big_moves(r, k=3.0):
     return float(np.corrcoef(r[big], r[big + 1])[0, 1]), len(big)
 
 
-def main():
+def main(days=None, n=20):
+    """Print the S&P number and the model's over n histories of `days` days
+    (default: as long as the S&P record)."""
     spx = market_data.spx_returns().values
-    c, n = after_big_moves(spx)
-    print(f"S&P 500: next-day correlation after {n} big days {c:+.2f}")
+    c, n_big = after_big_moves(spx)
+    print(f"S&P 500: next-day correlation after {n_big} big days {c:+.2f}")
     p = calibrate.load("spx")
-    runs = experiments.returns(p, calibrate.HELD_OUT_SEEDS[:20], len(spx))
+    runs = experiments.returns(p, calibrate.HELD_OUT_SEEDS[:n], days or len(spx))
     vals = [after_big_moves(r) for r in runs]
     cs = np.array([v[0] for v in vals])
-    print(f"model (20 histories): median {np.median(cs):+.2f}, 5-95% range "
+    print(f"model ({n} histories): median {np.median(cs):+.2f}, 5-95% range "
           f"{np.percentile(cs, 5):+.2f} to {np.percentile(cs, 95):+.2f}; "
           f"S&P percentile {experiments.percentile(c, cs):.0f}%")
 

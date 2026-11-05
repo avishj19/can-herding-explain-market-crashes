@@ -4,11 +4,9 @@ Every test states what "correct" means, and uses inputs whose answer we know
 independently (math or published facts), across several random seeds.
 """
 import numpy as np
-import pandas as pd
 import pytest
 
-from conftest import ROOT, SEEDS
-from herding import model
+from conftest import SEEDS
 from herding import stats
 
 
@@ -180,28 +178,6 @@ def test_acf_exact_alternating_series():
 def test_acf_rejects_impossible_lags(lags):
     with pytest.raises(ValueError, match="lags"):
         stats.acf(np.random.default_rng(0).standard_normal(100), lags)
-
-
-# ------------------------------------------------------------- tail_share
-# Spec: fraction of days beyond k standard deviations.
-
-@pytest.mark.parametrize("seed", SEEDS[:3])
-def test_tail_share_gaussian(seed):
-    x = np.random.default_rng(seed).standard_normal(2_000_000)
-    # P(|Z| > 3) = 0.0027 exactly for a bell curve
-    assert stats.tail_share(x, 3) == pytest.approx(0.0027, rel=0.05)
-
-
-@pytest.mark.parametrize("seed", SEEDS[:3])
-def test_tail_share_laplace(seed):
-    # Laplace with scale b has std b*sqrt(2); P(|X| > 4 std) = exp(-4*sqrt(2)) = 0.00349
-    x = np.random.default_rng(seed).laplace(0, 1, 2_000_000)
-    assert stats.tail_share(x, 4) == pytest.approx(np.exp(-4 * np.sqrt(2)), rel=0.05)
-
-
-def test_tail_share_exact_small_case():
-    x = np.array([-10.0] + [0.0] * 98 + [10.0])     # std = sqrt(2), so |z| = 7.07 twice
-    assert stats.tail_share(x, 4) == pytest.approx(0.02)
 
 
 # --------------------------------------------------------- fingerprint

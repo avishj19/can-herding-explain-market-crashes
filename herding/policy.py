@@ -24,7 +24,7 @@ def scaled_breakers(model_sd, market_sd, rules=model.US_BREAKERS):
     if not levels[-1] < 1:
         raise ValueError(f"the model is {scale:.1f}x as volatile as the market: "
                          f"the scaled levels {levels} reach 100%")
-    return dict(levels=levels, halt_minutes=rules["halt_minutes"]), scale
+    return dict(rules, levels=levels), scale       # every other rule is kept as it is
 
 
 def crash_measures(r, crash_level):
@@ -119,6 +119,19 @@ def surprise_experiment(pool, p, seeds, size=-0.10, horizon=10):
     ok = [r for r in rows if r is not None]
     return {k: np.array([r[k] for r in ok]) for k in ("chartists", "peak", "end", "placebo_peak")}, \
         len(rows) - len(ok)
+
+
+def median_overshoot(peak, placebo_peak, draws=2000, seed=0):
+    """The overshoot caused by the surprise, history by history: the median of
+    peak - (placebo_peak + 1) (each history minus its own placebo), with a 95%
+    bootstrap interval (resampling the histories). Returns (median, low, high).
+    (The difference of the two medians, as read off the table, is only a shortcut.)"""
+    d = np.asarray(peak, dtype=float) - (np.asarray(placebo_peak, dtype=float) + 1)
+    if d.size < 2:
+        raise ValueError(f"need at least 2 histories, got {d.size}")
+    g = np.random.default_rng(seed)
+    meds = np.median(d[g.integers(0, d.size, (draws, d.size))], axis=1)
+    return float(np.median(d)), float(np.quantile(meds, 0.025)), float(np.quantile(meds, 0.975))
 
 
 def paired_difference(off, on, draws=2000, seed=0):
