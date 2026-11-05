@@ -20,9 +20,8 @@ folder, e.g. `python3 analysis/typical.py`.
 | `crowded_episodes.py` | How long crowded episodes (over 50% chartists) last |
 | `crash_shape.py` | Why 5-day returns are fatter-tailed than daily ones: model crashes are multi-day slides |
 
-`history/` keeps earlier versions for comparison: the original single-file
-`main.py` and its tests, and the calibrations fitted to 8 targets
-(before the reversal and 50-day memory targets were added).
+Earlier versions (the original single-file `main.py` and its tests, and older
+calibrations) were removed from the folder; they are still in git history.
 
 Most probes were run while the code was still one file (`main.py`); they now
 reach the same functions in `herding/` through a small adapter at the top.

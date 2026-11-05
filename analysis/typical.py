@@ -1,7 +1,7 @@
 """Does the real S&P 500 look like a typical history of the calibrated model?
 
 Percentile of the S&P among 40 simulated histories (seeds 400-439, never used by
-the calibration). Older calibrations (analysis/history/) were fitted to the old
+the calibration). Older calibrations (in git history) were fitted to the old
 switching rule min(1, rate) and cannot be rerun on the current model.
 
 Run from the project folder:  python3 analysis/typical.py
