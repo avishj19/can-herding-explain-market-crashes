@@ -98,6 +98,28 @@ seeds (1000-1039).
   Lesson learned: the first version divided by the model's spread instead, and the
   fit "won" by being wildly variable (1,000-day stretches of 10% daily moves).
   A fixed yardstick removes that loophole.
+- Stability screen (recalibration of November 2026): a runaway can be too rare to
+  show up in the fitting runs (the first S&P fit ran away in 2 of 40 histories of
+  100,000 days). So each refined candidate is also run for 100,000 days on seeds
+  2000-2019, and the best-scoring candidate with the fewest runaways is kept.
+  The random search scores 3,000 settings (it was 1,200).
+
+## Policy experiments (an extension, not in the sources; herding/policy.py)
+Off by default; with both off the model is exactly sections 1-5.
+- **Circuit breakers** (US rules since 2013, SEC-approved NYSE Rule 7.12): when the
+  price falls 7% or 13% below the previous close, trading pauses for 15 minutes
+  (of a 390-minute day); at 20% it closes for the day. Each level fires at most once
+  a day. "Paused" means the price is frozen: no ticks, while traders keep
+  switching groups (their moods and strategies do not stop). Levels are scaled by
+  (model daily sd / S&P daily sd), so 7% means the same number of typical days.
+  Comparison: each seed is run with and without breakers. The two runs use the
+  same random numbers until the first halt, so each history's first halt is a
+  clean paired comparison (later days differ by chance too).
+- **Policy surprise**: at the start of one day the fundamental value jumps by a
+  fraction (here -10%), like an unexpected rate hike. The price's fall in units of
+  the surprise is 1 - (change in log price - log value since the day before) / |ln(0.9)|:
+  1 = the price followed the value exactly. A placebo (the same history without the
+  surprise) measures how much of that the ordinary wobble gives by itself.
 
 ## Parameters
 [L?] Parameter set I (unverified, from memory of [L] Table 1):

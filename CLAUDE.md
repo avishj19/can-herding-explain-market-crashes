@@ -32,16 +32,18 @@ The final product is a web app where users can tune herding strength and watch c
 - `KEY_POINTS.md`: self-contained guide to the project for someone new to it (ideas, figures, findings, limits)
 - `notes/SPEC.md`: the model's equations, each with its source (rebuild of November 2026). Code and spec must agree.
 - `main.py`: quick comparison (S&P 500 vs 20 held-out S&P-calibrated histories), saves `figures/draft.png`
-- `make_figures.py`: makes `figures/fig1-10*.png`, explained in `figures/RESULTS.md`
+- `make_figures.py`: makes `figures/fig1-11*.png`, explained in `figures/RESULTS.md`
 - `herding/`: the program, one module per job
   - `model.py`: the Lux-Marchesi simulation from SPEC.md (numba-accelerated), runaway guard
   - `stats.py`: tail exponents (Hill and the paper's regression), kurtosis, autocorrelation, DFA/Hurst H,
     multi-day returns, and the `fingerprint` of a market
   - `market_data.py`: loads and checks the files in `data/`
   - `kirman.py`: Kirman's ant model with its exact solution (the herding check from the proposal)
-  - `calibrate.py`: two fits (`python3 -m herding.calibrate paper|spx [--refine]`) -> `settings/paper.json`
+  - `calibrate.py`: two fits (`python3 -m herding.calibrate paper|spx [--draws N] [--refine]`), each ending
+    with a stability screen (100k-day runs on seeds 2000-2019) -> `settings/paper.json`
     (reproduces the paper's numbers) and `settings/spx.json` (reproduces the S&P 500)
   - `experiments.py`: many histories in parallel, percentiles, the typical history
+  - `policy.py`: extension: circuit breakers and a policy surprise (paired runs), used by Fig 11
   - `plots.py`: palette and drawing helpers (reusable by the future web app)
 - `settings/`: the two fitted settings
 - `tests/`: one test file per module; `python3 -m pytest tests/ -q` (quick: add `-m "not slow"`)

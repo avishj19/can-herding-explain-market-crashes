@@ -6,12 +6,16 @@ Two fits, by one method:
     spx     make the model's history look like the S&P 500's (its fingerprint)
 
 Method: (1) score random settings drawn from RANGES; (2) refine the best few with
-Nelder-Mead. Every score uses the same TRAIN_SEEDS (so two settings are compared on
-the same luck); checks of a fitted model must use other seeds (HELD_OUT_SEEDS).
+Nelder-Mead; (3) stability screen: run each refined candidate for STABILITY_DAYS on
+STABILITY_SEEDS and keep the best-scoring one among those that never run away
+(a runaway can be too rare to show up in the shorter fitting runs). Every score
+uses the same TRAIN_SEEDS (so two settings are compared on the same luck); checks
+of a fitted model must use other seeds (HELD_OUT_SEEDS).
 
 Run:  python3 -m herding.calibrate paper      -> settings/paper.json
       python3 -m herding.calibrate spx        -> settings/spx.json
       add --refine to polish the saved settings on all 8 training seeds
+      add --draws N to score N random settings in step 1 (default 1200)
 """
 import json
 import sys
@@ -27,6 +31,8 @@ SETTINGS_DIR = market_data.ROOT / "settings"
 BURN = 1000                       # days dropped at the start, so the start does not matter
 TRAIN_SEEDS = tuple(range(100, 108))
 HELD_OUT_SEEDS = tuple(range(1000, 1040))
+STABILITY_SEEDS = tuple(range(2000, 2020))   # the stability screen: neither training nor held out
+STABILITY_DAYS = 100_000                     # about 400 years of trading days per history
 
 # Settings that are fitted, with search ranges (low, high, "log" or "lin").
 RANGES = {
@@ -196,18 +202,46 @@ def _refine(args):
     return float(res.fun), from_vector(res.x, fit.ranges)
 
 
+def _runs_away(args):
+    p, seed, days = args
+    try:
+        model.simulate(p, days, seed=seed)
+    except model.RunawayError:
+        return True
+    return False
+
+
+def runaways(pool, p, seeds=STABILITY_SEEDS, days=STABILITY_DAYS):
+    """How many of the long histories (one per seed) run away, by the model's own
+    rule (more than e away from the value for MAX_DAYS days in a row)."""
+    return int(sum(pool.map(_runs_away, [(p, int(s), int(days)) for s in seeds])))
+
+
+def screen(pool, candidates, seeds=STABILITY_SEEDS, days=STABILITY_DAYS):
+    """Stability screen: sort (loss, settings) candidates by (runaways, loss), so the
+    best fit among the never-runaway ones comes first. Returns (runaways, loss, p)."""
+    out = sorted(((runaways(pool, p, seeds, days), loss, p) for loss, p in candidates),
+                 key=lambda c: (c[0], c[1]))
+    for bad, loss, _ in out:
+        print(f"  candidate loss {loss:.3f}: {bad} of {len(seeds)} long histories ran away")
+    return out
+
+
 def run(kind, draws=1200, keep=8, iters=150, workers=8):
-    """Random search, then Nelder-Mead from the `keep` best; returns (loss, settings)."""
+    """Random search, Nelder-Mead from the `keep` best, then the stability screen;
+    returns (loss, settings, runaways)."""
     fit = Fit(kind)
     t = time.time()
     with Pool(workers) as pool:
         scored = sorted(pool.map(fit.score_draw, range(draws), chunksize=4), key=lambda d: d[0])
         print(f"{kind}: {draws} random settings in {time.time() - t:.0f}s; "
-              f"best loss {scored[0][0]:.2f}; runaways {sum(s >= RUNAWAY_LOSS for s, _ in scored)}")
+              f"best loss {scored[0][0]:.2f}; runaways {sum(s >= RUNAWAY_LOSS for s, _ in scored)}",
+              flush=True)
         refined = pool.map(_refine, [(fit, p, iters) for _, p in scored[:keep]])
-    refined.sort(key=lambda d: d[0])
-    print(f"{kind}: refined {keep} in {time.time() - t:.0f}s total; best loss {refined[0][0]:.3f}")
-    return refined[0]
+        print(f"{kind}: refined {keep} in {time.time() - t:.0f}s total; stability screen:", flush=True)
+        bad, loss, p = screen(pool, refined)[0]
+    print(f"{kind}: chose loss {loss:.3f} ({bad} runaways) after {time.time() - t:.0f}s")
+    return loss, p, bad
 
 
 class _PoolFit(Fit):
@@ -232,22 +266,32 @@ def _fingerprint_one(args):
 
 def refine_saved(kind, iters=200, workers=8):
     """Nelder-Mead from the saved settings, scoring every candidate on all
-    TRAIN_SEEDS (the first fit may use fewer, which can overfit to lucky seeds)."""
+    TRAIN_SEEDS (the first fit may use fewer, which can overfit to lucky seeds).
+    The refined settings replace the saved ones only if they pass the stability
+    screen at least as well. Returns (loss, settings, runaways)."""
     start = load(kind)
     with Pool(workers) as pool:
         fit = _PoolFit(kind, pool, TRAIN_SEEDS)
         first = fit.loss(start)
         res = minimize(fit.loss_of_vector, to_vector(start, fit.ranges), method="Nelder-Mead",
                        options=dict(maxfev=iters, xatol=1e-3, fatol=1e-3))
-    print(f"{kind}: loss on all {len(TRAIN_SEEDS)} training seeds {first:.3f} -> {res.fun:.3f}")
-    return float(res.fun), from_vector(res.x, fit.ranges)
+        print(f"{kind}: loss on all {len(TRAIN_SEEDS)} training seeds {first:.3f} -> {res.fun:.3f}; "
+              "stability screen:", flush=True)
+        bad, loss, p = screen(pool, [(float(res.fun), from_vector(res.x, fit.ranges)),
+                                     (float(first), start)])[0]
+    return loss, p, bad
 
 
-def save(kind, loss, p, seeds=None):
+def save(kind, loss, p, seeds=None, runaways=None, draws=None):
     SETTINGS_DIR.mkdir(exist_ok=True)
     seeds = fit_seeds(kind) if seeds is None else seeds
     out = dict(kind=kind, loss=loss, train_seeds=list(seeds), burn=BURN,
                fitted=list(SPX_RANGES if kind == "spx" else RANGES), settings=p)
+    if draws is not None:
+        out["draws"] = int(draws)
+    if runaways is not None:
+        out["stability"] = dict(seeds=[STABILITY_SEEDS[0], STABILITY_SEEDS[-1]],
+                                days=STABILITY_DAYS, runaways=int(runaways))
     path = SETTINGS_DIR / f"{kind}.json"
     path.write_text(json.dumps(out, indent=1) + "\n")
     return path
@@ -268,8 +312,9 @@ if __name__ == "__main__":
     if which not in ("paper", "spx"):
         sys.exit("usage: python3 -m herding.calibrate paper|spx [--refine]")
     if "--refine" in sys.argv:
-        loss, p = refine_saved(which)
-        print("saved", save(which, loss, p, TRAIN_SEEDS))
+        loss, p, bad = refine_saved(which)
+        print("saved", save(which, loss, p, TRAIN_SEEDS, bad))
     else:
-        loss, p = run(which)
-        print("saved", save(which, loss, p))
+        n = int(sys.argv[sys.argv.index("--draws") + 1]) if "--draws" in sys.argv else 1200
+        loss, p, bad = run(which, draws=n)
+        print("saved", save(which, loss, p, runaways=bad, draws=n))
