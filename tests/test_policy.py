@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 
 from herding import model, policy
+from helpers import SerialPool
 
 TIGHT = dict(levels=(0.003, 0.006, 0.009), halt_minutes=15)   # fires often in set I
 CALM = dict(model.SET_I, a1=0.0, a2=0.0, tc=0.002)            # chartists barely matter
@@ -10,11 +11,6 @@ CALM = dict(model.SET_I, a1=0.0, a2=0.0, tc=0.002)            # chartists barely
 # (CALM is not enough: with a1 = 0 the chartists can still be 60% of traders, and
 # their buy-sell imbalance moves the price by 2-3% a day.)
 QUIET = dict(CALM, tc=0.0, sigma_mu=0.0, sigma_eps=0.0)
-
-
-class SerialPool:
-    def map(self, fn, jobs, chunksize=None):
-        return [fn(j) for j in jobs]
 
 
 def test_scaled_breakers_multiplies_every_level():
@@ -109,3 +105,72 @@ def test_paired_difference_mean_and_interval():
     assert policy.paired_difference([1, 2, 3], [1, 2, 3]) == (0.0, 0.0, 0.0)
     with pytest.raises(ValueError):
         policy.paired_difference([1.0], [2.0])
+
+
+# ------------------------------------------------------------------ honest reporting
+# `end` is the price's fall in units of the surprise, so an `end` of 1.30 after a 10%
+# surprise means the price fell 0.30 x 10.5% (about 3 percentage points) more than the
+# value, not "30% further down". RESULTS.md must read it that way, and must say that
+# `end` has no placebo (part of it is ordinary wobble).
+
+def test_results_reads_the_10_day_surprise_measure_in_the_right_units():
+    from pathlib import Path
+    results = (Path(__file__).parent.parent / "figures" / "RESULTS.md").read_text()
+    row = next(line for line in results.splitlines() if line.startswith("| 10–20% |"))
+    end = float(row.strip("|").split("|")[-1])
+    extra_points = (end - 1.0) * -np.log(0.9) * 100      # extra fall beyond the value, in %
+    assert extra_points == pytest.approx(3.2, abs=0.1)
+    text = " ".join(results.split())                       # ignore line breaks
+    assert "30% further down" not in text
+    assert "about 3 percentage points more than the value" in text
+    assert "no placebo for the 10-day number" in text
+
+
+# The surprise experiment (make_figures.py, Fig 11) runs only one size (-10%), so the
+# documents may compare surprises at different crowding, but must not claim that timing
+# matters "as much as" size: no run varies the size.
+
+def test_documents_do_not_compare_timing_with_size_of_a_surprise():
+    from pathlib import Path
+    root = Path(__file__).parent.parent
+    for name in ("figures/RESULTS.md", "KEY_POINTS.md"):
+        text = " ".join((root / name).read_text().split())   # ignore line breaks
+        assert "matters as much as its size" not in text, name
+
+
+def test_median_overshoot_pairs_each_history_with_its_own_placebo():
+    # placebo_peak is stored minus 1, so the overshoot of one history is
+    # peak - (placebo_peak + 1). Here every history overshoots by exactly 0.2.
+    placebo = np.random.default_rng(1).normal(0.1, 0.05, 50)
+    peak = placebo + 1 + 0.2
+    med, lo, hi = policy.median_overshoot(peak, placebo)
+    assert (med, lo, hi) == pytest.approx((0.2, 0.2, 0.2))
+    # Pairing matters: the median of differences is not the difference of medians.
+    peak, placebo = np.array([1.0, 2.0, 3.0]), np.array([1.0, -0.5, 0.0])
+    med, lo, hi = policy.median_overshoot(peak, placebo)
+    assert med == pytest.approx(1.5)                       # differences -1, 1.5, 2
+    assert np.median(peak) - np.median(placebo + 1) == pytest.approx(1.0)
+    assert lo <= med <= hi
+    with pytest.raises(ValueError):
+        policy.median_overshoot([1.0], [0.0])
+
+
+# The overshoot in a crowded market (10-20% chartists) rests on 18 histories, so the
+# documents must say so, give the paired median with its bootstrap interval, and not
+# present "a quarter" as a precise number.
+
+def test_documents_give_the_crowded_overshoot_with_its_sample_size_and_interval():
+    from pathlib import Path
+    root = Path(__file__).parent.parent
+    results = " ".join((root / "figures" / "RESULTS.md").read_text().split())
+    assert "18 histories" in results
+    assert "0.29 (95% interval 0.14 to 0.41)" in results
+    assert "difference of the two medians" in results     # says the table gap is a shortcut
+    key = " ".join((root / "KEY_POINTS.md").read_text().split())
+    assert "18 histories" in key
+    assert "0.14 to 0.41" in key
+
+
+def test_scaled_breakers_keeps_the_3_25_pm_cutoff():
+    rules, _ = policy.scaled_breakers(0.02, 0.01)
+    assert rules["last_pause_minute"] == 355 and rules["halt_minutes"] == 15

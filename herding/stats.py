@@ -63,11 +63,6 @@ def acf(r, lags):
     return np.array([np.corrcoef(z[:-k], z[k:])[0, 1] for k in lags])
 
 
-def tail_share(r, k=4.0):
-    """Fraction of days that move more than k standard deviations."""
-    return float(np.mean(np.abs(_standardize(r)) > k))
-
-
 def aggregate(r, tau):
     """Returns over tau days: sums of tau consecutive daily log returns
     (a leftover partial block at the end is dropped)."""

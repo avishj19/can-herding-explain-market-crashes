@@ -17,7 +17,7 @@ N traders (fixed): n_f fundamentalists, n_+ optimist chartists, n_- pessimist
 chartists; n_c = n_+ + n_-. Price p, fundamental value p_f. [N][S]
 Derived: opinion x = (n_+ - n_-)/n_c, chartist share z = n_c/N.
 
-## 1. Chartists change mood (optimist <-> pessimist) [S eq 17][C eq 16]
+## 1. Chartists change mood (optimist <-> pessimist) [S eq 17]; [C eq 16] checks the rate form only
 Rate per trader per unit time (first index = group moved TO):
 
     pi_{+-} = v1 (n_c/N) exp(U1)          (pessimist -> optimist)
@@ -26,7 +26,8 @@ Rate per trader per unit time (first index = group moved TO):
 
 a1 = herding (copy the majority mood), a2 = trend following. [N] "a weighted combination of both factors".
 
-## 2. Traders switch strategy (chartist <-> fundamentalist) [S eqs 18-21][C eqs 14-15]
+## 2. Traders switch strategy (chartist <-> fundamentalist) [S eqs 18-21]; [C eqs 14-15] check the rate forms only
+(The formulas for U1, U21 and U22 come from [S] alone: [C] calls them "a sort of utility functions" and gives no formula.)
 
     pi_{+f} = v2 (n_+/N) exp(U21)   (fundamentalist -> optimist)
     pi_{f+} = v2 (n_f/N) exp(-U21)  (optimist -> fundamentalist)
@@ -47,8 +48,10 @@ s < 1 discounts fundamentalists' future profits [N][S].
     down-tick rate = max(0, -beta (ED_c + ED_f + mu)) / tick
     so on average  (dp/dt)/p = beta (ED_c + ED_f)        [S eq 25]
 
-Each tick changes the price by one elementary unit: one cent [C], which is
-0.1% of the price, as in [S] ("Delta p = +/-0.001 p"). mu is Gaussian noise [S][C].
+Each tick changes the price by 0.1% of the current price ([S] eq 24 text:
+"Delta p = +/-0.001 p"), which is one cent at the starting price p_f = 10 [S][C].
+mu is white noise [C], taken here as Gaussian with sd sigma_mu (an assumption:
+[L], which would give its form, is not in hand).
 **Disagreements:** [C] writes ED_f = n_f gamma (p - p_f) (wrong sign, no 1/p)
 and puts mu outside beta. We follow [S]. **Units:** [S] gives the tick rate as
 beta (ED + mu) (eq 24) but also says the price moves on average at
@@ -71,8 +74,9 @@ ln p_f(t) - ln p_f(t-1) = eps_t, eps ~ Normal(0, sigma_eps). Gaussian, with no m
 - mu is drawn fresh each step with standard deviation sigma_mu * sqrt(0.01/dt): exactly
   [S] at dt = 0.01, and the same noise per day at any other dt.
 - dp/dt = the average price change over the last 10 steps [t - 10 dt, t] [S].
-- Floors: n_c and n_f never fall below a minimum (4 traders), so neither group
-  can die out for good (an "absorbing state") [S].
+- Floors: n_c and n_f never fall below a minimum, so neither group can die out for
+  good (an "absorbing state") [S]. The value, 4 traders, is this project's choice:
+  [S] and [C] give no number.
 - Returns are measured once per unit of time: ret_t = ln p_t - ln p_(t-1) [N Fig 1].
 
 ## Runaways (not in the sources)
@@ -92,6 +96,10 @@ candidate is scored on the same training seeds (100-107); every check uses other
 seeds (1000-1039).
 - Paper fit: squared gaps to alpha 2.64 +/- 0.15, H 0.48 +/- 0.03, H|r| 0.85 +/- 0.03,
   plus a penalty if 25-day kurtosis is above 1. Runs of 50,000 days.
+  These +/- values are the project's chosen yardsticks, not [N]'s error bars
+  (alpha +/- 0.077, H +/- 0.003, H|r| +/- 0.010, Figs 2-3 captions). Those are
+  regression errors from one run, smaller than the model's run-to-run spread
+  (H|r| varies by about 0.02), so no setting could meet them on every seed.
 - S&P fit: squared gaps between the model's median and the S&P 500 on all 11
   fingerprint measures, each gap divided by the S&P's own uncertainty (spread
   over 200 block-bootstrap resamples with one-year blocks).
@@ -102,13 +110,15 @@ seeds (1000-1039).
   show up in the fitting runs (the first S&P fit ran away in 2 of 40 histories of
   100,000 days). So each refined candidate is also run for 100,000 days on seeds
   2000-2019, and the best-scoring candidate with the fewest runaways is kept.
-  The random search scores 3,000 settings (it was 1,200).
+  The November 2026 recalibration scored 3,000 random settings (`--draws 3000`);
+  the code's default is 1,200. Neither kept settings file came from that run.
 
 ## Policy experiments (an extension, not in the sources; herding/policy.py)
 Off by default; with both off the model is exactly sections 1-5.
-- **Circuit breakers** (US rules since 2013, SEC-approved NYSE Rule 7.12): when the
-  price falls 7% or 13% below the previous close, trading pauses for 15 minutes
-  (of a 390-minute day); at 20% it closes for the day. Each level fires at most once
+- **Circuit breakers** (US rules since 2013, SEC-approved NYSE Rule 7.12, formerly
+  Rule 80B): when the price falls 7% or 13% below the previous close **before 3:25 pm**
+  (minute 355 of a 390-minute day, step 91 of 100), trading pauses for 15 minutes; a
+  7% or 13% fall later in the day does nothing. At 20% it closes for the day, at any time. Each level fires at most once
   a day. "Paused" means the price is frozen: no ticks, while traders keep
   switching groups (their moods and strategies do not stop). Levels are scaled by
   (model daily sd / S&P daily sd), so 7% means the same number of typical days.

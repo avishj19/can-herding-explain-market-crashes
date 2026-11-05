@@ -26,17 +26,18 @@ def longest_run(mask):
     return best
 
 
-def main():
+def main(days=DAYS, n=4):
+    """Measure the three claims on n held-out histories of `days` days per setting."""
     for kind in ("paper", "spx"):
         p = calibrate.load(kind)
-        h = experiments.histories(p, calibrate.HELD_OUT_SEEDS[:4], DAYS, keep=("r", "lp", "lf", "z"))
+        h = experiments.histories(p, calibrate.HELD_OUT_SEEDS[:n], days, keep=("r", "lp", "lf", "z"))
         h = [x for x in h if x is not None]
         gap = np.concatenate([x["lp"] - x["lf"] for x in h])
         r = np.concatenate([x["r"] for x in h])
         z = np.concatenate([x["z"][1:] for x in h])
         vol = np.abs(r) / r.std()
         low, high = vol[z <= np.quantile(z, 0.1)].mean(), vol[z >= np.quantile(z, 0.9)].mean()
-        print(f"{kind}: {len(h)} histories x {DAYS:,} days")
+        print(f"{kind}: {len(h)} histories x {days:,} days")
         print(f"  (1) mean log(price/value) {gap.mean():+.4f} (sd {gap.std():.4f})")
         print(f"  (2) days more than 10% mispriced {np.mean(np.abs(gap) > np.log(1.1)):.2%}; "
               f"longest such stretch {max(longest_run(np.abs(x['lp'] - x['lf']) > np.log(1.1)) for x in h)} days")

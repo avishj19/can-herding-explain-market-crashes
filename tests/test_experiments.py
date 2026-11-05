@@ -19,10 +19,11 @@ def test_histories_drop_the_burn_in_and_match_a_direct_run():
 
 def test_a_runaway_history_is_reported_not_lost():
     p = dict(model.SET_I)            # seed 1 runs away on day 28,511
-    out = experiments.histories(p, [1, 2], 29000 - experiments.BURN)
-    assert out[0] is None and out[1] is not None
-    with pytest.raises(model.RunawayError, match=r"\[1\]"):
-        experiments.returns(p, [1, 2], 29000 - experiments.BURN)
+    with Pool(2) as pool:            # one real pool for both calls
+        out = experiments.histories(p, [1, 2], 29000 - experiments.BURN, pool=pool)
+        assert out[0] is None and out[1] is not None
+        with pytest.raises(model.RunawayError, match=r"\[1\]"):
+            experiments.returns(p, [1, 2], 29000 - experiments.BURN, pool=pool)
 
 
 def test_percentile_by_hand():

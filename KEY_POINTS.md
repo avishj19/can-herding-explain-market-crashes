@@ -31,7 +31,7 @@ whether **herding alone** produces the real market's fat tails and clustering.
 | **Standard deviation (sd)** | The typical size of a daily move. A "10-sd day" is ten times a typical day. |
 | **Bell curve (Gaussian)** | The usual shape of random noise: moves beyond 4–5 sd are almost impossible. |
 | **Fat tail** | Big moves are far more common than the bell curve allows. |
-| **Tail exponent α** | How fast big moves become rare. Smaller α = fatter tail. Real markets: α ≈ 3 (the "inverse cubic law", Gopikrishnan et al. 1998). |
+| **Tail exponent α** | How fast big moves become rare. Smaller α = fatter tail. Real markets: α ≈ 3 (the "inverse cubic law", Gopikrishnan et al. 1998, measured on 5-minute stock returns; daily index returns give similar values). |
 | **Kurtosis** | One number for tail fatness: 0 for a bell curve, larger = more extreme days. |
 | **Volatility clustering / memory** | Big moves come in bunches: today's move size predicts move sizes weeks later. |
 | **H (Hurst exponent)** | A memory number from *detrended fluctuation analysis* (DFA). 0.5 = no memory; above 0.5 = spells that persist; below 0.5 = moves that reverse. |
@@ -80,7 +80,7 @@ are in a paper we could not get, so they are fitted):
   - a Pareto law with known α;
   - white noise has H = 0.5.
 
-  All 293 tests pass; run them with `python3 -m pytest tests/ -q` (about 3 minutes).
+  All 359 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
 - **Every result is judged over many histories** on held-out seeds: one history can
   be calm and another wild with identical settings.
 - **The real market counts as typical** if it falls inside the middle 90% of the
@@ -88,8 +88,8 @@ are in a paper we could not get, so they are fitted):
 
 ## 5. Key findings, with the evidence
 
-**1. The rebuilt model reproduces the paper** (Figs 1–3). On 8 held-out runs of
-100,000 days:
+**1. The rebuilt model reproduces the paper's α and H; H of |returns| is a bit low**
+(Figs 1–3). On 8 held-out runs of 100,000 days:
 
 | | Paper | Rebuilt model |
 |---|---|---|
@@ -97,6 +97,11 @@ are in a paper we could not get, so they are fitted):
 | H of returns | 0.48 | 0.47 |
 | H of \|returns\| | 0.85 | 0.81 |
 | H of news | 0.49 | 0.50 |
+
+H of |returns| is **0.81 ± 0.02** (spread between runs) against the paper's
+**0.85 ± 0.01**, about 4 of the paper's error bars away, so it is **not reproduced**.
+The fit's score of 0.06 is a *training* score (50,000-day runs on training seeds);
+on these held-out runs it is about 2.0, almost all from H of |returns|.
 
 Returns cross over to a bell curve by 25 days. *How to read Fig 2:* each curve shows
 the share of days with a bigger move than x, on log-log axes. A bell curve drops
@@ -125,14 +130,17 @@ by 0.4–2% (total variation). This is the herding rule inside the model.
 **7. The S&P 500 looks like a typical history on 9 of 11 measures** (Fig 7). The two
 misses:
 - the model's returns reverse slightly (H 0.39 vs the S&P's 0.50);
-- its middle-to-large tail is a bit thinner (paper-style α 2.60 vs 2.35).
+- its middle-to-large tail is thinner: paper-style α 2.64 (median of the 40 histories)
+  vs the S&P's 2.35, which is below every history.
 
 *How to read:* each panel is one measure; the dots are 40 model histories, the
 black line is the S&P.
 
-**8. Markets it never saw** (Fig 8): indexes are mostly typical, but single stocks
-have fatter tails than an index-calibrated model. That makes sense: companies also
-have their own news.
+**8. Markets it never saw** (Fig 8): the two indexes are typical on most measures,
+but both are unusual on memory. Single stocks have higher kurtosis than an
+index-calibrated model (companies also have their own news), though their tail
+exponents are typical; and most stocks don't reverse from day to day the way the
+model does.
 
 **9. Robust, within limits** (Fig 9). 44% of random settings run away into endless
 bubbles. Of the stable ones, 65% give fat tails with long memory. The paper's "open
@@ -140,9 +148,33 @@ set" of good parameters is real, but stability is the main limit.
 
 **10. More herding is not always more crashes** (Fig 10). In the paper-matched
 model, tails are fattest at a middling herding strength (a1 ≈ 0.6). Above a1 = 1
-the chartists lock into one mood, and returns become a bell curve again. The
-extremes come from being *near* a tipping point, not from herding as such. That is
-the paper's word "criticality".
+the chartists lock into one mood *and* become far fewer, and returns become a bell
+curve again; the figure can't tell which of the two matters. A guess (not tested):
+the extremes come from being *near* a tipping point, which may be what the paper
+calls "criticality".
+
+**11. Policy (an extension, Fig 11): circuit breakers make no measurable difference
+to crashes, but a crowded market makes a surprise overshoot.** Run with and without the US circuit-breaker rules
+(15-minute pauses at −7% and −13%, closed at −20%), the same histories fall by about the
+same amount: on the day the first pause fires, the difference is −0.16 percentage points
+(95% interval −0.42 to +0.08), and no detectable difference 5 or 20 days later (the
+intervals rule out effects above about 2 points). The rules include the real 3:25 pm
+cutoff for the 7% and 13% pauses. A 10% policy surprise
+(a sudden drop in value, like an unexpected rate hike) moves the price about 10% in a
+calm market, but overshoots by about a quarter when 10–20% of traders are chartists
+(each history compared with itself without the surprise: median 0.29, 95% interval
+0.14 to 0.41, from only 18 histories, so the size is rough; the direction is clear).
+*How to read:* in panel a, dots on the dashed line mean breakers made no difference;
+in panel c, the gap between the black and grey lines shows the overshoot roughly (the exact,
+history-by-history numbers are the ones above).
+
+**Recalibration (November 2026).** Both fits were rerun with a wider search and a new
+stability screen (each finalist run for 100,000 days on 20 extra seeds). The old
+settings were kept for both: the new paper fit scored worse, and the new S&P fit,
+although it scored better and never ran away, had thin tails and almost no herding,
+so the S&P looked typical on only 6 of 11 measures (old settings: 9 of 11). Lesson:
+the S&P score can trade away the fat tails this project is about
+([`figures/RESULTS.md`](figures/RESULTS.md), "Recalibration").
 
 ## 6. The paper's economic standpoint, and what we found
 
@@ -159,7 +191,7 @@ statements about government or regulation. Measured with
 | Volatility rises with the noise-trader share | ✅ 0.59× → 1.41× | ✅ 0.51× → 1.49× |
 | Price direction is unpredictable (H ≈ 0.5) | ✅ 0.47 | ⚠️ 0.39 (mild reversal) |
 | Fat tails come from traders, not news | ✅ | ✅ |
-| Results hold for many settings | ⚠️ for the 56% of random settings that stay stable | |
+| Results hold for many settings | ⚠️ for about a third of random settings (65% of the 56% that stay stable) | |
 
 ## 7. What the model gets wrong (honest limitations)
 
@@ -172,9 +204,10 @@ statements about government or regulation. Measured with
 4. **No bounce-back after big days:** after a 3-sd day the S&P tends to reverse
    (−0.19); the model doesn't (+0.02).
 5. **Rare runaways:** the S&P-calibrated settings run away in 2 of 40 histories of
-   100,000 days (about 400 years each).
+   100,000 days (about 400 years each). A refit that never ran away lost the fat
+   tails instead, so it was not used.
 6. **Tails at long horizons:** the S&P keeps fat tails at 25 days (kurtosis 3.3);
-   the models return to a bell curve faster (1.1–1.6).
+   the models return to a bell curve faster (1.6–1.8, Fig 2).
 7. **One whole market, no company news**, so single stocks look more extreme than
    the model.
 
@@ -212,9 +245,9 @@ statements about government or regulation. Measured with
 python3 -m pip install -r requirements.txt
 python3 data/download.py               # data files (already in the repository)
 python3 main.py                        # S&P vs 20 held-out histories (about 15 s)
-python3 make_figures.py                # figures 1-10 (about 1-2 min on 8 cores)
+python3 make_figures.py                # figures 1-11 (about 2 min on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests (about 1 min)
-python3 -m pytest tests/ -q            # all 293 tests (about 3 min)
+python3 -m pytest tests/ -q            # all 359 tests (about 1.5 min)
 python3 -m herding.calibrate paper     # refit to the paper (about 20 min), then --refine
-python3 -m herding.calibrate spx       # refit to the S&P 500 (about 1.5 h), then --refine
+python3 -m herding.calibrate spx       # refit to the S&P 500 (1.5-2.5 h; resumes if stopped)
 ```

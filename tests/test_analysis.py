@@ -1,7 +1,7 @@
 """Checks on the analysis scripts: portable, valid, and they still run."""
 import ast
-import subprocess
-import sys
+import importlib.util
+import inspect
 
 import pytest
 
@@ -26,9 +26,23 @@ def test_every_script_is_listed_in_the_readme(path):
     assert f"`{path.name}`" in (ROOT / "analysis" / "README.md").read_text()
 
 
+def load_script(name):
+    """Import an analysis script as a module (without running its main)."""
+    spec = importlib.util.spec_from_file_location(name[:-3], ROOT / "analysis" / name)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("name", [p.name for p in SCRIPTS])
+def test_main_takes_size_arguments(name):
+    # so the tests can run each script on tiny sizes instead of the full ones
+    params = inspect.signature(load_script(name).main).parameters
+    assert "days" in params and "n" in params
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("name", [p.name for p in SCRIPTS])
 def test_analysis_script_still_runs(name):
-    out = subprocess.run([sys.executable, str(ROOT / "analysis" / name)], capture_output=True,
-                         text=True, timeout=900, cwd=ROOT)
-    assert out.returncode == 0, out.stderr[-1500:]
+    # tiny sizes: this checks the code path works, not the numbers it prints
+    load_script(name).main(days=3000, n=2)

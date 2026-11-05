@@ -12,7 +12,7 @@ from multiprocessing import Pool
 import numpy as np
 
 from herding import calibrate, experiments, kirman, market_data, model, plots, policy, stats
-from herding.plots import (AQUA, BLUE, BLUE_LIGHT, GRID, INK, MUTED, NEWS, ORANGE,
+from herding.plots import (BLUE, BLUE_LIGHT, GRID, INK, MUTED, NEWS, ORANGE,
                            ORANGE_LIGHT, PAPER_MODEL, REAL, SECOND, SPX_MODEL, plt)
 
 FIG = market_data.ROOT / "figures"
@@ -113,7 +113,7 @@ def fig2_aggregation(paper_r, paper_news, spx_model_runs, spx, path=FIG / "fig2_
                       "dashed = bell curve. Lux & Marchesi report tail α = 2.64 at τ = 1 and a cross-over to the "
                       "bell curve as τ grows. The news (dash-dot) is a bell curve at every τ. In b, kurtosis is the median "
                       "over histories (pooled, a single freak day would dominate it). Steps at small moves in a are "
-                      "price ticks (0.1% each): the paper-matched model moves only about 7 ticks on a typical day.")
+                      "price ticks (0.1% each): the paper-matched model's daily sd is only about 7 ticks.")
 
 
 # ------------------------------------------------------------------ Fig 3
@@ -309,16 +309,22 @@ def fig7_typical(spx_runs, spx, path=FIG / "fig7_typical.png"):
 def fig8_out_of_sample(pool, p, path=FIG / "fig8_out_of_sample.png", n=20):
     """Markets the calibration never saw: percentile of each among model histories."""
     keys = [k for k in stats.FINGERPRINT if k != "sd"]     # shape only: volatility differs by asset
-    series = [("S&P 500 1928–", market_data.returns("spx_1928").values),
-              ("Nasdaq-100 1985–", market_data.returns("ndx").values)]
-    series += [(t, market_data.stock_returns(t).values) for t in market_data.stock_tickers()]
+    if not 1 <= n <= len(HELD_OUT) // 2:
+        raise ValueError(f"n must be between 1 and {len(HELD_OUT) // 2}, got {n}")
+    # (name, returns, seeds): the indexes use held-out seeds 1000-1019, the stocks
+    # their own, 1020-1039, so the stocks are not compared with shorter copies of
+    # the very histories the indexes were compared with.
+    series = [("S&P 500 1928–", market_data.returns("spx_1928").values, HELD_OUT[:n]),
+              ("Nasdaq-100 1985–", market_data.returns("ndx").values, HELD_OUT[:n])]
+    series += [(t, market_data.stock_returns(t).values, HELD_OUT[n:2 * n])
+               for t in market_data.stock_tickers()]
     cache, rows = {}, []
-    for name, r in series:
-        if len(r) not in cache:
-            seeds = HELD_OUT[:n] if len(r) != 6748 else HELD_OUT[n:2 * n]
-            cache[len(r)] = [stats.fingerprint(x) for x in experiments.returns(p, seeds, len(r), pool=pool)]
+    for name, r, seeds in series:
+        if (len(r), seeds) not in cache:
+            cache[len(r), seeds] = [stats.fingerprint(x)
+                                    for x in experiments.returns(p, seeds, len(r), pool=pool)]
         f = stats.fingerprint(r)
-        rows.append([experiments.percentile(f[k], [s[k] for s in cache[len(r)]]) for k in keys])
+        rows.append([experiments.percentile(f[k], [s[k] for s in cache[len(r), seeds]]) for k in keys])
     rows = np.array(rows)
     fig, ax = plt.subplots(figsize=(13, 9))
     cmap = matplotlib_diverging()
@@ -360,14 +366,21 @@ def _robust(args):
     return stats.kurtosis(r), stats.alpha_regression(r), stats.hurst(np.abs(r), stats.dfa_scales(days))
 
 
+def _robust_base(args):
+    """The no-chartist yardstick for Fig 9: kurtosis and H of |returns|."""
+    i, days = args
+    p = calibrate.draw(np.random.default_rng(60_000 + i), calibrate.RANGES)
+    r = model.simulate(p, days, seed=7, chartists=False)["r"]
+    return stats.kurtosis(r), stats.hurst(np.abs(r), stats.dfa_scales(days))
+
+
 def fig9_robustness(pool, n=400, days=20_000, path=FIG / "fig9_robustness.png"):
     """The paper: results hold 'for an open set of parameter values'. Do they?"""
-    out = pool.map(_robust, [(i, days) for i in range(n)])
+    # chunksize=1: run times differ a lot (runaways stop early), so hand out one at a time
+    out = pool.map(_robust, [(i, days) for i in range(n)], chunksize=1)
     ok = np.array([o for o in out if o is not None])
-    base = [model.simulate(calibrate.draw(np.random.default_rng(60_000 + i), calibrate.RANGES),
-                           days, seed=7, chartists=False)["r"] for i in range(40)]
-    base_k = np.array([stats.kurtosis(r) for r in base])
-    base_h = np.array([stats.hurst(np.abs(r), stats.dfa_scales(days)) for r in base])
+    base = np.array(pool.map(_robust_base, [(i, days) for i in range(40)], chunksize=1))
+    base_k, base_h = base[:, 0], base[:, 1]
     fat = ok[:, 0] > base_k.max()
     memory = ok[:, 2] > base_h.max()
     fig, ax = plt.subplots(1, 2, figsize=(14, 5.2))
@@ -401,15 +414,22 @@ def fig9_robustness(pool, n=400, days=20_000, path=FIG / "fig9_robustness.png"):
 
 
 # ------------------------------------------------------------------ Fig 10
+MIN_SURVIVORS = 5     # Fig 10: a median of fewer surviving histories is not shown
+
+
 def _dial(pool, p, a1s, days, n):
+    """For each a1: (share of histories that did not run away, then the median
+    kurtosis, Hill alpha and worst day in sd over the survivors). The medians are
+    NaN (not drawn) when fewer than min(MIN_SURVIVORS, n) histories survived."""
     rows = []
     for a1 in a1s:
         out = experiments.histories(dict(p, a1=float(a1)), HELD_OUT[:n], days, pool=pool)
         ok = [h["r"] for h in out if h is not None]
+        enough = len(ok) >= min(MIN_SURVIVORS, n)
         rows.append((len(ok) / n,
-                     np.median([stats.kurtosis(r) for r in ok]) if ok else np.nan,
-                     np.median([stats.hill_alpha(r) for r in ok]) if ok else np.nan,
-                     np.median([np.abs(r).max() / r.std() for r in ok]) if ok else np.nan))
+                     np.median([stats.kurtosis(r) for r in ok]) if enough else np.nan,
+                     np.median([stats.hill_alpha(r) for r in ok]) if enough else np.nan,
+                     np.median([np.abs(r).max() / r.std() for r in ok]) if enough else np.nan))
     return np.array(rows)
 
 
@@ -435,7 +455,8 @@ def fig10_herding(pool, spx_p, paper_p, days, path=FIG / "fig10_herding.png", n=
     plots.save(fig, path, "Fig 10. Turning the herding dial",
                f"Each fitted setting with only a1 (how strongly chartists copy the majority mood) changed; dotted "
                f"lines mark the fitted a1. {n} held-out histories of {days:,} days at each value; a runaway is an "
-               "endless bubble. Missing points: every history ran away. This is the dial the web app will expose.")
+               f"endless bubble. Missing points in b-d: fewer than {MIN_SURVIVORS} histories survived, too few for a median. "
+               "This is the dial the web app will expose.")
     return a1s, {k: v[0] for k, v in dials.items()}
 
 
@@ -448,11 +469,13 @@ def fig11_policy(pool, p, spx, path=FIG / "fig11_policy.png", breaker_seeds=BREA
     rules, scale = policy.scaled_breakers(sd, np.std(spx))
     whole, events, bad_b = policy.breaker_experiment(pool, p, breaker_seeds, days, rules)
     surprise, bad_s = policy.surprise_experiment(pool, p, surprise_seeds)
-    diffs = {k: policy.paired_difference(events["off"][k], events["on"][k]) for k in policy.EVENT_DAYS}
+    # (fewer than 2 histories with a pause, e.g. in a short test run: nothing to compare)
+    diffs = {k: policy.paired_difference(events["off"][k], events["on"][k])
+             if len(events["on"][k]) >= 2 else (np.nan, np.nan, np.nan) for k in policy.EVENT_DAYS}
     fig, ax = plt.subplots(1, 3, figsize=(16, 5.0))
     a = ax[0]
     off, on = 100 * events["off"][1], 100 * events["on"][1]
-    lim = (min(off.min(), on.min()) - 1, max(off.max(), on.max()) + 1)
+    lim = (min(off.min(), on.min()) - 1, max(off.max(), on.max()) + 1) if len(on) else (-10, 0)
     a.plot(lim, lim, color=MUTED, ls="--", lw=1, label="no difference")
     a.scatter(off, on, s=14, color=SPX_MODEL, label="one history's first halt")
     a.axvline(-100 * rules["levels"][0], color=GRID, lw=1)
@@ -467,9 +490,11 @@ def fig11_policy(pool, p, spx, path=FIG / "fig11_policy.png", breaker_seeds=BREA
     for i, k in enumerate(policy.EVENT_DAYS):
         m, lo, hi = (100 * x for x in diffs[k])
         b.errorbar(i, m, yerr=[[m - lo], [hi - m]], fmt="o", ms=8, color=SPX_MODEL, capsize=5, lw=1.6)
-        b.text(i + 0.08, m, f"{m:+.1f}", va="center", fontsize=9.5, color=INK)
+        if np.isfinite(m):
+            b.text(i + 0.08, m, f"{m:+.1f}", va="center", fontsize=9.5, color=INK)
     b.axhline(0, color=MUTED, ls="--", lw=1)
-    b.set_xticks(range(len(policy.EVENT_DAYS)), [f"{k} day{'s' * (k > 1)} later" for k in policy.EVENT_DAYS])
+    b.set_xticks(range(len(policy.EVENT_DAYS)),
+                 ["the halt day" if k == 1 else f"after {k} days\n(counting the halt day)" for k in policy.EVENT_DAYS])
     b.set_xlim(-0.5, len(policy.EVENT_DAYS) - 0.5)
     b.set_ylabel("with minus without breakers (% points)")
     b.set_title("b. Change since the previous close (mean, 95% interval)")
@@ -495,12 +520,14 @@ def fig11_policy(pool, p, spx, path=FIG / "fig11_policy.png", breaker_seeds=BREA
     c.legend(loc="upper right")
     fig.tight_layout(rect=(0, 0.08, 1, 0.93))
     plots.save(fig, path, "Fig 11. Policy experiments (extension): circuit breakers and a policy surprise",
-               f"S&P-calibrated model. Breakers: the US rules (15-minute pauses at -7% and -13%, closed at -20%), "
+               f"S&P-calibrated model. Breakers: the US rules (15-minute pauses at -7% and -13% before 3:25 pm, "
+               f"closed at -20%), "
                f"scaled x{scale:.2f} to the model's volatility; {len(breaker_seeds)} paired histories of {days:,} days "
                f"with and without breakers, compared at each history's first halt (identical until then). "
                f"Surprise: {len(surprise_seeds)} histories, one 10% drop in the value on a random day; "
                "1 = the price fell exactly as much as the value; the placebo is the same measure without the "
-               "surprise (ordinary wobble), so the overshoot is the gap between the two medians.")
+               "surprise (ordinary wobble); the gap between the two medians shows the overshoot roughly "
+               "(paired numbers in figures/RESULTS.md).")
     summary = dict(scale=scale, levels=rules["levels"], breaker_runaways=bad_b, events=len(events["on"][1]),
                    halt_days=float(whole["on"]["halt_days"].mean()),
                    closed_days=float(whole["on"]["closed_days"].mean()),
@@ -513,6 +540,9 @@ def fig11_policy(pool, p, spx, path=FIG / "fig11_policy.png", breaker_seeds=BREA
             summary[f"surprise_{lo}-{hi}%"] = dict(n=int(m.sum()), peak=float(np.median(surprise["peak"][m])),
                                                    placebo=float(np.median(surprise["placebo_peak"][m] + 1)),
                                                    end=float(np.median(surprise["end"][m])))
+            if m.sum() >= 2:      # overshoot paired with each history's own placebo
+                summary[f"surprise_{lo}-{hi}%"]["overshoot"] = policy.median_overshoot(
+                    surprise["peak"][m], surprise["placebo_peak"][m])
     return summary
 
 

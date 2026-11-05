@@ -388,3 +388,49 @@ def test_halt_minutes_must_fit_in_a_day(bad):
 def test_shocks_must_be_days_in_range_and_fractions_above_minus_one(bad):
     with pytest.raises(ValueError, match="shock"):
         model.simulate(BASE, 10, shocks=bad)
+
+
+def test_minute_to_step_counts_steps_before_a_minute():
+    assert model.minute_to_step(355, 0.01) == 91         # 355/390 of 100 steps = 91.03
+    assert model.minute_to_step(390, 0.01) == 100
+    assert model.minute_to_step(0, 0.005) == 0
+    assert model.minute_to_step(195, 0.005) == 100
+
+
+def test_the_us_rules_include_the_3_25_pm_cutoff():
+    assert model.US_BREAKERS == dict(levels=(0.07, 0.13, 0.20), halt_minutes=15, last_pause_minute=355)
+
+
+def test_a_cutoff_at_the_end_of_the_day_changes_nothing():
+    a = model.simulate(model.SET_I, 500, seed=6, breakers=TIGHT)
+    b = model.simulate(model.SET_I, 500, seed=6, breakers=dict(TIGHT, last_pause_minute=390))
+    for k in ("lp", "lf", "z", "x", "halts"):
+        assert np.array_equal(a[k], b[k])
+
+
+def test_after_the_cutoff_only_the_last_level_stops_trading():
+    # Cutoff at minute 0: levels 1 and 2 can never pause, so a day is either open
+    # all day (0) or closed at level 3; days can fall past level 1 without a halt.
+    o = model.simulate(model.SET_I, 2000, seed=4, breakers=dict(TIGHT, last_pause_minute=0))
+    assert set(np.unique(o["halts"])) <= {0, 3} and (o["halts"] == 3).any()
+    assert np.any(o["r"][o["halts"] == 0] <= np.log(1 - 0.003))
+
+
+def test_a_cutoff_only_removes_pauses_that_would_start_late():
+    # Same random numbers: the two runs are identical until the first day on which
+    # the full rules paused trading (halts records only each day's highest level,
+    # so compare the prices, not halts). That day must have a halt in the full run.
+    full = model.simulate(model.SET_I, 300, seed=8, breakers=TIGHT)
+    cut = model.simulate(model.SET_I, 300, seed=8, breakers=dict(TIGHT, last_pause_minute=195))
+    differ = np.flatnonzero(full["lp"] != cut["lp"])
+    assert differ.size                                  # the cutoff mattered somewhere
+    day = differ[0] - 1                                 # lp[i] is the close of day i - 1
+    assert full["halts"][day] >= 1
+    assert np.array_equal(full["halts"][:day], cut["halts"][:day])
+
+
+@pytest.mark.parametrize("bad", [-1, 391, True, float("nan"), "355"])
+def test_last_pause_minute_must_be_a_minute_of_the_day(bad):
+    with pytest.raises(ValueError, match="last_pause_minute"):
+        model.simulate(BASE, 10, breakers=dict(levels=(0.1, 0.2, 0.3), halt_minutes=15,
+                                               last_pause_minute=bad))

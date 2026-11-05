@@ -40,5 +40,14 @@
   "tick": 0.001,
   "dt": 0.01,
   "floor": 4
- }
+ },
+ "stability": {
+  "seeds": [
+   2000,
+   2019
+  ],
+  "days": 100000,
+  "runaways": 0
+ },
+ "note": "kept from the first rebuild fit: the recalibration of November 2026 scored worse (0.554)"
 }

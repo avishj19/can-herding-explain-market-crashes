@@ -21,6 +21,7 @@ import json
 import sys
 import time
 from multiprocessing import Pool
+from pathlib import Path
 
 import numpy as np
 from scipy.optimize import minimize
@@ -47,6 +48,11 @@ SPX_RANGES = dict(RANGES, sigma_eps=(0.002, 0.02, "log"))   # the S&P also sets 
 
 # Paper fit: (value, tolerance) for each published number, and the longest
 # aggregated kurtosis allowed (the paper: a cross-over to the normal distribution).
+# The tolerances are this project's own yardsticks, NOT the paper's error bars.
+# The paper's bars (from its Fig 2 and 3 captions: alpha 0.077, H 0.003, H|r| 0.010)
+# are regression errors from one long run; they are smaller than how much these numbers change from
+# one run of the model to the next (H of |returns| varies by about 0.02), so no
+# setting could match them on every seed. The wider tolerances allow for that.
 PAPER_TARGETS = {"alpha_reg": (2.64, 0.15), "H": (0.48, 0.03), "H_abs": (0.85, 0.03)}
 PAPER_KURT_25_MAX = 1.0
 PAPER_DAYS = 50_000
@@ -195,9 +201,38 @@ class Fit:
         return self.loss(from_vector(v, self.ranges))
 
 
+class SavedLoss:
+    """A loss function whose every score is saved as one JSON line in `path`. A
+    score already in the file is read back instead of recomputed. Nelder-Mead is
+    deterministic, so a refinement restarted after a stop asks for the same points
+    in the same order and replays the saved ones instantly."""
+
+    def __init__(self, fn, path):
+        self.fn, self.path, self.cache = fn, Path(path), {}
+        if self.path.exists():
+            for line in self.path.read_text().splitlines():
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:          # a line cut off mid-write
+                    continue
+                self.cache[tuple(rec["v"])] = rec["loss"]
+
+    def __call__(self, v):
+        key = tuple(float(x) for x in v)
+        if key not in self.cache:
+            self.cache[key] = float(self.fn(np.array(key)))
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with self.path.open("a") as f:
+                if f.tell() and not self.path.read_bytes().endswith(b"\n"):
+                    f.write("\n")
+                f.write(json.dumps({"v": list(key), "loss": self.cache[key]}) + "\n")
+        return self.cache[key]
+
+
 def _refine(args):
-    fit, p, iters = args
-    res = minimize(fit.loss_of_vector, to_vector(p, fit.ranges), method="Nelder-Mead",
+    fit, p, iters = args[:3]
+    loss = fit.loss_of_vector if len(args) < 4 else SavedLoss(fit.loss_of_vector, args[3])
+    res = minimize(loss, to_vector(p, fit.ranges), method="Nelder-Mead",
                    options=dict(maxfev=iters, xatol=1e-3, fatol=1e-3))
     return float(res.fun), from_vector(res.x, fit.ranges)
 
@@ -220,27 +255,68 @@ def runaways(pool, p, seeds=STABILITY_SEEDS, days=STABILITY_DAYS):
 def screen(pool, candidates, seeds=STABILITY_SEEDS, days=STABILITY_DAYS):
     """Stability screen: sort (loss, settings) candidates by (runaways, loss), so the
     best fit among the never-runaway ones comes first. Returns (runaways, loss, p)."""
-    out = sorted(((runaways(pool, p, seeds, days), loss, p) for loss, p in candidates),
+    # one pool.map over every (candidate, seed), so no worker waits between candidates
+    jobs = [(p, int(s), int(days)) for _, p in candidates for s in seeds]
+    ran_away = pool.map(_runs_away, jobs, chunksize=1)
+    counts = [int(sum(ran_away[i * len(seeds):(i + 1) * len(seeds)])) for i in range(len(candidates))]
+    out = sorted(((bad, loss, p) for bad, (loss, p) in zip(counts, candidates)),
                  key=lambda c: (c[0], c[1]))
     for bad, loss, _ in out:
         print(f"  candidate loss {loss:.3f}: {bad} of {len(seeds)} long histories ran away")
     return out
 
 
-def run(kind, draws=1200, keep=8, iters=150, workers=8):
+CHECKPOINT_DIR = market_data.ROOT / "scratch" / "calibrate"   # git-ignored
+
+
+def checkpointed(pool, fn, jobs, path):
+    """pool.map(fn, jobs), but each result is saved as one JSON line in `path` as
+    soon as it is done, and results already in the file are not recomputed. So a
+    fit that is stopped (a flat battery) loses at most the jobs that were running.
+    Every result must be JSON-friendly; lists come back as tuples."""
+    path = Path(path)
+    done = {}
+    if path.exists():
+        for line in path.read_text().splitlines():
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:              # a line cut off mid-write
+                continue
+            done[rec["i"]] = tuple(rec["out"]) if isinstance(rec["out"], list) else rec["out"]
+    todo = [i for i in range(len(jobs)) if i not in done]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        if path.stat().st_size and not path.read_bytes().endswith(b"\n"):
+            f.write("\n")                            # end a line cut off mid-write
+        for i, out in zip(todo, pool.imap(fn, [jobs[i] for i in todo])):
+            f.write(json.dumps({"i": i, "out": out}) + "\n")
+            f.flush()
+            done[i] = tuple(out) if isinstance(out, list) else out
+    return [done[i] for i in range(len(jobs))]
+
+
+def run(kind, draws=1200, keep=8, iters=150, workers=8, checkpoint_dir=CHECKPOINT_DIR):
     """Random search, Nelder-Mead from the `keep` best, then the stability screen;
-    returns (loss, settings, runaways)."""
+    returns (loss, settings, runaways). Progress is saved in checkpoint_dir, so
+    running the same command again after a stop continues where it was; the
+    checkpoint files are removed once the fit has finished."""
     fit = Fit(kind)
     t = time.time()
+    tag = Path(checkpoint_dir) / f"{kind}_draws{draws}_keep{keep}_iters{iters}"
     with Pool(workers) as pool:
-        scored = sorted(pool.map(fit.score_draw, range(draws), chunksize=4), key=lambda d: d[0])
+        scored = checkpointed(pool, fit.score_draw, list(range(draws)), f"{tag}_search.jsonl")
+        scored.sort(key=lambda d: d[0])
         print(f"{kind}: {draws} random settings in {time.time() - t:.0f}s; "
               f"best loss {scored[0][0]:.2f}; runaways {sum(s >= RUNAWAY_LOSS for s, _ in scored)}",
               flush=True)
-        refined = pool.map(_refine, [(fit, p, iters) for _, p in scored[:keep]])
+        refined = checkpointed(pool, _refine, [(fit, p, iters, f"{tag}_refine{j}_scores.jsonl")
+                                               for j, (_, p) in enumerate(scored[:keep])],
+                               f"{tag}_refine.jsonl")
         print(f"{kind}: refined {keep} in {time.time() - t:.0f}s total; stability screen:", flush=True)
         bad, loss, p = screen(pool, refined)[0]
     print(f"{kind}: chose loss {loss:.3f} ({bad} runaways) after {time.time() - t:.0f}s")
+    for part in ["search", "refine"] + [f"refine{j}_scores" for j in range(keep)]:
+        Path(f"{tag}_{part}.jsonl").unlink(missing_ok=True)
     return loss, p, bad
 
 
