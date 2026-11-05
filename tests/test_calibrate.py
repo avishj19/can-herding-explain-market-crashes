@@ -166,3 +166,31 @@ def test_parallel_scoring_gives_exactly_the_plain_loss():
 def test_spx_fit_rejects_even_a_bubble_that_bursts():
     assert calibrate.Fit("spx").max_days == 1
     assert calibrate.Fit("paper").max_days == model.MAX_DAYS
+
+
+class SerialPool:
+    def map(self, fn, jobs, chunksize=None):
+        return [fn(j) for j in jobs]
+
+
+def test_runaways_counts_the_histories_that_run_away():
+    # Parameter set I runs away on seed 1 before day 30,000 (tests/test_model.py);
+    # with no herding pull at all (a1 = a2 = 0, few chartists) nothing runs away.
+    assert calibrate.runaways(SerialPool(), model.SET_I, seeds=(1,), days=30_000) == 1
+    calm = dict(model.SET_I, a1=0.0, a2=0.0, tc=0.002)
+    assert calibrate.runaways(SerialPool(), calm, seeds=(1, 2), days=3000) == 0
+
+
+def test_screen_puts_a_stable_worse_fit_before_an_unstable_better_one():
+    calm = dict(model.SET_I, a1=0.0, a2=0.0, tc=0.002)
+    out = calibrate.screen(SerialPool(), [(0.1, model.SET_I), (5.0, calm), (3.0, calm)],
+                           seeds=(1,), days=30_000)
+    assert [(bad, loss) for bad, loss, _ in out] == [(0, 3.0), (0, 5.0), (1, 0.1)]
+
+
+def test_save_records_the_stability_screen(tmp_path, monkeypatch):
+    monkeypatch.setattr(calibrate, "SETTINGS_DIR", tmp_path)
+    path = calibrate.save("spx", 1.5, model.SET_I, runaways=0, draws=3000)
+    out = json.loads(path.read_text())
+    assert out["draws"] == 3000
+    assert out["stability"] == dict(seeds=[2000, 2019], days=100_000, runaways=0)

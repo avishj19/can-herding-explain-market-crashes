@@ -5,7 +5,7 @@ import pytest
 from matplotlib.image import imread
 
 import make_figures as mf
-from herding import calibrate, experiments, stats
+from herding import calibrate, experiments, market_data, stats
 
 
 class SerialPool:
@@ -93,5 +93,10 @@ def test_fig8_fig9_fig10_with_the_fitted_settings(tmp_path):
     a1s, dials = mf.fig10_herding(pool, p, calibrate.load("paper"), 3000, tmp_path / "f10.png", n=2)
     for rows in dials.values():
         assert rows.shape == (len(a1s), 4) and np.all((rows[:, 0] >= 0) & (rows[:, 0] <= 1))
-    for name in ("f8.png", "f9.png", "f10.png"):
+    out = mf.fig11_policy(pool, p, market_data.spx_returns().values[:4000], tmp_path / "f11.png",
+                          breaker_seeds=range(3000, 3006), surprise_seeds=range(4000, 4010))
+    assert out["breaker_runaways"] + 6 >= 6 and out["events"] <= 6
+    lo_hi = [v for k, v in out.items() if k.startswith("surprise_")]
+    assert sum(v["n"] for v in lo_hi) + out["surprise_runaways"] == 10
+    for name in ("f8.png", "f9.png", "f10.png", "f11.png"):
         assert is_image(tmp_path / name)

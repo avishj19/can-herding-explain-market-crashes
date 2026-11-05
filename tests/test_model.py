@@ -149,8 +149,10 @@ def test_max_gap_must_be_positive_or_none(bad):
 def test_numba_and_plain_python_give_identical_histories():
     code = ("import sys, numpy as np; sys.path.insert(0, '.');"
             "from herding import model;"
-            "o = model.simulate(model.SET_I, 30, seed=9);"
-            "np.save(sys.argv[1], np.vstack([o['lp'], o['lf'], o['z'], o['x']]))")
+            "o = model.simulate(model.SET_I, 30, seed=9, shocks={5: -0.1},"
+            " breakers=dict(levels=(0.002, 0.004, 0.006), halt_minutes=30));"
+            "np.save(sys.argv[1], np.vstack([o['lp'], o['lf'], o['z'], o['x'],"
+            " np.append(o['halts'], -1)]))")
     out = {}
     for flag in ("0", "1"):
         path = f"scratch_numba_{flag}.npy"
@@ -300,3 +302,89 @@ def test_matches_golden_output():
     o = model.simulate(BASE, 300, seed=0)
     for k in ("lp", "lf", "z", "x"):
         assert np.array_equal(o[k], gold[k]), k
+
+
+# ------------------------------------------------------------------ policy options (extension)
+
+TIGHT = dict(levels=(0.003, 0.006, 0.009), halt_minutes=15)   # fires on many days
+
+
+def test_breakers_off_and_breakers_that_never_fire_change_nothing():
+    # Same seed: with breakers that cannot fire (a 97% fall), every random number is
+    # used in the same way, so the history must be identical to no breakers at all.
+    a = model.simulate(model.SET_I, 300, seed=3)
+    b = model.simulate(model.SET_I, 300, seed=3,
+                       breakers=dict(levels=(0.97, 0.98, 0.99), halt_minutes=15))
+    for k in ("lp", "lf", "z", "x"):
+        assert np.array_equal(a[k], b[k])
+    assert not a["halts"].any() and not b["halts"].any()
+
+
+def test_a_day_without_a_halt_never_fell_to_the_first_level():
+    o = model.simulate(model.SET_I, 2000, seed=4, breakers=TIGHT)
+    h, r = o["halts"], o["r"]
+    assert set(np.unique(h)) == {0, 1, 2, 3}           # every level fires at some point
+    assert np.all(r[h == 0] > np.log(1 - 0.003))
+
+
+def test_closing_freezes_the_price_at_the_fall_that_closed_it():
+    # A slow price (beta 0.05: about 2.5 ticks per step at most in set I), so one
+    # step cannot jump far past the level; after closing, the price must stay there.
+    o = model.simulate(dict(model.SET_I, beta=0.05), 2000, seed=4, breakers=TIGHT)
+    r, h = o["r"][o["halts"] == 3], o["halts"]
+    one_step = 40 * np.log(1 + 0.001)                  # far more ticks than one step makes
+    assert np.all(r <= np.log(1 - 0.009))
+    assert np.all(r > np.log(1 - 0.009) - one_step)
+    assert (h == 3).sum() > 10
+
+
+def test_a_pause_of_a_whole_day_freezes_the_close_between_the_levels():
+    # halt_minutes=390: after the first-level fall the price is frozen for the rest
+    # of the day, so the close sits between level 1 and level 2.
+    o = model.simulate(model.SET_I, 2000, seed=5, breakers=dict(TIGHT, halt_minutes=390))
+    r = o["r"][o["halts"] == 1]
+    assert len(r) > 10
+    assert np.all((r <= np.log(1 - 0.003)) & (r > np.log(1 - 0.006)))
+
+
+def test_pause_steps_converts_minutes_of_a_390_minute_day():
+    assert model.pause_steps(15, 0.01) == 4               # 15/390 day = 3.85 steps of 0.01
+    assert model.pause_steps(39, 0.01) == 10
+    assert model.pause_steps(390, 0.005) == 200
+    assert model.pause_steps(0.1, 0.01) == 1              # never shorter than one step
+
+
+def test_a_policy_surprise_moves_the_value_once_by_exactly_its_size():
+    o = model.simulate(settings(sigma_eps=0.0), 50, seed=1, shocks={20: -0.1, 30: 0.05})
+    lf = o["lf"]
+    assert np.all(lf[:21] == 0)
+    assert np.allclose(lf[21:31], np.log(0.9))
+    assert np.allclose(lf[31:], np.log(0.9) + np.log(1.05))
+
+
+@pytest.mark.parametrize("bad", [
+    (0.07, 0.13), (0.13, 0.07, 0.2), (0.0, 0.1, 0.2), (0.1, 0.2, 1.0), (0.1, True, 0.3),
+    (0.1, float("nan"), 0.3)])
+def test_breaker_levels_must_be_three_increasing_falls(bad):
+    with pytest.raises(ValueError, match="levels"):
+        model.simulate(BASE, 10, breakers=dict(levels=bad, halt_minutes=15))
+
+
+@pytest.mark.parametrize("bad", [dict(levels=(0.1, 0.2, 0.3)), [0.1, 0.2, 0.3],
+                                 dict(levels=(0.1, 0.2, 0.3), halt_minutes=15, extra=1)])
+def test_breakers_need_exactly_levels_and_minutes(bad):
+    with pytest.raises(ValueError, match="breakers"):
+        model.simulate(BASE, 10, breakers=bad)
+
+
+@pytest.mark.parametrize("bad", [0, -5, 391, True, float("inf")])
+def test_halt_minutes_must_fit_in_a_day(bad):
+    with pytest.raises(ValueError, match="halt_minutes"):
+        model.simulate(BASE, 10, breakers=dict(levels=(0.1, 0.2, 0.3), halt_minutes=bad))
+
+
+@pytest.mark.parametrize("bad", [{10: 0.1}, {-1: 0.1}, {2.0: 0.1}, {True: 0.1}, {2: -1.0},
+                                 {2: float("nan")}, {2: "x"}, [(2, 0.1)]])
+def test_shocks_must_be_days_in_range_and_fractions_above_minus_one(bad):
+    with pytest.raises(ValueError, match="shock"):
+        model.simulate(BASE, 10, shocks=bad)

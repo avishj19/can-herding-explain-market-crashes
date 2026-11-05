@@ -10,6 +10,10 @@ moves the price one tick at a time. News moves the fundamental value as Gaussian
 noise, so any fat tails or volatility clustering must come from the traders.
 
 Section numbers (sec. 1-5) refer to notes/SPEC.md.
+
+Policy options (an extension, not part of the paper; SPEC.md "Policy experiments"):
+circuit breakers that pause or close trading after a big fall within the day, and
+one-off policy surprises that move the fundamental value.
 """
 import os
 
@@ -54,6 +58,10 @@ MAX_GAP = 1.0          # a runaway: the price more than e = 2.7x away from its v
 MAX_DAYS = 250         # ...for a whole year of trading days in a row,
 HARD_GAP = 20.0        # or ever more than e^20 (5 hundred million) times away
 START_CHARTISTS = 0.1  # share of chartists at the start, split evenly into the two moods
+# US market-wide circuit breakers since 2013 (SEC Rule 80B / NYSE 7.12): a 15-minute
+# pause when the S&P 500 is 7% or 13% below the previous close, closed for the day at 20%
+US_BREAKERS = dict(levels=(0.07, 0.13, 0.20), halt_minutes=15)
+MINUTES_PER_DAY = 390  # 9:30 to 16:00
 
 
 # ------------------------------------------------------------------ checks
@@ -119,11 +127,17 @@ def _cap(u):
 
 def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
               beta, sigma_mu, sigma_eps, tick, floor, n_plus, n_minus, max_gap, max_days,
-              hard_gap):
+              hard_gap, cb1, cb2, cb3, halt_steps, shock):
     """The simulation loop (see SPEC.md). Returns per-day log price, log value,
-    chartist share and opinion at each day's close, and the number of days
-    completed (fewer than `days` if the price ran away: |log price - log value|
-    above max_gap for max_days days in a row, or ever above hard_gap)."""
+    chartist share and opinion at each day's close, the circuit-breaker level of
+    each day, and the number of days completed (fewer than `days` if the price ran
+    away: |log price - log value| above max_gap for max_days days in a row, or ever
+    above hard_gap).
+    Circuit breakers: 0 > cb1 > cb2 > cb3 are log falls from the previous close
+    (-inf = off). Falling to cb1 or cb2 freezes the price for
+    halt_steps steps (once each per day); falling to cb3 freezes it for the rest of
+    the day. Traders keep switching while the price is frozen.
+    shock[day]: log change of the value at the start of that day (policy surprise)."""
     dt = 1.0 / steps
     window = int(round(TREND_WINDOW * steps))
     up_step, down_step = np.log(1.0 + tick), np.log(1.0 - tick)
@@ -142,9 +156,13 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
     nc = n_plus + n_minus
     out_z[0] = nc / N
     out_x[0] = (n_plus - n_minus) / nc if nc > 0 else 0.0
+    halts = np.zeros(days, dtype=np.int64)     # 0 none, 1-2 pause levels, 3 closed
     t = 0
     outside = 0                                # days in a row beyond max_gap
     for day in range(days):
+        lf += shock[day]
+        prev_close = lp
+        paused = 0                             # steps of pause left
         for _ in range(steps):
             # dp/dt / p: relative price change per day over the trend window
             trend = (np.exp(lp - past[t % window]) - 1.0) / TREND_WINDOW
@@ -189,10 +207,23 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
             # ticks per day = beta (ED + mu) / tick, so that on average
             # d(ln p)/dt = beta (ED + mu), SPEC eq. 25
             push = beta * (ed + mu_sd * g.standard_normal()) / tick
-            if push > 0.0:
-                lp += g.poisson(push * dt) * up_step
+            if halts[day] == 3 or paused > 0:  # trading halted: the price is frozen
+                paused = max(0, paused - 1)
             else:
-                lp += g.poisson(-push * dt) * down_step
+                if push > 0.0:
+                    lp += g.poisson(push * dt) * up_step
+                else:
+                    lp += g.poisson(-push * dt) * down_step
+                # circuit breakers: each level fires at most once a day
+                fall = lp - prev_close
+                if fall <= cb3:
+                    halts[day] = 3
+                elif fall <= cb2 and halts[day] < 2:
+                    halts[day] = 2
+                    paused = halt_steps
+                elif fall <= cb1 and halts[day] < 1:
+                    halts[day] = 1
+                    paused = halt_steps
             # sec. 4: news
             lf += sigma_eps * np.sqrt(dt) * g.standard_normal()
         nc = n_plus + n_minus
@@ -201,8 +232,8 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
         out_x[day + 1] = (n_plus - n_minus) / nc if nc > 0 else 0.0
         outside = outside + 1 if abs(lp - lf) > max_gap else 0
         if outside >= max_days or abs(lp - lf) > hard_gap:
-            return out_lp, out_lf, out_z, out_x, day + 1
-    return out_lp, out_lf, out_z, out_x, days
+            return out_lp, out_lf, out_z, out_x, halts, day + 1
+    return out_lp, out_lf, out_z, out_x, halts, days
 
 
 USE_NUMBA = numba is not None and os.environ.get("MODEL_NO_NUMBA") != "1"
@@ -212,15 +243,61 @@ if USE_NUMBA:
     _simulate = numba.njit(cache=True)(_simulate)
 
 
-def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_DAYS):
+def check_breakers(breakers):
+    """Circuit-breaker rules: dict(levels=(l1, l2, l3), halt_minutes=m). The levels
+    are falls below the previous close (0.07 = 7%), increasing; l1 and l2 pause
+    trading for m minutes of a 390-minute day, l3 closes it. None = no breakers."""
+    if breakers is None:
+        return
+    if not isinstance(breakers, dict) or set(breakers) != {"levels", "halt_minutes"}:
+        raise ValueError(f"breakers needs exactly 'levels' and 'halt_minutes', got {breakers!r}")
+    lv = tuple(breakers["levels"])
+    if len(lv) != 3 or not all(_is_number(x) and 0 < x < 1 for x in lv) \
+            or not lv[0] < lv[1] < lv[2]:
+        raise ValueError(f"breaker levels must be 3 increasing falls between 0 and 1, got {lv}")
+    m = breakers["halt_minutes"]
+    if not _is_number(m) or not 0 < m <= MINUTES_PER_DAY:
+        raise ValueError(f"halt_minutes must be a number from 0 to {MINUTES_PER_DAY}, got {m!r}")
+
+
+def check_shocks(shocks, days):
+    """Policy surprises: {day: fraction}, e.g. {200: -0.1} = at the start of day 200
+    a surprise cuts the fundamental value by 10%. None = no surprises."""
+    if shocks is None:
+        return
+    if not isinstance(shocks, dict):
+        raise ValueError(f"shocks must be a dict {{day: fraction}}, got {shocks!r}")
+    for day, x in shocks.items():
+        if isinstance(day, (bool, np.bool_)) or not isinstance(day, (int, np.integer)) \
+                or not 0 <= day < days:
+            raise ValueError(f"shock day must be a whole number from 0 to {days - 1}, got {day!r}")
+        if not _is_number(x) or not x > -1:
+            raise ValueError(f"shock on day {day} must be a number above -1 (a fraction), got {x!r}")
+
+
+def pause_steps(minutes, dt):
+    """A pause of `minutes` (of a 390-minute day) in time steps of dt days: at least 1."""
+    return max(1, int(round(minutes / MINUTES_PER_DAY / dt)))
+
+
+def _is_number(x):
+    return isinstance(x, (int, float, np.number)) and not isinstance(x, (bool, np.bool_)) \
+        and bool(np.isfinite(x))
+
+
+def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_DAYS,
+             breakers=None, shocks=None):
     """Run the market for `days` trading days with settings p.
 
     Returns a dict of daily series (one value per day's close, days + 1 values):
         lp, lf  log price and log fundamental value (both start at 0)
         z       share of traders who are chartists
         x       chartists' opinion, (optimists - pessimists) / chartists
-    plus r, the daily log returns (days values).
+    plus r, the daily log returns (days values), and halts, the circuit-breaker
+    level reached each day (days values: 0 none, 1 or 2 a pause, 3 closed early).
     chartists=False runs the "no chartists" check: everybody is a fundamentalist.
+    breakers (check_breakers, e.g. US_BREAKERS) and shocks (check_shocks) are the
+    policy options; both off by default, which leaves the model exactly as in SPEC.md.
 
     Raises RunawayError if the price runs away: more than a factor e^max_gap from
     its value for max_days trading days in a row, or ever more than e^HARD_GAP
@@ -240,15 +317,25 @@ def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_D
     if isinstance(max_days, (bool, np.bool_)) or not isinstance(max_days, (int, np.integer)) \
             or max_days < 1:
         raise ValueError(f"max_days must be a whole number >= 1, got {max_days!r}")
-    lp, lf, z, x, done = _simulate(
+    check_breakers(breakers)
+    check_shocks(shocks, days)
+    if breakers is None:
+        cb, halt_steps = (-np.inf, -np.inf, -np.inf), 0
+    else:
+        cb = tuple(float(np.log(1.0 - x)) for x in breakers["levels"])
+        halt_steps = pause_steps(breakers["halt_minutes"], p["dt"])
+    shock = np.zeros(int(days))
+    for day, frac in (shocks or {}).items():
+        shock[day] += np.log1p(frac)
+    lp, lf, z, x, halts, done = _simulate(
         np.random.default_rng(seed), int(days), int(round(1 / p["dt"])), bool(chartists),
         N, *(float(p[k]) for k in ("v1", "v2", "a1", "a2", "a3", "s", "R", "tc", "gamma",
                                    "beta", "sigma_mu", "sigma_eps", "tick")),
         floor, each, each, np.inf if max_gap is None else float(max_gap), int(max_days),
-        np.inf if max_gap is None else HARD_GAP)
+        np.inf if max_gap is None else HARD_GAP, *cb, int(halt_steps), shock)
     if done < days:
         ratio = np.exp(min(abs(lp[done] - lf[done]), 700.0))   # 700: largest safe exponent
         raise RunawayError(f"day {done}: the price is {ratio:.3g}x away from its value with "
                            f"{z[done]:.0%} chartists and has not come back (a runaway "
                            f"{'bubble' if lp[done] > lf[done] else 'crash'})", done)
-    return dict(r=np.diff(lp), lp=lp, lf=lf, z=z, x=x)
+    return dict(r=np.diff(lp), lp=lp, lf=lf, z=z, x=x, halts=halts)

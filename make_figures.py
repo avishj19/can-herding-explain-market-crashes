@@ -1,4 +1,4 @@
-"""Make every results figure (figures/fig1-10*.png), explained in figures/RESULTS.md.
+"""Make every results figure (figures/fig1-11*.png), explained in figures/RESULTS.md.
 
 Run:  python3 make_figures.py        (a few minutes with numba, using every core)
 
@@ -11,13 +11,15 @@ from multiprocessing import Pool
 
 import numpy as np
 
-from herding import calibrate, experiments, kirman, market_data, model, plots, stats
+from herding import calibrate, experiments, kirman, market_data, model, plots, policy, stats
 from herding.plots import (AQUA, BLUE, BLUE_LIGHT, GRID, INK, MUTED, NEWS, ORANGE,
                            ORANGE_LIGHT, PAPER_MODEL, REAL, SECOND, SPX_MODEL, plt)
 
 FIG = market_data.ROOT / "figures"
 HELD_OUT = calibrate.HELD_OUT_SEEDS            # 40 seeds, never used for fitting
 LONG = 100_000                                 # days in a long run (the paper's Figs 2-3)
+BREAKER_SEEDS = tuple(range(3000, 3200))       # policy experiments: their own seeds
+SURPRISE_SEEDS = tuple(range(4000, 4400))
 TAUS = (1, 5, 15, 25)                          # the paper's aggregation horizons
 LABEL = {k: k for k in stats.FINGERPRINT}
 LABEL.update(sd="daily sd", kurtosis="kurtosis", alpha_hill="tail α (Hill)",
@@ -437,6 +439,83 @@ def fig10_herding(pool, spx_p, paper_p, days, path=FIG / "fig10_herding.png", n=
     return a1s, {k: v[0] for k, v in dials.items()}
 
 
+# ------------------------------------------------------------------ Fig 11
+def fig11_policy(pool, p, spx, path=FIG / "fig11_policy.png", breaker_seeds=BREAKER_SEEDS,
+                 surprise_seeds=SURPRISE_SEEDS):
+    """Extension: circuit breakers and a policy surprise, in S&P-calibrated markets."""
+    days = len(spx)
+    sd = np.median([r.std() for r in experiments.returns(p, breaker_seeds[:5], days, pool=pool)])
+    rules, scale = policy.scaled_breakers(sd, np.std(spx))
+    whole, events, bad_b = policy.breaker_experiment(pool, p, breaker_seeds, days, rules)
+    surprise, bad_s = policy.surprise_experiment(pool, p, surprise_seeds)
+    diffs = {k: policy.paired_difference(events["off"][k], events["on"][k]) for k in policy.EVENT_DAYS}
+    fig, ax = plt.subplots(1, 3, figsize=(16, 5.0))
+    a = ax[0]
+    off, on = 100 * events["off"][1], 100 * events["on"][1]
+    lim = (min(off.min(), on.min()) - 1, max(off.max(), on.max()) + 1)
+    a.plot(lim, lim, color=MUTED, ls="--", lw=1, label="no difference")
+    a.scatter(off, on, s=14, color=SPX_MODEL, label="one history's first halt")
+    a.axvline(-100 * rules["levels"][0], color=GRID, lw=1)
+    a.axhline(-100 * rules["levels"][0], color=GRID, lw=1)
+    a.set_xlim(lim)
+    a.set_ylim(lim)
+    a.set_xlabel("day's change without breakers (%)")
+    a.set_ylabel("same day with breakers (%)")
+    a.set_title("a. The day a breaker first fires")
+    a.legend(loc="upper left")
+    b = ax[1]
+    for i, k in enumerate(policy.EVENT_DAYS):
+        m, lo, hi = (100 * x for x in diffs[k])
+        b.errorbar(i, m, yerr=[[m - lo], [hi - m]], fmt="o", ms=8, color=SPX_MODEL, capsize=5, lw=1.6)
+        b.text(i + 0.08, m, f"{m:+.1f}", va="center", fontsize=9.5, color=INK)
+    b.axhline(0, color=MUTED, ls="--", lw=1)
+    b.set_xticks(range(len(policy.EVENT_DAYS)), [f"{k} day{'s' * (k > 1)} later" for k in policy.EVENT_DAYS])
+    b.set_xlim(-0.5, len(policy.EVENT_DAYS) - 0.5)
+    b.set_ylabel("with minus without breakers (% points)")
+    b.set_title("b. Change since the previous close (mean, 95% interval)")
+    c = ax[2]
+    z = 100 * surprise["chartists"]
+    c.scatter(z, surprise["placebo_peak"] + 1, s=10, color=MUTED, alpha=0.5,
+              label="same history, no surprise (placebo)")
+    c.scatter(z, surprise["peak"], s=12, color=SPX_MODEL, label="with a 10% surprise")
+    edges = np.array([0, 5, 10, 20, 100])
+    mids, med, med0 = [], [], []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        m = (z >= lo) & (z < hi)
+        if m.sum() >= 5:
+            mids.append(np.median(z[m]))
+            med.append(np.median(surprise["peak"][m]))
+            med0.append(np.median(surprise["placebo_peak"][m] + 1))
+    c.plot(mids, med, "o-", color=INK, lw=2, label="median, with the surprise")
+    c.plot(mids, med0, "o--", color=SECOND, lw=1.6, label="median, placebo")
+    c.axhline(1, color=MUTED, ls="--", lw=1)
+    c.set_xlabel("chartists the day before the surprise (% of traders)")
+    c.set_ylabel("largest fall within 10 days, in units of the surprise")
+    c.set_title("c. A policy surprise: the value drops 10% at once")
+    c.legend(loc="upper right")
+    fig.tight_layout(rect=(0, 0.08, 1, 0.93))
+    plots.save(fig, path, "Fig 11. Policy experiments (extension): circuit breakers and a policy surprise",
+               f"S&P-calibrated model. Breakers: the US rules (15-minute pauses at -7% and -13%, closed at -20%), "
+               f"scaled x{scale:.2f} to the model's volatility; {len(breaker_seeds)} paired histories of {days:,} days "
+               f"with and without breakers, compared at each history's first halt (identical until then). "
+               f"Surprise: {len(surprise_seeds)} histories, one 10% drop in the value on a random day; "
+               "1 = the price fell exactly as much as the value; the placebo is the same measure without the "
+               "surprise (ordinary wobble), so the overshoot is the gap between the two medians.")
+    summary = dict(scale=scale, levels=rules["levels"], breaker_runaways=bad_b, events=len(events["on"][1]),
+                   halt_days=float(whole["on"]["halt_days"].mean()),
+                   closed_days=float(whole["on"]["closed_days"].mean()),
+                   worse_day1=int(np.sum(events["on"][1] < events["off"][1])),
+                   better_day1=int(np.sum(events["on"][1] > events["off"][1])),
+                   diffs=diffs, surprise_runaways=bad_s)
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        m = (z >= lo) & (z < hi)
+        if m.any():
+            summary[f"surprise_{lo}-{hi}%"] = dict(n=int(m.sum()), peak=float(np.median(surprise["peak"][m])),
+                                                   placebo=float(np.median(surprise["placebo_peak"][m] + 1)),
+                                                   end=float(np.median(surprise["end"][m])))
+    return summary
+
+
 # ------------------------------------------------------------------ all
 def main():
     plots.style()
@@ -469,6 +548,7 @@ def main():
         a1s, dials = fig10_herding(pool, spx_p, paper, len(spx))
         for name, rows in dials.items():
             print("fig10", name, dict(zip(a1s.tolist(), np.round(rows, 2).tolist())))
+        print("fig11", fig11_policy(pool, spx_p, spx))
 
 
 if __name__ == "__main__":
