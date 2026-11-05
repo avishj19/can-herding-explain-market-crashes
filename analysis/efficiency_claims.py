@@ -1,43 +1,47 @@
-"""Lux & Marchesi (1999) efficient-market claims, measured on the model: price equals
-value on average, no persistent large mispricing, volatility rises with the chartist share.
+"""Lux & Marchesi (1999)'s efficient-market claims, measured on both fitted settings.
+
+The paper (p. 499-500): (1) "a price which on average equals the fundamental value";
+(2) "no pathological situations, with persistent deviations from the economy's
+fundamentals"; (3) volatility is above average when the share of noise traders is
+high (near a critical value).
 
 Run from the project folder:  python3 analysis/efficiency_claims.py
 """
 import sys
-from multiprocessing import Pool
 from pathlib import Path
-import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from herding import calibrate, model  # noqa: E402
-from herding.experiments import BURN, DAYS  # noqa: E402
+import numpy as np
+
+from herding import calibrate, experiments
+
+DAYS = 100_000
 
 
-def run(args):
-    p, seed = args
-    o = model.simulate_full(DAYS + BURN, p=p, seed=seed)
-    r, frac = o["r"][BURN:], o["frac"][BURN:]
-    mis = (o["lp"] - o["lf"])[BURN + 1:]
-    # longest stretch where |mispricing| > 10%
-    big = np.abs(mis) > 0.10
-    e = np.diff(np.r_[0, big.astype(int), 0]); runs = np.where(e == -1)[0] - np.where(e == 1)[0]
-    # volatility by chartist share (the paper's "critical fraction")
-    bins = [0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.01]
-    vol = [np.std(r[(frac >= lo) & (frac < hi)]) if np.sum((frac >= lo) & (frac < hi)) > 50 else np.nan
-           for lo, hi in zip(bins[:-1], bins[1:])]
-    return mis.mean(), np.abs(mis).mean(), runs.max() if len(runs) else 0, big.mean(), vol, r.std()
+def longest_run(mask):
+    best = run = 0
+    for m in mask:
+        run = run + 1 if m else 0
+        best = max(best, run)
+    return best
+
+
+def main():
+    for kind in ("paper", "spx"):
+        p = calibrate.load(kind)
+        h = experiments.histories(p, calibrate.HELD_OUT_SEEDS[:4], DAYS, keep=("r", "lp", "lf", "z"))
+        h = [x for x in h if x is not None]
+        gap = np.concatenate([x["lp"] - x["lf"] for x in h])
+        r = np.concatenate([x["r"] for x in h])
+        z = np.concatenate([x["z"][1:] for x in h])
+        vol = np.abs(r) / r.std()
+        low, high = vol[z <= np.quantile(z, 0.1)].mean(), vol[z >= np.quantile(z, 0.9)].mean()
+        print(f"{kind}: {len(h)} histories x {DAYS:,} days")
+        print(f"  (1) mean log(price/value) {gap.mean():+.4f} (sd {gap.std():.4f})")
+        print(f"  (2) days more than 10% mispriced {np.mean(np.abs(gap) > np.log(1.1)):.2%}; "
+              f"longest such stretch {max(longest_run(np.abs(x['lp'] - x['lf']) > np.log(1.1)) for x in h)} days")
+        print(f"  (3) volatility, least crowded 10% of days {low:.2f}x average, most crowded 10% {high:.2f}x")
 
 
 if __name__ == "__main__":
-    for name, p in [("calibrated v3", calibrate.load()), ("default settings", model.P)]:
-        with Pool() as pool:
-            res = pool.map(run, [(p, s) for s in range(600, 620)])
-        m = np.array([x[0] for x in res]); a = np.array([x[1] for x in res])
-        L = np.array([x[2] for x in res]); share = np.array([x[3] for x in res])
-        vol = np.nanmedian(np.array([np.array(x[4]) / x[5] for x in res]), axis=0)
-        print(f"\n{name}")
-        print(f"  1. price = value on average: mean log(price/value) {m.mean():+.4f} (sd across histories {m.std():.4f})")
-        print(f"     typical |mispricing| {a.mean():.3%}")
-        print(f"  2. no persistent big deviations: days with |mispricing|>10%: {share.mean():.2%}, "
-              f"longest such stretch: median {np.median(L):.0f} days, max {L.max():.0f}")
-        print("  3. volatility (relative to overall) by chartist share 0-10,10-30,30-50,50-70,70-90,90-100%:",
-              " ".join("  -  " if np.isnan(v) else f"{v:.2f}" for v in vol))
+    main()

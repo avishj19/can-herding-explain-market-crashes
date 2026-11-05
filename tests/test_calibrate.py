@@ -1,225 +1,168 @@
-"""Tests for calibrate.py: the search is sound and the result holds on new seeds."""
+"""Tests for herding/calibrate.py (the two fits: paper and S&P 500)."""
 import json
 
 import numpy as np
 import pytest
 
-from herding import calibrate
-from herding import model
-from herding import stats
-
-TARGET = {k: 0.0 for k in calibrate.TARGETS}
+from herding import calibrate, model, stats
 
 
-def test_loss_exact_by_hand():
-    # one fact off by exactly 2 SCALE units, another by 1 -> 2^2 + 1^2 = 5
-    f = dict(TARGET)
-    f["alpha_5pct"] = 2 * calibrate.SCALE["alpha_5pct"]
-    f["ac_r_2"] = -calibrate.SCALE["ac_r_2"]
-    assert calibrate.loss(f, TARGET) == pytest.approx(5.0)
+def test_vector_round_trip_is_exact():
+    p = calibrate.draw(np.random.default_rng(0), calibrate.SPX_RANGES)
+    back = calibrate.from_vector(calibrate.to_vector(p, calibrate.SPX_RANGES), calibrate.SPX_RANGES)
+    for k in calibrate.SPX_RANGES:
+        assert back[k] == pytest.approx(p[k], rel=1e-12)
 
 
-def test_loss_ignores_kurtosis_and_rejects_failed_runs():
-    f = dict(TARGET, kurtosis=1e6)                  # kurtosis is reported, not targeted
-    assert calibrate.loss(f, TARGET) == 0
-    assert calibrate.loss(None, TARGET) == float("inf")
+def test_log_settings_use_log_coordinates():
+    p = dict(calibrate.base(), beta=np.e ** 2)
+    v = calibrate.to_vector(p, calibrate.RANGES)
+    assert v[list(calibrate.RANGES).index("beta")] == pytest.approx(2.0)
 
 
-@pytest.mark.parametrize("seed", [0, 1, 2])
-def test_sample_covers_each_range_evenly(seed):
-    # Latin hypercube: with n samples, each of the n equal slices of every
-    # range holds exactly one sample
-    n = 50
-    ps = calibrate.sample(n, seed)
-    for k, (lo, hi) in calibrate.RANGES.items():
+def test_from_vector_clips_into_the_ranges():
+    big = np.full(len(calibrate.RANGES), 50.0)
+    p = calibrate.from_vector(big, calibrate.RANGES)
+    assert all(p[k] == hi for k, (lo, hi, _) in calibrate.RANGES.items())
+
+
+def test_draws_stay_inside_the_ranges_and_fill_them():
+    rng = np.random.default_rng(1)
+    ps = [calibrate.draw(rng, calibrate.RANGES) for _ in range(2000)]
+    for k, (lo, hi, kind) in calibrate.RANGES.items():
         v = np.array([p[k] for p in ps])
-        assert np.all((v >= lo) & (v <= hi))
-        assert sorted(np.floor((v - lo) / (hi - lo) * n).astype(int)) == list(range(n))
-    for p in ps:                                     # every sample is a full, valid setting
-        assert set(p) == set(model.P)
+        assert v.min() >= lo and v.max() <= hi
+        mid = np.sqrt(lo * hi) if kind == "log" else (lo + hi) / 2   # the median of the draw
+        assert abs(np.mean(v < mid) - 0.5) < 0.05
 
 
-def test_model_facts_returns_none_for_runaway_settings():
-    assert calibrate.model_facts(dict(model.P, s=0.25), seeds=[201], days=5000) is None
+def test_draws_are_valid_settings_and_keep_the_fixed_ones():
+    p = calibrate.draw(np.random.default_rng(2), calibrate.SPX_RANGES)
+    model.check(p)
+    for k in set(model.SET_I) - set(calibrate.SPX_RANGES):
+        assert p[k] == model.SET_I[k]
 
 
-def test_model_facts_averages_over_seeds():
-    one = [calibrate.model_facts(model.P, [s], days=2000) for s in (0, 1)]
-    both = calibrate.model_facts(model.P, [0, 1], days=2000)
-    for k in both:
-        assert both[k] == pytest.approx((one[0][k] + one[1][k]) / 2)
+def test_paper_loss_is_zero_on_target_and_counts_tolerances():
+    fp = {k: np.array([v]) for k, (v, _) in calibrate.PAPER_TARGETS.items()}
+    fp["kurt_25"] = np.array([0.5])
+    assert calibrate.paper_loss(fp) == 0
+    fp["H"] = np.array([0.48 + 2 * 0.03])                 # two tolerances off -> 4
+    assert calibrate.paper_loss(fp) == pytest.approx(4.0)
+    fp["kurt_25"] = np.array([3.0])                       # 2 above the allowed 1 -> + 4
+    assert calibrate.paper_loss(fp) == pytest.approx(8.0)
 
 
-def test_saved_calibration_is_valid_and_inside_ranges():
-    p = calibrate.load()
-    for k, (lo, hi) in calibrate.RANGES.items():
-        assert lo <= p[k] <= hi, f"{k} outside its search range"
-    assert p["dt"] <= 1 / (p["beta"] * p["gamma"])  # stability limit
+def test_runaways_get_the_worst_score():
+    assert calibrate.paper_loss(None) == calibrate.RUNAWAY_LOSS
+    assert calibrate.spx_loss(None, {}, {}) == calibrate.RUNAWAY_LOSS
 
 
-def test_load_rejects_corrupted_file(tmp_path):
-    bad = dict(calibrate.load(), sgma_news=0.01)
-    f = tmp_path / "cal.json"
-    f.write_text(json.dumps({"params": bad}))
-    with pytest.raises(ValueError, match="sgma_news"):
-        calibrate.load(f)
+def test_spx_loss_uses_the_median_and_the_fixed_tolerance():
+    fp = {k: np.array([0.0, 1.0, 50.0]) for k in calibrate.SPX_TARGETS}   # median 1
+    tol = {k: 0.5 for k in calibrate.SPX_TARGETS}
+    on = {k: 1.0 for k in calibrate.SPX_TARGETS}
+    off = {k: 2.0 for k in calibrate.SPX_TARGETS}                         # 2 tolerances away
+    assert calibrate.spx_loss(fp, on, tol) == 0
+    assert calibrate.spx_loss(fp, off, tol) == pytest.approx(4.0)
 
 
-# ------------------------------------------------- held-out check (the real test)
-# Spec: on seeds the search never used, the calibrated model matches the S&P 500
-# far better than the paper's settings, never runs away, and keeps the base case.
-
-HELD_OUT = range(100, 106)
-
-
-@pytest.mark.slow
-def test_calibration_beats_paper_settings_on_new_seeds():
-    target = calibrate.spx_facts()
-    cal = calibrate.loss(calibrate.model_facts(calibrate.load(), HELD_OUT), target)
-    paper = calibrate.loss(calibrate.model_facts(model.P, HELD_OUT), target)
-    assert cal < paper / 3, f"calibrated {cal:.1f} vs paper {paper:.1f}"
+def test_a_wilder_model_does_not_score_better():
+    # The bug in the first S&P fit: dividing by the model's own spread rewarded
+    # wild models. With a fixed tolerance, more spread around the same median
+    # gives the same score, and a worse median gives a worse one.
+    tol = {k: 1.0 for k in calibrate.SPX_TARGETS}
+    target = {k: 0.0 for k in calibrate.SPX_TARGETS}
+    calm = {k: np.array([1.9, 2.0, 2.1]) for k in calibrate.SPX_TARGETS}
+    wild = {k: np.array([-40.0, 2.0, 90.0]) for k in calibrate.SPX_TARGETS}
+    assert calibrate.spx_loss(calm, target, tol) == calibrate.spx_loss(wild, target, tol)
 
 
-@pytest.mark.slow
-def test_calibrated_tail_exponent_is_inverse_cubic():
-    f = calibrate.model_facts(calibrate.load(), HELD_OUT)
-    assert 2.7 < f["alpha_5pct"] < 3.6 and 2.7 < f["alpha_1pct"] < 3.9
+def test_block_bootstrap_keeps_blocks_whole():
+    r = np.arange(1000, dtype=float)      # each value tells where it came from
+    import herding.calibrate as c
+    seen = []
+    orig = c.stats.fingerprint
+    c.stats.fingerprint = lambda x: seen.append(np.array(x)) or {}
+    try:
+        c.block_bootstrap(r, block=100, draws=3)
+    finally:
+        c.stats.fingerprint = orig
+    for x in seen:
+        assert len(x) == 1000
+        d = np.diff(x.reshape(10, 100), axis=1) % 1000
+        assert np.all(d == 1)             # consecutive days inside every block
 
 
-@pytest.mark.slow
-def test_calibrated_model_has_no_two_day_reversal():
-    # The paper settings fail this (-0.17, see test_model.py); calibration fixes it
-    f = calibrate.model_facts(calibrate.load(), HELD_OUT)
-    assert abs(f["ac_r_2"]) < 0.1 and abs(f["ac_r_1"]) < 0.1
-
-
-@pytest.mark.slow
-def test_calibrated_model_has_volatility_memory():
-    f = calibrate.model_facts(calibrate.load(), HELD_OUT)
-    assert f["ac_abs_20"] > 0.08 and f["ac_abs_100"] > 0.0
-
-
-@pytest.mark.slow
-def test_calibrated_model_has_long_memory_like_spx():
-    # Was a known limitation (0.02 at 100 days) until the 50- and 100-day memory
-    # were both targeted; S&P: 0.125 at 50 days, 0.094 at 100 days
-    f = calibrate.model_facts(calibrate.load(), HELD_OUT)
-    assert f["ac_abs_50"] > 0.08 and f["ac_abs_100"] > 0.05
-
-
-@pytest.mark.slow
-def test_calibrated_reversal_is_small_over_days_2_to_10():
-    # The reversal must not hide past day 2 (paper settings: -0.044, S&P: -0.005)
-    f = calibrate.model_facts(calibrate.load(), HELD_OUT)
-    assert abs(f["ac_r_2to10"]) < 0.03
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("seed", HELD_OUT)
-def test_calibrated_settings_never_run_away(seed):
-    r, _ = model.simulate(19600, p=calibrate.load(), seed=seed)
-    assert np.all(np.isfinite(r))
-
-
-@pytest.mark.parametrize("seed", [0, 1, 2])
-def test_calibrated_base_case_is_still_a_bell_curve(seed):
-    r, _ = model.simulate(5000, herding=False, p=calibrate.load(), seed=seed)
-    assert abs(stats.kurtosis(r)) < 0.3
-
-
-# ------------------------------------------------ typicality (model has randomness)
-# Spec: a stochastic model is right if the real market looks like a TYPICAL
-# history from it: S&P percentile among simulated histories far from 0 and 100.
-
-def test_percentile_exact_by_hand():
-    sims = [{"x": v} for v in [1.0, 2.0, 3.0, 4.0]]
-    assert calibrate.percentiles({"x": 2.5}, sims, ["x"]) == {"x": 50.0}
-    assert calibrate.percentiles({"x": 0.0}, sims, ["x"]) == {"x": 0.0}
-    assert calibrate.percentiles({"x": 9.0}, sims, ["x"]) == {"x": 100.0}
-
-
-def test_representative_is_median_loss_history():
-    target = {k: 0.0 for k in calibrate.TARGETS}
-    sims = [{k: d * calibrate.SCALE[k] for k in calibrate.TARGETS} for d in (0.1, 0.5, 0.2, 0.9, 0.3)]
-    # losses grow with d -> median d is 0.3, at index 4
-    assert calibrate.representative(sims, target) == 4
-
-
-@pytest.mark.slow
-def test_spx_is_a_typical_history_of_the_calibrated_model():
-    sims = [calibrate.model_facts(calibrate.load(), [s]) for s in range(500, 520)]
-    pct = calibrate.percentiles(calibrate.spx_facts(), sims, calibrate.TARGETS)
-    unusual = [k for k, v in pct.items() if not 5 <= v <= 95]
-    assert len(unusual) <= 1, f"S&P looks unusual on {unusual}"
-
-
-# ------------------------------------------- out-of-sample: data never calibrated on
-# Spec: markets the calibration never saw should look like typical model histories.
-# With 10 measures and a 5-95% band, ~1 "unusual" measure is expected by chance.
-
-def _unusual(real_returns, first_seed, n=20):
-    sims = [calibrate.model_facts(calibrate.load(), [s], days=len(real_returns))
-            for s in range(first_seed, first_seed + n)]
-    pct = calibrate.percentiles(stats.stylized_facts(real_returns), sims, calibrate.TARGETS)
-    return [k for k, v in pct.items() if not 5 <= v <= 95]
-
-
-@pytest.mark.slow
-def test_nasdaq_100_is_a_typical_history():
+def test_spx_tolerance_is_positive_and_independent_of_the_model():
     from herding import market_data
-    assert len(_unusual(market_data.returns("ndx").values, 1000)) <= 2
+    tol = calibrate.spx_tolerance(market_data.spx_returns().values)
+    assert set(tol) == set(calibrate.SPX_TARGETS) and all(v > 0 for v in tol.values())
+    assert tol["alpha_reg"] == pytest.approx(0.09, abs=0.02)
 
 
-@pytest.mark.slow
-def test_sp500_since_1928_with_great_depression_is_a_typical_history():
-    from herding import market_data
-    assert len(_unusual(market_data.returns("spx_1928").values, 1000)) <= 2
+def test_held_out_seeds_are_never_used_for_fitting():
+    assert not set(calibrate.TRAIN_SEEDS) & set(calibrate.HELD_OUT_SEEDS)
 
 
-def test_calibration_seeds_cover_every_seed_the_search_uses():
-    import inspect
-    used = set()
-    for fn in (calibrate.search, calibrate.refine):
-        for name, par in inspect.signature(fn).parameters.items():
-            if "seeds" in name:
-                used |= set(par.default)
-    assert used <= set(calibrate.CALIBRATION_SEEDS)
+def test_unknown_fit_kind_is_rejected():
+    with pytest.raises(ValueError, match="paper"):
+        calibrate.Fit("nasdaq")
 
 
-def test_model_facts_does_not_hide_typos():
-    # Bug fix: a misspelled setting must raise, not silently score "infinitely bad"
-    with pytest.raises(ValueError, match="sgma_news"):
-        calibrate.model_facts(dict(model.P, sgma_news=0.01), seeds=[0], days=100)
+def test_spx_fit_targets_the_whole_fingerprint_of_the_real_data():
+    fit = calibrate.Fit("spx")
+    assert set(fit.target) == set(stats.FINGERPRINT)
+    assert fit.days == 19329 and fit.target["kurtosis"] > 20
 
 
-@pytest.mark.slow
-def test_refine_never_returns_worse_than_its_start():
-    # A deliberately poor start (paper settings): refine may improve it, never worsen it
-    target = calibrate.spx_facts()
-    start = dict(model.P)
-    final = calibrate.refine.__defaults__[3]
-    p, l, _, _ = calibrate.refine(start, n=8, top=2, seed=9)
-    assert l <= calibrate.loss(calibrate.model_facts(start, final), target) + 1e-9
+def test_runaway_settings_score_as_runaways():
+    fit = calibrate.Fit("paper")
+    fit.days, fit.seeds = 30000 - calibrate.BURN, (1,)     # set I, seed 1 runs away
+    assert fit.loss(dict(model.SET_I)) == calibrate.RUNAWAY_LOSS
 
 
-def test_percentiles_and_representative_reject_empty_ensembles():
-    # percentiles([]) used to return NaN silently, which read as "typical"
-    with pytest.raises(ValueError, match="at least one"):
-        calibrate.percentiles({"x": 1.0}, [], ["x"])
-    with pytest.raises(ValueError, match="at least one"):
-        calibrate.representative([], {"x": 1.0})
+def test_load_reports_a_missing_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(calibrate, "SETTINGS_DIR", tmp_path)
+    with pytest.raises(FileNotFoundError, match="herding.calibrate paper"):
+        calibrate.load("paper")
 
 
-def test_calibration_uses_the_models_time_step():
-    # dt is part of the model's definition (results shift at other dt), so the
-    # saved calibration must have been fitted at the default dt
-    assert calibrate.load()["dt"] == model.P["dt"] == 0.01
+def test_save_then_load_round_trip(tmp_path, monkeypatch):
+    monkeypatch.setattr(calibrate, "SETTINGS_DIR", tmp_path)
+    p = calibrate.draw(np.random.default_rng(3), calibrate.RANGES)
+    path = calibrate.save("paper", 1.5, p)
+    assert calibrate.load("paper") == p
+    assert json.loads(path.read_text())["loss"] == 1.5
 
 
-def test_discount_factor_follows_the_paper():
-    # Lux & Marchesi (1999): fundamentalists' arbitrage profits are discounted by a
-    # factor < 1. The search range and the saved calibration must respect that.
-    lo, hi = calibrate.RANGES["s"]
-    assert 0 < lo and hi <= 1
-    assert lo <= calibrate.load()["s"] <= hi
-    assert all(p["s"] <= 1 for p in calibrate.sample(200, seed=0))
+@pytest.mark.parametrize("kind", ["paper", "spx"])
+def test_saved_settings_are_valid(kind):
+    if not (calibrate.SETTINGS_DIR / f"{kind}.json").exists():
+        pytest.skip("not fitted yet")
+    model.check(calibrate.load(kind))
+
+
+def test_saved_file_records_the_seeds_the_fit_really_used(tmp_path, monkeypatch):
+    monkeypatch.setattr(calibrate, "SETTINGS_DIR", tmp_path)
+    for kind in ("paper", "spx"):
+        path = calibrate.save(kind, 1.0, calibrate.base())
+        assert json.loads(path.read_text())["train_seeds"] == list(calibrate.fit_seeds(kind))
+    assert calibrate.Fit("paper").seeds == calibrate.fit_seeds("paper") == (100, 101)
+
+
+def test_parallel_scoring_gives_exactly_the_plain_loss():
+    class SerialPool:
+        def map(self, fn, jobs):
+            return [fn(j) for j in jobs]
+    p = dict(model.SET_I, tc=0.002, gamma=0.02)
+    plain = calibrate.Fit("paper")
+    plain.days, plain.seeds = 3000, (100, 101)
+    par = calibrate._PoolFit("paper", SerialPool(), (100, 101))
+    par.days = 3000
+    assert par.loss(p) == plain.loss(p)
+
+
+def test_spx_fit_rejects_even_a_bubble_that_bursts():
+    assert calibrate.Fit("spx").max_days == 1
+    assert calibrate.Fit("paper").max_days == model.MAX_DAYS

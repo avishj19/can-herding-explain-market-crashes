@@ -1,5 +1,7 @@
 """Real-market data, loaded with checks so a bad file fails loudly.
 
+All files come from data/download.py and end on the same day (2026-10-30).
+
 Markets (daily closes from Yahoo Finance):
     spx       S&P 500, 1950-today   (the calibration target)
     spx_1928  S&P 500, 1928-today   (adds the 1929 crash and the Great Depression;
@@ -26,10 +28,8 @@ def load_prices(path):
     unique dates, positive prices."""
     path = Path(path)
     if not path.exists():
-        raise FileNotFoundError(
-            f"{path} not found. Download it with: python3 -c \"import yfinance as yf; "
-            f"yf.download('^GSPC', start='1950-01-01')[['Close']].to_csv('{path}')\" "
-            f"(use the right ticker: ^GSPC, ^NDX, or the stock's symbol)")
+        raise FileNotFoundError(f"{path} not found. Download every data file with: "
+                                f"python3 data/download.py")
     df = pd.read_csv(path, parse_dates=["Date"], index_col="Date")
     close = df["Close"]
     if close.isna().any() or not (close > 0).all():

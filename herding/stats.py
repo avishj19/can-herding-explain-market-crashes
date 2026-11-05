@@ -121,22 +121,47 @@ def hurst(x, scales=(16, 32, 64, 128, 256, 512, 1024, 2048)):
     return float(np.polyfit(np.log(s), np.log(F), 1)[0])
 
 
-def stylized_facts(r):
-    """The fingerprint of a market: tails, predictability, clustering.
+def dfa_scales(n, smallest=16, count=12):
+    """Window sizes for dfa(): `count` sizes spaced evenly on a log scale, from
+    `smallest` days up to a quarter of the data (n days)."""
+    if n // 4 < smallest:
+        raise ValueError(f"need at least {4 * smallest} values for DFA, got {n}")
+    return tuple(int(s) for s in np.unique(np.geomspace(smallest, n // 4, count).astype(int)))
 
-    These are the numbers the model is calibrated against the S&P 500.
-    """
-    a = np.abs(_returns(r))
+
+FINGERPRINT = {
+    "sd": "typical daily move (standard deviation of returns)",
+    "kurtosis": "excess kurtosis: 0 for a bell curve, more = fatter tails",
+    "alpha_hill": "tail exponent, Hill estimate from the largest 5% of moves (S&P ~3)",
+    "alpha_reg": "tail exponent the paper's way: log-log fit to the largest 30% (paper 2.64)",
+    "ac_r_1": "correlation of one day's return with the next (about 0 = unpredictable)",
+    "ac_abs_1": "correlation of one day's move size with the next (clustering)",
+    "ac_abs_50": "the same 50 days apart (long volatility memory)",
+    "H": "DFA exponent of returns: 0.5 = no memory (paper 0.48)",
+    "H_abs": "DFA exponent of move sizes |r|: above 0.5 = memory (paper 0.85)",
+    "kurt_5": "excess kurtosis of 5-day returns",
+    "kurt_25": "excess kurtosis of 25-day returns (paper: back to a bell curve)",
+}
+
+
+def fingerprint(r):
+    """The numbers that describe a market's returns, as a dict (see FINGERPRINT).
+    Needs at least 25 * 20 = 500 days so every measure is defined."""
+    r = _returns(r)
+    if len(r) < 500:
+        raise ValueError(f"need at least 500 days for a fingerprint, got {len(r)}")
+    a = np.abs(r)
+    scales = dfa_scales(len(r))
     return {
-        "kurtosis": kurtosis(r),
-        "alpha_5pct": hill_alpha(r, 0.05),
-        "alpha_1pct": hill_alpha(r, 0.01),
-        "share_4sd": tail_share(r, 4.0),
-        "ac_r_1": acf(r, 1)[0],
-        "ac_r_2": acf(r, 2)[0],
-        "ac_r_2to10": float(np.mean(acf(r, range(2, 11)))),   # reversals hiding past day 2
-        "ac_abs_1": acf(a, 1)[0],
-        "ac_abs_20": acf(a, 20)[0],
-        "ac_abs_50": acf(a, 50)[0],
-        "ac_abs_100": acf(a, 100)[0],
+        "sd": float(r.std()),
+        "kurtosis": float(kurtosis(r)),
+        "alpha_hill": float(hill_alpha(r, 0.05)),
+        "alpha_reg": alpha_regression(r),
+        "ac_r_1": float(acf(r, 1)[0]),
+        "ac_abs_1": float(acf(a, 1)[0]),
+        "ac_abs_50": float(acf(a, 50)[0]),
+        "H": hurst(r, scales),
+        "H_abs": hurst(a, scales),
+        "kurt_5": float(kurtosis(aggregate(r, 5))),
+        "kurt_25": float(kurtosis(aggregate(r, 25))),
     }

@@ -204,52 +204,39 @@ def test_tail_share_exact_small_case():
     assert stats.tail_share(x, 4) == pytest.approx(0.02)
 
 
-# --------------------------------------------------------- stylized_facts
+# --------------------------------------------------------- fingerprint
+# Spec: fingerprint(r) returns every measure in FINGERPRINT, each computed by the
+# functions tested above; on processes with a known answer it must give that answer.
 
-def test_stylized_facts_gaussian_reference():
-    x = np.random.default_rng(1).standard_normal(200_000)
-    f = stats.stylized_facts(x)
-    assert abs(f["kurtosis"]) < 0.05 and f["alpha_5pct"] > 4.5
-    assert f["share_4sd"] < 2e-4
-    assert all(abs(f[k]) < 0.015 for k in ["ac_r_1", "ac_r_2", "ac_abs_1", "ac_abs_20", "ac_abs_100"])
-
-
-def test_stylized_facts_spx_published_shape():
-    # Real market fingerprint (Cont 2001 "stylized facts"): fat tails, alpha ~3,
-    # returns unpredictable, |returns| clustered with long memory
-    from herding import market_data as data
-    f = stats.stylized_facts(data.spx_returns().values)
-    assert f["kurtosis"] > 10 and 2.5 < f["alpha_5pct"] < 3.5
-    assert abs(f["ac_r_1"]) < 0.05 and abs(f["ac_r_2"]) < 0.05
-    assert f["ac_abs_1"] > 0.2 and f["ac_abs_100"] > 0.05
+def test_fingerprint_has_exactly_the_documented_measures():
+    f = stats.fingerprint(np.random.default_rng(0).standard_normal(5000))
+    assert set(f) == set(stats.FINGERPRINT)
+    assert all(isinstance(v, float) for v in f.values())
 
 
-# ------------------------------------------ calibration v2: new fingerprint facts
-# Spec: ac_r_2to10 = mean return autocorrelation over lags 2..10 (catches a
-# reversal that hides past day 2); ac_abs_50 = volatility memory at 50 days.
+def test_fingerprint_of_a_bell_curve():
+    # i.i.d. Gaussian: no fat tails at any horizon, no memory, H = 0.5
+    x = 0.01 * np.random.default_rng(1).standard_normal(200_000)
+    f = stats.fingerprint(x)
+    assert f["sd"] == pytest.approx(0.01, rel=0.01)
+    assert abs(f["kurtosis"]) < 0.05 and abs(f["kurt_5"]) < 0.1 and abs(f["kurt_25"]) < 0.2
+    assert f["alpha_hill"] > 4.5
+    assert f["alpha_reg"] == pytest.approx(3.7, abs=0.3)      # see the alpha_regression test
+    assert all(abs(f[k]) < 0.015 for k in ("ac_r_1", "ac_abs_1", "ac_abs_50"))
+    assert f["H"] == pytest.approx(0.5, abs=0.03) and f["H_abs"] == pytest.approx(0.5, abs=0.03)
 
-def test_reversal_measure_on_ar1_by_formula():
-    # AR(1) with phi: mean of phi^k for k = 2..10, computed independently
-    phi = -0.5
-    e = np.random.default_rng(3).standard_normal(300_000)
+
+def test_fingerprint_lag1_on_ar1_by_formula():
+    phi = -0.3
+    e = np.random.default_rng(3).standard_normal(200_000)
     x = np.empty_like(e)
     x[0] = e[0]
     for t in range(1, len(e)):
         x[t] = phi * x[t - 1] + e[t]
-    expected = np.mean([phi ** k for k in range(2, 11)])
-    assert stats.stylized_facts(x)["ac_r_2to10"] == pytest.approx(expected, abs=0.005)
+    assert stats.fingerprint(x)["ac_r_1"] == pytest.approx(phi, abs=0.01)
 
 
-def test_reversal_measure_catches_day_3_reversal():
-    # x_t = e_t - 0.6 e_(t-3): correlation only at lag 3, = -0.6/(1+0.36)
-    e = np.random.default_rng(4).standard_normal(300_003)
-    x = e[3:] - 0.6 * e[:-3]
-    f = stats.stylized_facts(x)
-    assert abs(f["ac_r_2"]) < 0.01                       # invisible to the old target
-    assert f["ac_r_2to10"] == pytest.approx(-0.6 / 1.36 / 9, abs=0.004)
-
-
-def test_volatility_memory_50_on_known_process():
+def test_fingerprint_volatility_memory_50_on_known_process():
     # |x| with a slowly switching volatility regime has memory at lag 50;
     # shuffled, the same values have none
     g = np.random.default_rng(5)
@@ -258,14 +245,33 @@ def test_volatility_memory_50_on_known_process():
     # exact: |x| = V*|Z|. Lag 50 is inside the same 100-day block half the time, so
     # Cov = (2/pi) * 0.5 * Var(V) with Var(V) = 1; Var(|x|) = E[V^2] - (E[V] E|Z|)^2
     expected = (2 / np.pi) * 0.5 * 1.0 / (5.0 - (2.0 * np.sqrt(2 / np.pi)) ** 2)
-    assert stats.stylized_facts(x)["ac_abs_50"] == pytest.approx(expected, abs=0.01)
-    assert abs(stats.stylized_facts(g.permutation(x))["ac_abs_50"]) < 0.01
+    f = stats.fingerprint(x)
+    assert f["ac_abs_50"] == pytest.approx(expected, abs=0.01)
+    assert f["H_abs"] > 0.6
+    shuffled = stats.fingerprint(g.permutation(x))
+    assert abs(shuffled["ac_abs_50"]) < 0.01 and shuffled["H_abs"] == pytest.approx(0.5, abs=0.03)
 
 
-def test_fingerprint_has_all_calibration_targets():
-    from herding import calibrate
-    f = stats.stylized_facts(np.random.default_rng(0).standard_normal(5000))
-    assert set(calibrate.TARGETS) <= set(f) and set(calibrate.SCALE) == set(calibrate.TARGETS)
+def test_fingerprint_of_the_sp500_has_the_published_shape():
+    # Cont (2001) "stylized facts": fat tails with alpha ~3, returns hard to
+    # predict, move sizes clustered with long memory; Lux & Marchesi's H values
+    from herding import market_data as data
+    f = stats.fingerprint(data.spx_returns().values)
+    assert f["kurtosis"] > 10 and 2.5 < f["alpha_hill"] < 3.5
+    assert abs(f["ac_r_1"]) < 0.05 and 0.4 < f["H"] < 0.55
+    assert f["ac_abs_1"] > 0.2 and f["ac_abs_50"] > 0.05 and f["H_abs"] > 0.8
+
+
+def test_fingerprint_rejects_short_input():
+    with pytest.raises(ValueError, match="500 days"):
+        stats.fingerprint(np.random.default_rng(0).standard_normal(499))
+
+
+def test_dfa_scales_span_16_to_a_quarter_of_the_data():
+    s = stats.dfa_scales(20000)
+    assert s[0] == 16 and s[-1] == 5000 and list(s) == sorted(set(s))
+    with pytest.raises(ValueError, match="at least 64"):
+        stats.dfa_scales(63)
 
 
 @pytest.mark.parametrize("lag", [2.5, [1, 1.5], []])

@@ -1,35 +1,38 @@
-"""Why the calibrated model's 5-day returns are fatter-tailed than daily ones: its
-crashes are multi-day slides (momentum after big days), unlike the S&P's one-day shocks.
+"""Do big moves bounce back (like the S&P) or keep going (slow-motion slides)?
+
+For every day that moves more than 3 standard deviations, correlate its return with
+the next day's. The old model (before the rebuild) gave +0.31 vs the S&P's -0.19.
 
 Run from the project folder:  python3 analysis/crash_shape.py
 """
 import sys
-from multiprocessing import Pool
 from pathlib import Path
-import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from herding import calibrate, experiments, market_data  # noqa: E402
+import numpy as np
+
+from herding import calibrate, experiments, market_data
 
 
-def look(r):
-    z = (r - r.mean()) / r.std()
-    n = len(r) // 5
-    w = r[:n * 5].reshape(n, 5).sum(axis=1); zw = (w - w.mean()) / w.std()
-    i = np.argmax(np.abs(zw))                      # the most extreme week
-    days = z[i * 5:i * 5 + 5]
-    sel = np.abs(z[:-1]) > 3                      # momentum right after big days
-    c = np.corrcoef(z[:-1][sel], z[1:][sel])[0, 1]
-    return np.abs(zw).max(), np.abs(z).max(), np.sum(np.sign(days) == np.sign(w[i])), c
+def after_big_moves(r, k=3.0):
+    """Correlation of big-move days (|r| > k sd) with the day after, and their count."""
+    r = np.asarray(r)
+    big = np.where(np.abs(r[:-1]) > k * r.std())[0]
+    return float(np.corrcoef(r[big], r[big + 1])[0, 1]), len(big)
 
 
-def job(seed):
-    return look(experiments.history(calibrate.load(), seed))
+def main():
+    spx = market_data.spx_returns().values
+    c, n = after_big_moves(spx)
+    print(f"S&P 500: next-day correlation after {n} big days {c:+.2f}")
+    p = calibrate.load("spx")
+    runs = experiments.returns(p, calibrate.HELD_OUT_SEEDS[:20], len(spx))
+    vals = [after_big_moves(r) for r in runs]
+    cs = np.array([v[0] for v in vals])
+    print(f"model (20 histories): median {np.median(cs):+.2f}, 5-95% range "
+          f"{np.percentile(cs, 5):+.2f} to {np.percentile(cs, 95):+.2f}; "
+          f"S&P percentile {experiments.percentile(c, cs):.0f}%")
 
 
 if __name__ == "__main__":
-    with Pool() as pool:
-        res = np.array(pool.map(job, range(600, 620)))
-    s = look(market_data.spx_returns().values)
-    for k, n in enumerate(["most extreme WEEK (in weekly std)", "most extreme DAY (in daily std)",
-                           "days in that week moving the same way (of 5)", "corr(day, next day) after |move|>3 std"]):
-        print(f"{n:<46} S&P {s[k]:6.2f}   model median {np.median(res[:, k]):6.2f} (range {res[:, k].min():.2f}-{res[:, k].max():.2f})")
+    main()

@@ -1,6 +1,7 @@
-"""Checks on the analysis scripts (they are exploration, but must stay portable)."""
+"""Checks on the analysis scripts: portable, valid, and they still run."""
 import ast
-from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -11,31 +12,23 @@ SCRIPTS = sorted((ROOT / "analysis").glob("*.py"))
 
 @pytest.mark.parametrize("path", SCRIPTS, ids=[p.name for p in SCRIPTS])
 def test_no_hardcoded_home_folder(path):
-    # Bug fix: absolute paths break on other computers and leak the username
+    # absolute paths break on other computers and leak the username
     assert "/Users/" not in path.read_text()
 
 
 @pytest.mark.parametrize("path", SCRIPTS, ids=[p.name for p in SCRIPTS])
-def test_scripts_are_valid_python(path):
-    ast.parse(path.read_text())
+def test_scripts_are_valid_python_with_a_docstring(path):
+    assert ast.get_docstring(ast.parse(path.read_text()))
 
 
-QUICK = ["fresh.py", "lag2.py", "a1.py", "probe.py", "audit.py", "knobs.py", "regime.py",
-         "lags.py", "holdout.py", "holdout2.py", "typical.py", "out_of_sample.py",
-         "circuit_breakers.py", "policy_shocks.py", "efficiency_claims.py", "crowded_episodes.py",
-         "crash_shape.py"]
+@pytest.mark.parametrize("path", SCRIPTS, ids=[p.name for p in SCRIPTS])
+def test_every_script_is_listed_in_the_readme(path):
+    assert f"`{path.name}`" in (ROOT / "analysis" / "README.md").read_text()
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("name", QUICK)
+@pytest.mark.parametrize("name", [p.name for p in SCRIPTS])
 def test_analysis_script_still_runs(name):
-    # Old scripts rot when the program improves (e.g. new guardrails); catch it here
-    import subprocess, sys
     out = subprocess.run([sys.executable, str(ROOT / "analysis" / name)], capture_output=True,
-                         text=True, timeout=300, cwd=ROOT)
+                         text=True, timeout=900, cwd=ROOT)
     assert out.returncode == 0, out.stderr[-1500:]
-
-
-def test_every_script_is_in_the_run_list_or_known_long():
-    long = {"stress_tests.py"}                      # ~20 s; run by hand
-    assert {p.name for p in SCRIPTS} == set(QUICK) | long

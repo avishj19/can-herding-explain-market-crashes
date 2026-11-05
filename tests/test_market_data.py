@@ -53,7 +53,7 @@ def test_recessions_match_nber():
 
 
 def test_load_spx_missing_file_explains_fix(tmp_path):
-    with pytest.raises(FileNotFoundError, match="yfinance"):
+    with pytest.raises(FileNotFoundError, match="data/download.py"):
         data.load_spx(tmp_path / "nope.csv")
 
 
@@ -166,3 +166,20 @@ def test_unknown_stock_gives_clear_error():
     # used to suggest downloading the S&P 500 into ZZZZ.csv
     with pytest.raises(ValueError, match="unknown stock"):
         data.stock_returns("ZZZZ")
+
+
+def test_every_file_ends_on_the_same_fixed_day():
+    # The old files ended on different days, and their last row was a live
+    # (mid-day) price, not the official close. data/download.py stops every
+    # series at the same END date.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("download", data.DATA / "download.py")
+    download = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(download)
+    end = data.pd.Timestamp(download.END)
+    files = [data.DATA / name for name in download.INDEXES]
+    files += [data.STOCKS / f"{t}.csv" for t in data.stock_tickers()]
+    for f in files:
+        assert data.load_prices(f).index[-1] == end, f.name
+    months = data.pd.read_csv(data.DATA / "us_recessions_monthly.csv", parse_dates=[0])
+    assert months.iloc[-1, 0] == end.to_period("M").to_timestamp()

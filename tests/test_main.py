@@ -1,57 +1,44 @@
-"""Tests for main.py: the end-to-end comparison runs and saves its figure."""
+"""Tests for main.py: the end-to-end comparison runs and its table is right."""
 import numpy as np
 import pytest
 
-from conftest import ROOT
-from herding import calibrate
 import main
-from herding import model
-from herding import stats
+from herding import calibrate, experiments, model, stats
 
 
+def test_table_flags_unusual_measures_by_percentile():
+    sims = [{"x": float(v)} for v in range(20)]
+    assert "unusual" not in main.table({"x": 10.0}, sims)       # 50th percentile
+    assert "unusual" in main.table({"x": 99.0}, sims)           # above every history
+    assert "unusual" in main.table({"x": -1.0}, sims)           # below every history
+
+
+def test_table_has_one_line_per_measure_with_the_right_percentile():
+    sims = [{"a": float(v), "b": 2.0 * v} for v in range(10)]
+    text = main.table({"a": 4.5, "b": 100.0}, sims).splitlines()
+    assert len(text) == 3 and text[1].startswith("a") and text[2].startswith("b")
+    assert "50%" in text[1] and "100%" in text[2]
+
+
+def test_main_uses_only_held_out_seeds():
+    assert not set(main.SEEDS) & set(calibrate.TRAIN_SEEDS)
+
+
+@pytest.mark.slow
 def test_main_runs_end_to_end(tmp_path, capsys):
+    if not (calibrate.SETTINGS_DIR / "spx.json").exists():
+        pytest.skip("not fitted yet")
     out = tmp_path / "draft.png"
-    real, herd, base = main.main(out=out, histories=3, days=3000)
+    real, shown, base = main.main(out=out, seeds=main.SEEDS[:3], days=3000)
     text = capsys.readouterr().out
-    assert out.exists() and out.stat().st_size > 50_000           # a real figure
-    assert "-20.5%" in text and "23.0 standard deviations" in text  # Black Monday line
-    assert len(herd) == len(base) == 3000 and len(real) > 19_000
-    assert "typical history: seed" in text and "no-chartist base case" in text
-
-
-def test_main_table_has_every_fact_and_columns(tmp_path, capsys):
-    main.main(out=tmp_path / "f.png", histories=3, days=3000)
-    text = capsys.readouterr().out
-    lines = text.split("simulated histories")[1].splitlines()[1:]
-    assert all(c in lines[0] for c in ["S&P 500", "calibrated", "S&P pct", "default"])
-    for fact in stats.stylized_facts(np.random.default_rng(0).standard_normal(500)):
-        assert any(l.startswith(fact) for l in lines), fact
-
-
-def test_plotted_history_is_the_median_mismatch_one(tmp_path):
-    # main must plot the typical history, not a cherry-picked best one
-    _, herd, _ = main.main(out=tmp_path / "f.png", histories=5, days=3000)
-    runs, facts = main.ensemble(calibrate.load(), main.SEEDS[:5], days=3000)
-    target = stats.stylized_facts(main.data.spx_returns().values)
-    i = calibrate.representative(facts, target)
-    assert np.array_equal(herd, runs[i])
-
-
-def test_ensemble_table_flags_unusual_facts():
-    target = {"x": 10.0}
-    sims = [{"x": float(v)} for v in range(20)]          # S&P at the 50th percentile
-    assert "unusual" not in main.ensemble_table(target, sims, sims)
-    assert "unusual" in main.ensemble_table({"x": 99.0}, sims, sims)
-
-
-def test_run_model_drops_burn_in():
-    r, f = main.run_model(seed=4, days=500)
-    full, _ = model.simulate(500 + main.BURN, seed=4)
-    assert np.array_equal(r, full[main.BURN:]) and len(f) == 500
-
-
-def test_main_histories_are_held_out_from_calibration():
-    # Bug fix: the "is the S&P typical?" table must use seeds the calibration
-    # never scored, or it overstates the fit
-    assert set(main.SEEDS).isdisjoint(calibrate.CALIBRATION_SEEDS)
-    assert len(main.SEEDS) >= main.HISTORIES
+    assert out.exists() and out.stat().st_size > 50_000
+    assert "-20.5% in one day = 23.0 standard deviations" in text      # Black Monday
+    for k in stats.FINGERPRINT:
+        assert any(line.startswith(k) for line in text.splitlines()), k
+    assert len(shown) == len(base) == 3000 and len(real) == 19329
+    # the plotted history is the typical (median-mismatch) one, not the best
+    p = calibrate.load("spx")
+    runs = experiments.returns(p, main.SEEDS[:3], 3000)
+    target = stats.fingerprint(real)
+    i = experiments.typical([stats.fingerprint(r) for r in runs], target)
+    assert np.array_equal(shown, runs[i])
