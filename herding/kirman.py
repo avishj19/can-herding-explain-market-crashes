@@ -3,6 +3,10 @@
 N ants feed at two identical food sources, A and B. Each step one random ant
 either switches source on its own (probability eps), or meets another random
 ant and is recruited to that ant's source (probability 1 - delta).
+The two chances are added, as in Kirman's formulas (up_prob, down_prob). Taken
+literally, "either ... or" needs eps + (1 - delta) <= 1. Fig 6 uses delta = 0.1
+so that both panels follow the story literally (with delta = 0.01 and N = 100 no
+setting can: no herding needs eps > 0.01, the story needs eps <= 0.01).
 
 Because only one ant moves per step, the number k at source A is a birth-death
 chain, so its long-run distribution is known exactly (detailed balance):

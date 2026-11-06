@@ -5,8 +5,8 @@ import pytest
 from conftest import SEEDS
 from herding import kirman
 
-HERD = dict(N=100, eps=0.002, delta=0.01)    # eps < (1-delta)/(N-1) = 0.01 -> herding
-SPLIT = dict(N=100, eps=0.05, delta=0.01)    # eps > 0.01 -> about 50/50
+HERD = dict(N=100, eps=0.002, delta=0.1)     # eps < (1-delta)/(N-1) = 0.009 -> herding
+SPLIT = dict(N=100, eps=0.05, delta=0.1)     # eps > 0.009 -> about 50/50
 
 
 def herds(N, eps, delta):

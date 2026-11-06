@@ -74,9 +74,16 @@ ln p_f(t) - ln p_f(t-1) = eps_t, eps ~ Normal(0, sigma_eps). Gaussian, with no m
 - mu is drawn fresh each step with standard deviation sigma_mu * sqrt(0.01/dt): exactly
   [S] at dt = 0.01, and the same noise per day at any other dt.
 - dp/dt = the average price change over the last 10 steps [t - 10 dt, t] [S].
+  In the code, (dp/dt)/p is (p_t - p_(t-10dt)) / (0.1 p_(t-10dt)): divided by the price
+  at the start of the window, not the current one (they differ by the price's move over
+  the window, usually well under 1%; [S] does not say which). At the start the window
+  is filled with the starting price, so the trend is 0 for the first 0.1 day.
+- Order within a step: traders switch (secs. 1-2, all from the same state), then the
+  price ticks (sec. 3), then the news moves the value (sec. 4) by Normal(0, sigma_eps sqrt(dt)).
 - Floors: n_c and n_f never fall below a minimum, so neither group can die out for
   good (an "absorbing state") [S]. The value, 4 traders, is this project's choice:
-  [S] and [C] give no number.
+  [S] and [C] give no number. When a step's moves would push a group below the floor,
+  just enough of the moves out of that group are undone (the larger outflow first).
 - Returns are measured once per unit of time: ret_t = ln p_t - ln p_(t-1) [N Fig 1].
 
 ## Runaways (not in the sources)
@@ -92,8 +99,9 @@ days). The paper says this does not happen ("no persistent deviations"), so:
 
 ## Fitting (herding/calibrate.py)
 Random search over wide ranges, then Nelder-Mead from the best candidates. Every
-candidate is scored on the same training seeds (100-107); every check uses other
-seeds (1000-1039).
+candidate is scored on the same training seeds (100-107; the paper fit's search and
+first refinement use only 100-101, because its runs are long, and `--refine` uses all 8);
+every check uses other seeds (1000-1039).
 - Paper fit: squared gaps to alpha 2.64 +/- 0.15, H 0.48 +/- 0.03, H|r| 0.85 +/- 0.03,
   plus a penalty if 25-day kurtosis is above 1. Runs of 50,000 days.
   These +/- values are the project's chosen yardsticks, not [N]'s error bars
@@ -112,6 +120,10 @@ seeds (1000-1039).
   2000-2019, and the best-scoring candidate with the fewest runaways is kept.
   The November 2026 recalibration scored 3,000 random settings (`--draws 3000`);
   the code's default is 1,200. Neither kept settings file came from that run.
+- Overnight recalibration (6 November 2026, outside the repository): tail measures
+  weighted 3x, differential evolution (spx and paper), and the S&P from 1928 as the
+  target. None passed the judging rule fixed in advance, so both settings files are
+  unchanged (figures/RESULTS.md, "Overnight recalibration").
 
 ## Policy experiments (an extension, not in the sources; herding/policy.py)
 Off by default; with both off the model is exactly sections 1-5.

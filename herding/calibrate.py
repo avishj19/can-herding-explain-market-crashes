@@ -24,7 +24,6 @@ from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
-from scipy.optimize import minimize
 
 from . import market_data, model, stats
 
@@ -230,6 +229,7 @@ class SavedLoss:
 
 
 def _refine(args):
+    from scipy.optimize import minimize   # here, not on top: only fits need slow-to-load scipy
     fit, p, iters = args[:3]
     loss = fit.loss_of_vector if len(args) < 4 else SavedLoss(fit.loss_of_vector, args[3])
     res = minimize(loss, to_vector(p, fit.ranges), method="Nelder-Mead",
@@ -345,6 +345,7 @@ def refine_saved(kind, iters=200, workers=8):
     TRAIN_SEEDS (the first fit may use fewer, which can overfit to lucky seeds).
     The refined settings replace the saved ones only if they pass the stability
     screen at least as well. Returns (loss, settings, runaways)."""
+    from scipy.optimize import minimize
     start = load(kind)
     with Pool(workers) as pool:
         fit = _PoolFit(kind, pool, TRAIN_SEEDS)

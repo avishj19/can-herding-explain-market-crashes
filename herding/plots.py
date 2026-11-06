@@ -9,6 +9,7 @@ blue, orange and aqua pass as a set of three in light mode):
 Aqua is low-contrast on white, so it is always labelled (legend or text), never
 identified by colour alone.
 """
+from math import erfc
 from pathlib import Path
 
 import matplotlib
@@ -16,7 +17,6 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import norm
 
 from . import stats
 
@@ -54,27 +54,45 @@ def save(fig, path, title, caption):
     return path
 
 
-def ccdf(ax, r, label, color, **kw):
-    """Log-log tail plot: share of days whose |standardized return| exceeds x."""
+def ccdf(ax, r, label, color, points=None, **kw):
+    """Log-log tail plot: share of days whose |standardized return| exceeds x.
+    With `points`, draw about that many markers, spaced evenly on the log x axis and
+    each on a real data point (the largest move always included), as in Lux &
+    Marchesi's Fig 2; otherwise draw every point as a line."""
     z, cc = stats.ccdf(r)
     keep = z > 0
-    ax.loglog(z[keep], cc[keep], color=color, label=label, **kw)
+    z, cc = z[keep], cc[keep]
+    if points:
+        grid = np.geomspace(z[0], z[-1], points)
+        i = np.unique(np.append(np.minimum(np.searchsorted(z, grid), len(z) - 1), len(z) - 1))
+        z, cc = z[i], cc[i]
+        kw = dict(dict(ls="none", marker="o", ms=4), **kw)
+    ax.loglog(z, cc, color=color, label=label, **kw)
 
 
-def gaussian_ccdf(ax, label="bell curve N(0,1)"):
+def gaussian_ccdf(ax, label="bell curve N(0,1)", ls="--"):
     g = np.geomspace(0.05, 6, 200)
-    ax.loglog(g, 2 * norm.sf(g), "--", color=MUTED, lw=1.2, label=label)
+    # share of a bell curve beyond +-x: erfc(x / sqrt 2). (math.erfc, not scipy: scipy
+    # takes about half a second to load, in every worker process)
+    ax.loglog(g, [erfc(x / np.sqrt(2)) for x in g], ls, color=MUTED, lw=1.2, label=label)
 
 
-def dfa(ax, x, scales, label, color, marker="o", shift=1.0):
-    """DFA fluctuation F(n) vs window n (log-log), with the fitted slope H in the label."""
+def power_law(ax, x0, y0, slope, x1, label=None, color=MUTED, **kw):
+    """Reference line y = y0 (x / x0)^slope from x0 to x1: a straight line of the given
+    slope on log-log axes (a tail exponent is minus the slope; H is the slope)."""
+    x = np.array([x0, x1])
+    return ax.loglog(x, y0 * (x / x0) ** slope, color=color, label=label, **dict(dict(ls="--", lw=1.1), **kw))[0]
+
+
+def dfa(ax, x, scales, label, color, marker="o", shift=1.0, fit_ls="-"):
+    """DFA fluctuation F(n) vs window n (log-log), with the fitted slope H in the label.
+    Returns (H, the first window, its fitted F) so a reference slope can start there."""
     s, F = stats.dfa(x, scales)
-    H = np.polyfit(np.log(s), np.log(F), 1)[0]
-    ax.loglog(s, F * shift, marker, color=color, ms=4.5, lw=0,
-              label=f"{label}: H = {H:.2f}")
-    fit = np.exp(np.polyval(np.polyfit(np.log(s), np.log(F), 1), np.log(s)))
-    ax.loglog(s, fit * shift, "-", color=color, lw=1.0)
-    return H
+    coef = np.polyfit(np.log(s), np.log(F), 1)
+    ax.loglog(s, F * shift, marker, color=color, ms=4.5, lw=0, label=f"{label}: H = {coef[0]:.2f}")
+    fit = np.exp(np.polyval(coef, np.log(s))) * shift
+    ax.loglog(s, fit, fit_ls, color=color, lw=1.0)
+    return coef[0], s[0], fit[0]
 
 
 def standardized(r):

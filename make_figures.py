@@ -36,18 +36,25 @@ def shade(hex_color, amount):
 
 
 # ------------------------------------------------------------------ Fig 1
-def fig1_snapshot(paper_run, spx_run, path=FIG / "fig1_snapshot.png", days=4000):
-    """The paper's Fig 1: price tracks its value, but returns are wilder than the news."""
-    fig, ax = plt.subplots(4, 2, figsize=(13, 10), sharex=True)
-    for col, (run, color, name) in enumerate([(paper_run, PAPER_MODEL, "paper-matched settings"),
-                                              (spx_run, SPX_MODEL, "S&P-calibrated settings")]):
+def fig1_snapshot(paper_run, spx_run, spx, path=FIG / "fig1_snapshot.png", days=4000):
+    """The paper's Fig 1: price tracks its value, but returns are wilder than the news.
+    Paper conventions: 4,000 days; price solid, value dotted and shifted down for
+    visibility; output (b) and input (c) on the same y range. Added: the chartist
+    share (d) and the last 4,000 days of the real S&P 500 (right)."""
+    fig, ax = plt.subplots(4, 3, figsize=(17, 10), sharex=True)
+    t = np.arange(days + 1)
+    for col, (run, color, name) in enumerate([(paper_run, PAPER_MODEL, "paper-matched model"),
+                                              (spx_run, SPX_MODEL, "S&P-calibrated model")]):
         lp, lf, z = run["lp"][:days + 1], run["lf"][:days + 1], run["z"][:days + 1]
-        t = np.arange(days + 1)
         a = ax[0, col]
-        a.plot(t, 100 * np.exp(lp - lp[0]), color=color, lw=1.0, label="price p")
-        a.plot(t, 100 * np.exp(lf - lp[0]), ":", color=INK, lw=1.0, label="fundamental value p_f")
+        price = 100 * np.exp(lp - lp[0])
+        gap = 5 * np.ceil(0.1 * np.ptp(price))        # the paper's vertical shift, in whole 5s
+        a.plot(t, price, color=color, lw=1.0, label="price p")
+        a.plot(t, 100 * np.exp(lf - lp[0]) - gap, ":", color=INK, lw=1.0,
+               label=f"fundamental value p_f (drawn {gap:.0f} lower)")
         a.set_title(f"a. Price and value ({name})")
-        a.set_ylabel("level (start = 100)")
+        lo_, hi_ = min(price.min(), (100 * np.exp(lf - lp[0]) - gap).min()), price.max()
+        a.set_ylim(lo_ - 0.05 * (hi_ - lo_), hi_ + 0.4 * (hi_ - lo_))     # room for the legend
         a.legend(loc="upper left", frameon=True, facecolor="white", edgecolor=GRID, framealpha=0.9)
         r, eps = np.diff(lp), np.diff(lf)
         lim = 1.1 * max(np.abs(r).max(), np.abs(eps).max())
@@ -55,86 +62,117 @@ def fig1_snapshot(paper_run, spx_run, path=FIG / "fig1_snapshot.png", days=4000)
         ax[1, col].set_title("b. The output: daily returns ln p_t − ln p_t−1")
         ax[2, col].plot(t[1:], eps, color=NEWS, lw=0.4)
         ax[2, col].set_title("c. The input: news ε_t = ln p_f,t − ln p_f,t−1 (Gaussian)")
-        for a in (ax[1, col], ax[2, col]):
+        for a, x in ((ax[1, col], r), (ax[2, col], eps)):
             a.set_ylim(-lim, lim)
-            a.set_ylabel("log change")
+            a.text(0.01, 0.92, f"kurtosis {stats.kurtosis(x):.1f}", transform=a.transAxes,
+                   fontsize=8.5, color=INK, va="top")
         ax[3, col].fill_between(t, 0, z, color=shade(color, 0.35), lw=0)
         ax[3, col].set_ylim(0, 1)
         ax[3, col].set_title("d. Share of traders who are chartists")
         ax[3, col].set_xlabel("day")
-        ax[1, col].text(0.01, 0.92, f"kurtosis {stats.kurtosis(r):.1f}", transform=ax[1, col].transAxes,
-                        fontsize=8.5, color=INK, va="top")
-        ax[2, col].text(0.01, 0.92, f"kurtosis {stats.kurtosis(eps):.1f}",
-                        transform=ax[2, col].transAxes, fontsize=8.5, color=INK, va="top")
+    r = np.asarray(spx[-days:])
+    ax[0, 2].plot(t, 100 * np.exp(np.concatenate([[0], np.cumsum(r)])), color=REAL, lw=1.0, label="price")
+    ax[0, 2].set_title(f"a. Real S&P 500, last {days:,} trading days")
+    ax[0, 2].legend(loc="upper left")
+    ax[1, 2].plot(t[1:], r, color=REAL, lw=0.4)
+    ax[1, 2].set_ylim(-1.1 * np.abs(r).max(), 1.1 * np.abs(r).max())
+    ax[1, 2].set_title("b. Daily returns (its own y scale)")
+    ax[1, 2].text(0.01, 0.92, f"kurtosis {stats.kurtosis(r):.1f}", transform=ax[1, 2].transAxes,
+                  fontsize=8.5, color=INK, va="top")
+    ax[2, 2].text(0.02, 0.5, "A real market's news and its share of\nchartists cannot be measured,\n"
+                  "so panels c and d exist only\nfor the model.", fontsize=10.5, color=SECOND, va="center")
+    ax[2, 2].axis("off")
+    ax[3, 2].axis("off")
+    ax[1, 2].tick_params(labelbottom=True)
+    ax[1, 2].set_xlabel("trading day")
+    for row, label in enumerate(["level (start = 100)", "log change", "log change", "share"]):
+        ax[row, 0].set_ylabel(label)
     fig.tight_layout(rect=(0, 0.05, 1, 0.96))
     return plots.save(fig, path, "Fig 1. The price follows its value, but returns are far wilder than the news",
-                      f"A {days:,}-day stretch of one held-out history for each setting, as in Lux & Marchesi's "
-                      "Fig 1. The news (c) is a plain bell curve with no calm or wild spells; the returns (b) have "
-                      "bursts of large moves, and the bursts come when many traders are chartists (d). The "
+                      f"A {days:,}-day stretch of one held-out history for each setting, drawn as in Lux & Marchesi's "
+                      "Fig 1 (value dotted and shifted down so both lines show; b and c on the same scale). The news "
+                      "(c) is a plain bell curve with no calm or wild spells; the returns (b) have bursts of large "
+                      "moves, and the bursts come when many traders are chartists (d, not in the paper). The "
                       "S&P-calibrated model keeps few chartists most of the time, so its bursts are rarer (Fig 5).")
 
 
 # ------------------------------------------------------------------ Fig 2
+TAU_MARKERS = ("^", "+", "D", "v")              # the paper's Fig 2 symbols for tau = 1, 5, 15, 25
+PAPER_ALPHA = 2.64                               # Lux & Marchesi (1999) Fig 2, tau = 1
+
+
 def fig2_aggregation(paper_r, paper_news, spx_model_runs, spx, path=FIG / "fig2_tails.png",
                      paper_runs=None):
-    """The paper's Fig 2: fat tails at 1 day, a cross-over to the bell curve at longer horizons."""
-    fig, ax = plt.subplots(1, 3, figsize=(15, 5.2), sharey=True)
+    """The paper's Fig 2: fat tails at 1 day, a cross-over to the bell curve at longer horizons.
+    Paper conventions: log-log share of |ret|/sd beyond x for tau = 1, 5, 15, 25 as markers,
+    the bell curve as a solid line, alpha from a log-log fit to the largest 30% at tau = 1."""
+    fig, ax = plt.subplots(1, 3, figsize=(15, 5.4), sharey=True)
     pooled = np.concatenate(spx_model_runs)
-    n_runs = len(spx_model_runs)
-    panels = [(paper_r, [paper_r], PAPER_MODEL, f"a. Paper-matched model (one run, {len(paper_r):,} days)"),
-              (pooled, spx_model_runs, SPX_MODEL,
-               f"b. S&P-calibrated model ({n_runs} histories pooled)"),
+    panels = [(paper_r, paper_runs or [paper_r], PAPER_MODEL, f"a. Paper-matched model (one run, {len(paper_r):,} days)"),
+              (pooled, spx_model_runs, SPX_MODEL, f"b. S&P-calibrated model ({len(spx_model_runs)} histories pooled)"),
               (spx, [spx], REAL, f"c. Real S&P 500, 1950–2026 ({len(spx):,} days)")]
     for a, (r, runs, color, title) in zip(ax, panels):
+        shown = [r] if r is paper_r else runs        # kurtosis of the run drawn, or the median of histories
         for i, tau in enumerate(TAUS):
-            x = stats.aggregate(r, tau)
-            k = np.median([stats.kurtosis(stats.aggregate(h, tau)) for h in runs])
-            word = "median kurtosis" if len(runs) > 1 else "kurtosis"
-            plots.ccdf(a, x, f"τ = {tau:>2}: {word} {k:5.1f}", shade(color, 0.62 * i / 3))
+            k = np.median([stats.kurtosis(stats.aggregate(h, tau)) for h in shown])
+            word = "median kurtosis" if len(shown) > 1 else "kurtosis"
+            plots.ccdf(a, stats.aggregate(r, tau), f"τ = {tau:>2}: {word} {k:5.1f}", shade(color, 0.5 * i / 3),
+                       points=45, marker=TAU_MARKERS[i], ms=5 if TAU_MARKERS[i] == "+" else 4, mew=1.2)
         if r is paper_r:
             plots.ccdf(a, paper_news, "news, τ = 1", NEWS, lw=1.2, ls="-.")
-        plots.gaussian_ccdf(a)
-        alphas = [stats.alpha_regression(h) for h in (paper_runs if r is paper_r and paper_runs else runs)]
-        note = f"tail α at τ = 1 (paper's method): {stats.alpha_regression(r) if len(runs) == 1 else np.median(alphas):.2f}"
-        if r is paper_r and paper_runs:
-            note += f"\n(this run; mean of {len(paper_runs)} runs: {np.mean(alphas):.2f})"
-        elif len(runs) > 1:
-            note += " (median of histories)"
-        a.text(0.03, 0.04, note, transform=a.transAxes, fontsize=8.8, color=INK)
-        a.set_xlim(0.05, 40)
+        plots.gaussian_ccdf(a, ls="-")
+        top = a.legend(loc="upper right", fontsize=8)
+        alpha, c, lo, hi = stats.tail_fit(r)
+        fit = plots.power_law(a, lo, c * lo ** -alpha, -alpha, hi, f"fit to largest 30%: α = {alpha:.2f}",
+                              color=INK, ls=":", lw=1.6)
+        ref = plots.power_law(a, lo, c * lo ** -alpha, -PAPER_ALPHA, hi, f"Lux & Marchesi: α = {PAPER_ALPHA}")
+        head = "τ = 1 tail"
+        if len(runs) > 1:
+            alphas = [stats.alpha_regression(h) for h in runs]
+            head += (f" (α, mean of {len(runs)} runs: {np.mean(alphas):.2f})" if r is paper_r
+                     else f" (α, median of {len(runs)} histories: {np.median(alphas):.2f})")
+        a.legend(handles=[fit, ref], loc="lower left", fontsize=8, title=head, title_fontsize=8, alignment="left")
+        a.add_artist(top)
+        a.set_xlim(0.3, 40)
         a.set_ylim(1e-5, 1.5)
         a.set_title(title)
         a.set_xlabel("|return| / standard deviation")
-        a.legend(loc="upper right", fontsize=8)
     ax[0].set_ylabel("share of periods with a bigger move")
-    fig.tight_layout(rect=(0, 0.07, 1, 0.94))
+    fig.tight_layout(rect=(0, 0.08, 1, 0.94))
     return plots.save(fig, path, "Fig 2. Fat tails over one day, closer to a bell curve over 25 days",
-                      "Each curve: the share of τ-day periods whose move (in standard deviations) beats x; "
-                      "dashed = bell curve. Lux & Marchesi report tail α = 2.64 at τ = 1 and a cross-over to the "
-                      "bell curve as τ grows. The news (dash-dot) is a bell curve at every τ. In b, kurtosis is the median "
-                      "over histories (pooled, a single freak day would dominate it). Steps at small moves in a are "
-                      "price ticks (0.1% each): the paper-matched model's daily sd is only about 7 ticks.")
+                      "Drawn as in Lux & Marchesi's Fig 2: markers show the share of τ-day periods whose move (in "
+                      "standard deviations) beats x; solid grey = bell curve. Dotted: the paper's way of measuring the "
+                      "tail, a straight-line fit to the largest 30% of daily moves (tail α = minus its slope); dashed: "
+                      "the slope of the paper's α = 2.64, for comparison. As τ grows the curves cross over to the bell "
+                      "curve. The news (dash-dot, not drawn in the paper) is a bell curve.")
 
 
 # ------------------------------------------------------------------ Fig 3
+PAPER_H = dict(r=0.48, abs_r=0.85, news=0.49, abs_news=0.51)     # Lux & Marchesi (1999) Fig 3
+
+
 def fig3_memory(paper_r, paper_news, spx_model_r, spx, path=FIG / "fig3_memory.png"):
-    """The paper's Fig 3: DFA. Returns have no memory (H ~ 0.5); their sizes do (H ~ 0.85)."""
-    fig, ax = plt.subplots(1, 3, figsize=(15, 5))
+    """The paper's Fig 3: DFA. Returns have no memory (H ~ 0.5); their sizes do (H ~ 0.85).
+    Paper conventions: log-log F(n) against window n; output as triangles with a solid fit,
+    news as plus signs with a dotted (a) or dashed (b) fit, news shifted in b. Added: a
+    grey reference line with the paper's slope, and panel c (the S&P 500)."""
+    fig, ax = plt.subplots(1, 3, figsize=(15, 5.2))
     s_long = stats.dfa_scales(len(paper_r))
     s_spx = stats.dfa_scales(len(spx))
-    a = ax[0]
-    plots.dfa(a, np.abs(paper_r), s_long, "|returns| (paper 0.85)", PAPER_MODEL)
-    plots.dfa(a, np.abs(paper_news), s_long, "|news| (paper 0.51)", NEWS, marker="s")
-    a.set_title("a. Size of moves: long memory in the output only")
-    a = ax[1]
-    plots.dfa(a, paper_r, s_long, "returns (paper 0.48)", PAPER_MODEL)
-    plots.dfa(a, paper_news, s_long, "news (paper 0.49)", NEWS, marker="s", shift=3.0)
-    a.set_title("b. Direction of moves: no memory in either")
+    for a, f, key, title in [(ax[0], np.abs, "abs_", "a. Size of moves: long memory in the output only"),
+                             (ax[1], lambda x: x, "", "b. Direction of moves: no memory in either")]:
+        _, n0, F0 = plots.dfa(a, f(paper_r), s_long, "|returns|" if key else "returns", PAPER_MODEL, marker="^")
+        plots.dfa(a, f(paper_news), s_long, f"{'|news|' if key else 'news'} (paper {PAPER_H[key + 'news']})",
+                  NEWS, marker="+", fit_ls=":" if key else "--", shift=1.0 if key else 3.0)
+        plots.power_law(a, n0, F0, PAPER_H[key + "r"], s_long[-1], f"Lux & Marchesi: H = {PAPER_H[key + 'r']}")
+        a.set_title(title)
     a = ax[2]
-    plots.dfa(a, np.abs(spx), s_spx, "S&P |returns|", REAL)
+    _, n0, F0 = plots.dfa(a, np.abs(spx), s_spx, "S&P |returns|", REAL)
     plots.dfa(a, np.abs(spx_model_r), s_spx, "model |returns|", SPX_MODEL, marker="^")
-    plots.dfa(a, spx, s_spx, "S&P returns", REAL, marker="D", shift=0.2)
+    plots.power_law(a, n0, F0, PAPER_H["abs_r"], s_spx[-1], f"Lux & Marchesi's model: H = {PAPER_H['abs_r']}")
+    _, n0, F0 = plots.dfa(a, spx, s_spx, "S&P returns", REAL, marker="D", shift=0.2)
     plots.dfa(a, spx_model_r, s_spx, "model returns", SPX_MODEL, marker="v", shift=0.2)
+    plots.power_law(a, n0, F0, 0.5, s_spx[-1], "no memory: H = 0.5", ls=":")
     a.set_title("c. The S&P 500 and the S&P-calibrated model")
     for a in ax:
         a.set_xlabel("window n (days)")
@@ -142,10 +180,11 @@ def fig3_memory(paper_r, paper_news, spx_model_r, spx, path=FIG / "fig3_memory.p
     ax[0].set_ylabel("fluctuation F(n)")
     fig.tight_layout(rect=(0, 0.07, 1, 0.94))
     return plots.save(fig, path, "Fig 3. Moves have no memory of direction, but a long memory of size",
-                      "Detrended fluctuation analysis (Peng et al. 1994), the paper's Fig 3 method: F(n) grows like "
-                      "n^H. H = 0.5 means no memory; H near 1 means calm and wild spells that last. Panels a-b: one "
-                      "long paper-matched run and its news (the news curve in b is shifted up for visibility). "
-                      "Panel c: one held-out history the length of the S&P (returns curves shifted down).")
+                      "Detrended fluctuation analysis (Peng et al. 1994), drawn as in Lux & Marchesi's Fig 3: F(n) grows "
+                      "like n^H, so H is the slope. H = 0.5 means no memory; H near 1 means calm and wild spells that "
+                      "last. Grey dashed: the paper's slope, for comparison. Panels a-b: one long paper-matched run (the "
+                      "output) and its news (the input; shifted up in b). Panel c: one held-out history the length of "
+                      "the S&P (returns curves shifted down).")
 
 
 # ------------------------------------------------------------------ Fig 4
@@ -241,8 +280,8 @@ def fig5_mechanism(run, path=FIG / "fig5_mechanism.png", window=1500):
 # ------------------------------------------------------------------ Fig 6
 def fig6_kirman(path=FIG / "fig6_kirman.png"):
     """Kirman's ants: the herding mechanism, checked against his exact solution."""
-    cases = [("a. Herding: ε < (1−δ)/(N−1)", dict(N=100, eps=0.002, delta=0.01)),
-             ("b. No herding: ε > (1−δ)/(N−1)", dict(N=100, eps=0.05, delta=0.01))]
+    cases = [("a. Herding: ε < (1−δ)/(N−1)", dict(N=100, eps=0.002, delta=0.1)),
+             ("b. No herding: ε > (1−δ)/(N−1)", dict(N=100, eps=0.05, delta=0.1))]
     fig, ax = plt.subplots(2, 2, figsize=(13, 7))
     for col, (name, kw) in enumerate(cases):
         k = kirman.simulate(**kw, steps=40_000_000, seed=1)
@@ -260,10 +299,11 @@ def fig6_kirman(path=FIG / "fig6_kirman.png"):
         ax[1, col].set_title(f"mismatch (total variation distance) = {tv:.3f}", fontsize=9.5)
         ax[1, col].set_xlabel("ants at source A")
         ax[1, col].set_ylabel("share of time")
+        ax[1, col].set_ylim(0, 1.35 * max(hist.max(), exact.max()))     # room for the legend
         ax[1, col].legend(loc="upper center")
     fig.tight_layout(rect=(0, 0.06, 1, 0.94))
     return plots.save(fig, path, "Fig 6. Kirman's ants herd exactly as his math predicts",
-                      "100 ants choose between two identical food sources (δ = 0.01). Rarely switching on their own "
+                      "100 ants choose between two identical food sources (δ = 0.1). Rarely switching on their own "
                       "(a), they crowd at one source and then flip all at once; otherwise (b) they split about 50/50. "
                       "Bottom: time spent in each state (bars) vs the exact long-run answer (line). Lux & Marchesi "
                       "use the same recruitment rule for traders joining or leaving the chartists.")
@@ -387,11 +427,12 @@ def fig9_robustness(pool, n=400, days=20_000, path=FIG / "fig9_robustness.png"):
     a = ax[0]
     a.scatter(ok[~memory, 1], ok[~memory, 2], s=12, color=ORANGE_LIGHT, label="no volatility memory")
     a.scatter(ok[memory, 1], ok[memory, 2], s=12, color=PAPER_MODEL, label="volatility memory")
-    a.plot(2.64, 0.85, "*", ms=16, color=INK, label="Lux & Marchesi (1999)")
+    a.plot(PAPER_ALPHA, PAPER_H["abs_r"], "*", ms=16, color=INK,
+           label=f"Lux & Marchesi (1999): α {PAPER_ALPHA}, H {PAPER_H['abs_r']}")
     a.axhline(base_h.max(), color=NEWS, ls="--", lw=1.2, label="largest value with no chartists")
     a.set_xlabel("tail α (paper's method)")
     a.set_ylabel("H of |returns|")
-    a.set_xlim(1, 4.5)
+    a.set_xlim(1, 5.5)      # room on the right for the legend
     a.set_title("a. Every setting that did not run away")
     a.legend(loc="upper right", frameon=True, facecolor="white", edgecolor=GRID)
     b = ax[1]
@@ -563,7 +604,7 @@ def main():
         paper_r = paper_long[0]["r"]
         paper_news = np.diff(paper_long[0]["lf"])
         spx_runs = [h["r"] for h in spx_hist]
-        print("saved", fig1_snapshot(paper_long[0], spx_hist[0]))
+        print("saved", fig1_snapshot(paper_long[0], spx_hist[0], spx))
         print("saved", fig2_aggregation(paper_r, paper_news, spx_runs, spx,
                                         paper_runs=[h["r"] for h in paper_long]))
         print("saved", fig3_memory(paper_r, paper_news, spx_runs[0], spx))

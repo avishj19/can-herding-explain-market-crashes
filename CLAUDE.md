@@ -55,7 +55,7 @@ The final product is a web app where users can tune herding strength and watch c
   kept locally only (git-ignored: copyrighted, and this repo is public). The equations come from the
   Samanidou et al. (2007) review (see SPEC.md); the parameter tables of Lux & Marchesi (2000) are still
   needed via CMU library access.
-- `notes/`: my own notes from tutoring sessions
+- `notes/`: my own notes from tutoring sessions; `notes/journal_guide.md` points to the key moments in `journal/`
 - `scratch/`: temporary files (git-ignored)
 - `journal/`: build journal logs (copied automatically; don't edit by hand)
 
