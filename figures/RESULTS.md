@@ -103,7 +103,7 @@ share of model histories below the real value; under 5% or over 95% = unusual.
 ---
 
 ## Fig 1 — The price follows its value, but returns are wilder than the news (paper's Fig 1)
-`fig1_snapshot.png`. 4,000 days of one held-out history per setting, drawn as in the
+[`fig01_price_follows_value.png`](fig01_price_follows_value.png). 4,000 days of one held-out history per setting, drawn as in the
 paper's Fig 1: price solid, value dotted and **shifted down** so both lines show (by 20
 and 35 points; the legend says how much), and the output (b) and input (c) on the same
 y scale.
@@ -119,7 +119,7 @@ y scale.
   A real market's news and chartist share cannot be measured, so c and d are model-only.
 
 ## Fig 2 — Fat tails over a day, a bell curve over weeks (paper's Fig 2)
-`fig2_tails.png`. Drawn as in the paper's Fig 2: each horizon τ = 1, 5, 15, 25 days
+[`fig02_fat_tails_day_vs_weeks.png`](fig02_fat_tails_day_vs_weeks.png). Drawn as in the paper's Fig 2: each horizon τ = 1, 5, 15, 25 days
 is a set of markers in the paper's symbols (▲ + ◆ ▼), and the bell curve is the solid
 line. New in every panel: the paper's tail fit itself (dotted, a straight line through
 the largest 30% of daily moves, labelled with its α) and a dashed line with the paper's
@@ -137,7 +137,7 @@ histories 2.64), 2.35 (c, S&P).
 - The news collapses onto the bell curve at every horizon, as in the paper.
 
 ## Fig 3 — No memory of direction, long memory of size (paper's Fig 3)
-`fig3_memory.png`. Detrended fluctuation analysis (Peng et al. 1994), drawn as in the
+[`fig03_memory_of_move_size.png`](fig03_memory_of_move_size.png). Detrended fluctuation analysis (Peng et al. 1994), drawn as in the
 paper's Fig 3: the output as triangles with a solid fitted line, the news as plus signs
 with a dotted (a) or dashed (b) fitted line. New: a grey dashed line with the paper's
 slope (H 0.85 in a, 0.48 in b, 0.85 on the S&P's |returns| in c) and a dotted "no
@@ -161,7 +161,7 @@ The S&P-calibrated model's returns **reverse** a little from day to day
 (H 0.39), while the S&P's do not (0.50). This is its clearest miss (Fig 7).
 
 ## Fig 4 — The proposal's checks
-`fig4_checks.png`.
+[`fig04_proposal_checks.png`](fig04_proposal_checks.png).
 - **No chartists → bell curve:** median kurtosis **0.01** over 40 histories (`main.py`
   prints 0.04: one history, so a little noisier),
   Hill α 6.6 (thin tails). Check passed.
@@ -171,7 +171,7 @@ The S&P-calibrated model's returns **reverse** a little from day to day
   dominated by one day (Black Monday); kurtosis is that sensitive.
 
 ## Fig 5 — The mechanism (paper p. 500)
-`fig5_mechanism.png`. S&P-calibrated, one 100,000-day held-out run.
+[`fig05_how_herding_makes_bursts.png`](fig05_how_herding_makes_bursts.png). S&P-calibrated, one 100,000-day held-out run.
 - Average move size climbs steadily with the share of chartists: 0.6× the
   average when chartists are rare, 3.5× when they are 20–25% of traders.
 - Crowded markets are rare: chartists are under 5% of traders on about 77% of
@@ -187,14 +187,14 @@ The S&P-calibrated model's returns **reverse** a little from day to day
 | Volatility rises with the chartist share | 0.59× (least crowded tenth) to 1.41× (most crowded) | 0.51× to 1.52× |
 
 ## Fig 6 — Kirman's ants (the herding check from the proposal)
-`fig6_kirman.png`. 40 million steps per case, δ = 0.1 (so "switch alone *or* be recruited"
+[`fig06_kirman_ants_check.png`](fig06_kirman_ants_check.png). 40 million steps per case, δ = 0.1 (so "switch alone *or* be recruited"
 adds up to at most 1 and the ant story holds literally). The simulated time at each state
 matches Kirman's exact formula: total variation distance **0.007** (herding) and
 **0.006** (no herding). The same recruitment rule moves traders in and out of the
 chartist group in Lux–Marchesi.
 
 ## Fig 7 — Is the S&P 500 a typical history of the model?
-`fig7_typical.png`. 40 held-out S&P-calibrated histories, each 19,329 days long.
+[`fig07_is_sp500_typical.png`](fig07_is_sp500_typical.png). 40 held-out S&P-calibrated histories, each 19,329 days long.
 - **9 of 11 measures typical.** Daily sd 90%, kurtosis 95%, Hill α 32%,
   next-day correlation 92%, clustering 82% (1 day) and 60% (50 days), H|r| 78%,
   5-day kurtosis 57%, 25-day kurtosis 92%.
@@ -208,7 +208,7 @@ chartist group in Lux–Marchesi.
   burst.
 
 ## Fig 8 — Markets the model never saw
-`fig8_out_of_sample.png`. Percentile of each real market among 20 model
+[`fig08_markets_model_never_saw.png`](fig08_markets_model_never_saw.png). Percentile of each real market among 20 model
 histories of the same length: the two indexes against seeds 1000–1019, the 20
 stocks against their own seeds 1020–1039 (until November 2026 a length check was
 off by one day and the stocks reused the index seeds; fixing it changed 49 unusual
@@ -226,7 +226,7 @@ the stocks.
   kurtosis (all 100%).
 
 ## Fig 9 — How robust is it? (paper: "an open set of parameter values")
-`fig9_robustness.png`. 400 random settings, one 20,000-day run each. The star in a is
+[`fig09_robustness_random_settings.png`](fig09_robustness_random_settings.png). 400 random settings, one 20,000-day run each. The star in a is
 the paper's own point (α 2.64, H|r| 0.85).
 - **6%** (26) are not run: their time step is too coarse. The fundamentalists' pull
   in one step, β·N·γ·dt (`model.step_pull`), is 2 or more, so every step would overshoot
@@ -240,7 +240,7 @@ the paper's own point (α 2.64, H|r| 0.85).
   But the region is not "almost everything": stability is the main limit.
 
 ## Fig 10 — Turning the herding dial
-`fig10_herding.png`. Only a1 (copying the majority mood) is changed.
+[`fig10_herding_strength_dial.png`](fig10_herding_strength_dial.png). Only a1 (copying the majority mood) is changed.
 - **Paper-matched:** kurtosis peaks at a1 = 0.6 (fitted 0.54) and **collapses to a
   bell curve for a1 ≥ 1**. More herding does *not* simply mean more crashes. Two
   things happen together above 1 (one history, 20,000 days, a1 0.6 → 1.2): the
@@ -257,7 +257,7 @@ the paper's own point (α 2.64, H|r| 0.85).
 ---
 
 ## Fig 11 — Policy experiments (an extension, not in the paper)
-`fig11_policy.png`. S&P-calibrated settings; code in `herding/policy.py`; the rules in
+[`fig11_circuit_breakers_and_policy.png`](fig11_circuit_breakers_and_policy.png). S&P-calibrated settings; code in `herding/policy.py`; the rules in
 `notes/SPEC.md` ("Policy experiments").
 
 **Circuit breakers.** The US rules since 2013 (NYSE Rule 7.12): trading pauses for

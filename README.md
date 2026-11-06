@@ -16,6 +16,7 @@ on fat tails, volatility clustering and extreme moves.
 
 **New to the project? Start with [`KEY_POINTS.md`](KEY_POINTS.md).** It explains
 the ideas, the figures and the findings without assuming any finance background.
+To see every figure with a short caption, open [`figures/GALLERY.md`](figures/GALLERY.md).
 Detailed results for every figure are in [`figures/RESULTS.md`](figures/RESULTS.md).
 
 ## How to run it
@@ -24,8 +25,8 @@ Requires Python 3.10 or newer.
 
 ```bash
 pip install -r requirements.txt
-python3 main.py                      # S&P 500 vs the model -> figures/draft.png
-python3 make_figures.py              # all figures fig1-fig11 (about 2 minutes on 8 cores)
+python3 main.py                      # S&P 500 vs the model -> figures/fig00_quick_check_sp500_vs_model.png
+python3 make_figures.py              # all figures fig01-fig11 (about 2 minutes on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests
 python3 -m pytest tests/ -q          # all tests
 python3 -m herding.calibrate paper   # refit to the paper's numbers (add --refine to polish)
@@ -47,7 +48,7 @@ The model's equations, each with its source, are in [`notes/SPEC.md`](notes/SPEC
 | `analysis/` | Exploration scripts behind individual findings |
 | `data/` | S&P 500, Nasdaq-100, 20 large stocks, VIX (Yahoo Finance) and US recessions (FRED), from `data/download.py` |
 | `paper/`, `notes/` | Sources, the model specification and my study notes |
-| `proposal.pdf` | My project proposal |
+| `notes/proposal.pdf` | My project proposal |
 | `journal/` | Build journal (Claude Code session logs, copied automatically) |
 
 The web app (adjust herding strength and watch crashes) and the video demo are

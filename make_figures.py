@@ -1,4 +1,4 @@
-"""Make every results figure (figures/fig1-11*.png), explained in figures/RESULTS.md.
+"""Make every results figure (figures/fig01-fig11*.png), explained in figures/RESULTS.md.
 
 Run:  python3 make_figures.py        (a few minutes with numba, using every core)
 
@@ -36,7 +36,7 @@ def shade(hex_color, amount):
 
 
 # ------------------------------------------------------------------ Fig 1
-def fig1_snapshot(paper_run, spx_run, spx, path=FIG / "fig1_snapshot.png", days=4000):
+def fig1_snapshot(paper_run, spx_run, spx, path=FIG / "fig01_price_follows_value.png", days=4000):
     """The paper's Fig 1: price tracks its value, but returns are wilder than the news.
     Paper conventions: 4,000 days; price solid, value dotted and shifted down for
     visibility; output (b) and input (c) on the same y range. Added: the chartist
@@ -101,7 +101,7 @@ TAU_MARKERS = ("^", "+", "D", "v")              # the paper's Fig 2 symbols for 
 PAPER_ALPHA = 2.64                               # Lux & Marchesi (1999) Fig 2, tau = 1
 
 
-def fig2_aggregation(paper_r, paper_news, spx_model_runs, spx, path=FIG / "fig2_tails.png",
+def fig2_aggregation(paper_r, paper_news, spx_model_runs, spx, path=FIG / "fig02_fat_tails_day_vs_weeks.png",
                      paper_runs=None):
     """The paper's Fig 2: fat tails at 1 day, a cross-over to the bell curve at longer horizons.
     Paper conventions: log-log share of |ret|/sd beyond x for tau = 1, 5, 15, 25 as markers,
@@ -151,7 +151,7 @@ def fig2_aggregation(paper_r, paper_news, spx_model_runs, spx, path=FIG / "fig2_
 PAPER_H = dict(r=0.48, abs_r=0.85, news=0.49, abs_news=0.51)     # Lux & Marchesi (1999) Fig 3
 
 
-def fig3_memory(paper_r, paper_news, spx_model_r, spx, path=FIG / "fig3_memory.png"):
+def fig3_memory(paper_r, paper_news, spx_model_r, spx, path=FIG / "fig03_memory_of_move_size.png"):
     """The paper's Fig 3: DFA. Returns have no memory (H ~ 0.5); their sizes do (H ~ 0.85).
     Paper conventions: log-log F(n) against window n; output as triangles with a solid fit,
     news as plus signs with a dotted (a) or dashed (b) fit, news shifted in b. Added: a
@@ -188,7 +188,7 @@ def fig3_memory(paper_r, paper_news, spx_model_r, spx, path=FIG / "fig3_memory.p
 
 
 # ------------------------------------------------------------------ Fig 4
-def fig4_checks(no_chart, spx_runs, paper_runs, spx, path=FIG / "fig4_checks.png"):
+def fig4_checks(no_chart, spx_runs, paper_runs, spx, path=FIG / "fig04_proposal_checks.png"):
     """The proposal's checks: no chartists -> bell curve; herding -> alpha ~ 3 like the S&P."""
     fig, ax = plt.subplots(1, 3, figsize=(15, 4.8))
     a = ax[0]
@@ -232,7 +232,7 @@ def fig4_checks(no_chart, spx_runs, paper_runs, spx, path=FIG / "fig4_checks.png
 
 
 # ------------------------------------------------------------------ Fig 5
-def fig5_mechanism(run, path=FIG / "fig5_mechanism.png", window=1500):
+def fig5_mechanism(run, path=FIG / "fig05_how_herding_makes_bursts.png", window=1500):
     """Where bursts come from: volatility rises with the chartist share."""
     r, z = run["r"], run["z"][1:]
     vol = np.abs(r) / r.std()
@@ -278,7 +278,7 @@ def fig5_mechanism(run, path=FIG / "fig5_mechanism.png", window=1500):
 
 
 # ------------------------------------------------------------------ Fig 6
-def fig6_kirman(path=FIG / "fig6_kirman.png"):
+def fig6_kirman(path=FIG / "fig06_kirman_ants_check.png"):
     """Kirman's ants: the herding mechanism, checked against his exact solution."""
     cases = [("a. Herding: ε < (1−δ)/(N−1)", dict(N=100, eps=0.002, delta=0.1)),
              ("b. No herding: ε > (1−δ)/(N−1)", dict(N=100, eps=0.05, delta=0.1))]
@@ -310,7 +310,7 @@ def fig6_kirman(path=FIG / "fig6_kirman.png"):
 
 
 # ------------------------------------------------------------------ Fig 7
-def fig7_typical(spx_runs, spx, path=FIG / "fig7_typical.png"):
+def fig7_typical(spx_runs, spx, path=FIG / "fig07_is_sp500_typical.png"):
     """Is the S&P 500 a typical history of the calibrated model, measure by measure?"""
     target = stats.fingerprint(spx)
     sims = [stats.fingerprint(r) for r in spx_runs]
@@ -346,7 +346,7 @@ def fig7_typical(spx_runs, spx, path=FIG / "fig7_typical.png"):
 
 
 # ------------------------------------------------------------------ Fig 8
-def fig8_out_of_sample(pool, p, path=FIG / "fig8_out_of_sample.png", n=20):
+def fig8_out_of_sample(pool, p, path=FIG / "fig08_markets_model_never_saw.png", n=20):
     """Markets the calibration never saw: percentile of each among model histories."""
     keys = [k for k in stats.FINGERPRINT if k != "sd"]     # shape only: volatility differs by asset
     if not 1 <= n <= len(HELD_OUT) // 2:
@@ -421,7 +421,7 @@ def _robust_base(args):
     return stats.kurtosis(r), stats.hurst(np.abs(r), stats.dfa_scales(days))
 
 
-def fig9_robustness(pool, n=400, days=20_000, path=FIG / "fig9_robustness.png"):
+def fig9_robustness(pool, n=400, days=20_000, path=FIG / "fig09_robustness_random_settings.png"):
     """The paper: results hold 'for an open set of parameter values'. Do they?"""
     # chunksize=1: run times differ a lot (runaways stop early), so hand out one at a time
     out = pool.map(_robust, [(i, days) for i in range(n)], chunksize=1)
@@ -488,7 +488,7 @@ def _dial(pool, p, a1s, days, n):
     return np.array(rows)
 
 
-def fig10_herding(pool, spx_p, paper_p, days, path=FIG / "fig10_herding.png", n=12):
+def fig10_herding(pool, spx_p, paper_p, days, path=FIG / "fig10_herding_strength_dial.png", n=12):
     """The project question as a dial: what does stronger mood herding (a1) do?"""
     a1s = np.round(np.linspace(0, 1.4, 8), 2)
     dials = {"S&P-calibrated": (_dial(pool, spx_p, a1s, days, n), spx_p, SPX_MODEL, "o"),
@@ -516,7 +516,7 @@ def fig10_herding(pool, spx_p, paper_p, days, path=FIG / "fig10_herding.png", n=
 
 
 # ------------------------------------------------------------------ Fig 11
-def fig11_policy(pool, p, spx, path=FIG / "fig11_policy.png", breaker_seeds=BREAKER_SEEDS,
+def fig11_policy(pool, p, spx, path=FIG / "fig11_circuit_breakers_and_policy.png", breaker_seeds=BREAKER_SEEDS,
                  surprise_seeds=SURPRISE_SEEDS):
     """Extension: circuit breakers and a policy surprise, in S&P-calibrated markets."""
     days = len(spx)

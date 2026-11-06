@@ -1,6 +1,6 @@
 """Can herding explain market crashes? The Lux-Marchesi model vs the S&P 500.
 
-Run:  python3 main.py    -> prints the comparison table, saves figures/draft.png
+Run:  python3 main.py    -> prints the comparison table, saves figures/fig00_quick_check_sp500_vs_model.png
 Uses the S&P-calibrated settings (settings/spx.json) and held-out seeds only.
 """
 import numpy as np
@@ -26,7 +26,7 @@ def table(target, sims):
     return "\n".join(lines)
 
 
-def main(p=None, out=FIGURES / "draft.png", seeds=SEEDS, days=None):
+def main(p=None, out=FIGURES / "fig00_quick_check_sp500_vs_model.png", seeds=SEEDS, days=None):
     p = calibrate.load("spx") if p is None else p
     real = data.spx_returns()
     bm = data.black_monday(real)
