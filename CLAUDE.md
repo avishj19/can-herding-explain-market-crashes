@@ -32,7 +32,7 @@ The final product is a web app where users can tune herding strength and watch c
 - `KEY_POINTS.md`: self-contained guide to the project for someone new to it (ideas, figures, findings, limits)
 - `notes/SPEC.md`: the model's equations, each with its source (rebuild of November 2026). Code and spec must agree.
 - `main.py`: quick comparison (S&P 500 vs 20 held-out S&P-calibrated histories), saves `figures/fig00_quick_check_sp500_vs_model.png`
-- `make_figures.py`: makes `figures/fig01-fig11*.png` (descriptive names), explained in `figures/RESULTS.md`; `figures/GALLERY.md` shows them all with plain captions
+- `make_figures.py`: makes `figures/fig01-fig12*.png` (descriptive names), explained in `figures/RESULTS.md`; `figures/GALLERY.md` shows them all with plain captions
 - `herding/`: the program, one module per job
   - `model.py`: the Lux-Marchesi simulation from SPEC.md (numba-accelerated), runaway guard
   - `stats.py`: tail exponents (Hill and the paper's regression), kurtosis, autocorrelation, DFA/Hurst H,
@@ -44,6 +44,7 @@ The final product is a web app where users can tune herding strength and watch c
     (reproduces the paper's numbers) and `settings/spx.json` (reproduces the S&P 500)
   - `experiments.py`: many histories in parallel, percentiles, the typical history
   - `policy.py`: extension: circuit breakers and a policy surprise (paired runs), used by Fig 11
+  - `politics.py`: extension: the president's party (1923-2026) and its return gap against luck, used by Fig 12
   - `plots.py`: palette and drawing helpers (reusable by the future web app)
 - `.vscode/`: VS Code setup (hides clutter, one-click tasks for tests and figures, suggested extensions)
 - `settings/`: the two fitted settings

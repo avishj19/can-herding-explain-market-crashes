@@ -309,6 +309,44 @@ value), next to a placebo (the same history without the surprise: ordinary wobbl
   market.** Only one size (a 10% drop) was tested, so this does not say how timing
   compares with the size of the surprise.
 
+## Fig 12 — Political parties (an extension, not in the paper)
+[`fig12_political_parties.png`](fig12_political_parties.png). Code in `herding/politics.py`; the
+numbers below come from `python3 analysis/party.py`. The president's party is taken from inauguration
+dates (13 changes of party from 1928 to 2026). The "presidential puzzle" (Santa-Clara &
+Valkanov 2003; Pástor & Veronesi 2020) says US stocks return more under Democratic presidents,
+with no matching difference in risk.
+
+The model has no politics in it, so it can serve as a yardstick for luck. Every gap is
+measured in units of the series' own daily sd, so that markets of different volatility can be
+compared. Two yardsticks:
+- **the model:** 40 S&P-calibrated histories, cut at the real inauguration dates;
+- **the real returns with the party calendar slid along:** whole quarters, at least a year away
+  from the real calendar (387 fake calendars for 1928–, 299 for 1950–). This keeps the market's own
+  calm and wild spells.
+
+| S&P 500 | 1928–2026 | 1950–2026 |
+|---|---|---|
+| Return gap, Democrats − Republicans | **+6.8% a year** | +5.3% a year |
+| ... percentile among shifted calendars / model | **98% / 100%** | 95% / 100% |
+| Volatility D ÷ R | 0.88 (32% / 15%) | 0.86 (13% / 10%) |
+| Fat tails (kurtosis) D − R | −9.5 (24% / 12%) | −28 (13% / 0%) |
+| Crash days (below −4 sd) per 1,000, D − R | −2.2 (29% / 15%) | −1.6 (27% / 22%) |
+
+- **The return gap is real but borderline.** Against the fair yardstick (shifted calendars) it
+  sits at the 95th–98th percentile. With only 13 changes of party, a few eras carry much of it:
+  leaving out 1929–1932 (Hoover) shrinks it to 3.7% a year, and leaving out 2008 (Bush) as well
+  shrinks it to 2.4%.
+- **The model is the wrong yardstick for average returns.** Its returns reverse from day to day
+  (H 0.39, the miss in Fig 7), so its long-run averages wobble too little, and every real gap
+  looks extreme against it. For volatility, tails and crashes the two yardsticks agree.
+- **No party difference in crashes, volatility or fat tails.** Every one sits inside both
+  yardsticks. The −28 kurtosis gap since 1950 is mostly one day: without Black Monday 1987 (under a
+  Republican president) it is −8.3.
+- **What this means for the project question:** the crash-making mechanism (herding) shows no
+  sign of depending on the party in power. Parties may shift average returns, as Pástor &
+  Veronesi argue, through investors' fear, which this model does not have. Party is correlation,
+  not cause: this test cannot say what drives the gap.
+
 ## Limitations (honest list)
 1. **Parameters are fitted, not the paper's.** The paper's parameter tables
    (Lux & Marchesi 2000) were not available. The remembered "set I" gives a

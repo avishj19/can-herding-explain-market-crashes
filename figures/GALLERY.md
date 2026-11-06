@@ -121,3 +121,11 @@ strong herding. This dial is what the future web app will let users turn.
   the day of the pause or in the weeks after.
 - **A surprise 10% drop in true value** (like an unexpected rate hike) makes the price
   overshoot more when many traders are chartists.
+
+![Political parties](fig12_political_parties.png)
+
+**fig12 — Political parties** (an extension beyond the paper).
+- Since 1928 the S&P returned about 6.8% a year more under Democratic presidents. That is
+  more than 98% of "fake" party calendars give, so it's borderline: only 13 changes of party.
+- Crashes, volatility and fat tails show **no** party difference, so herding works the
+  same whoever is president.

@@ -93,4 +93,4 @@ def test_palette_roles_are_distinct():
 def test_package_has_one_module_per_job():
     names = {p.stem for p in (ROOT / "herding").glob("*.py")}
     assert names == {"__init__", "model", "stats", "market_data", "kirman", "calibrate",
-                     "plots", "experiments", "policy"}
+                     "plots", "experiments", "policy", "politics"}

@@ -11,7 +11,7 @@ from multiprocessing import Pool
 
 import numpy as np
 
-from herding import calibrate, experiments, kirman, market_data, model, plots, policy, stats
+from herding import calibrate, experiments, kirman, market_data, model, plots, policy, politics, stats
 from herding.plots import (BLUE, BLUE_LIGHT, GRID, INK, MUTED, NEWS, ORANGE,
                            ORANGE_LIGHT, PAPER_MODEL, REAL, SECOND, SPX_MODEL, plt)
 
@@ -603,6 +603,61 @@ def fig11_policy(pool, p, spx, path=FIG / "fig11_circuit_breakers_and_policy.png
     return summary
 
 
+# ------------------------------------------------------------------ Fig 12
+DEM_SHADE, REP_SHADE = "#dbe7f7", "#f8e0d5"      # light, and always labelled in the legend
+
+
+def fig12_politics(pool, p, path=FIG / "fig12_political_parties.png", market="spx_1928", seeds=HELD_OUT):
+    """Extension: is the market different under Democratic and Republican presidents,
+    beyond what luck gives? Two yardsticks for luck: the model (no politics at all) cut at
+    the real inauguration dates, and the real returns with the party calendar shifted."""
+    r, dem, real, nulls, pct = politics.compare(market, p, seeds, pool)
+    sd = r.std()
+    fig = plt.figure(figsize=(16, 8.4))
+    gs = fig.add_gridspec(2, 4, height_ratios=(1.15, 1))
+    a = fig.add_subplot(gs[0, :])
+    starts, party = politics.switches(r.index)
+    ends = np.append(starts[1:], len(r))
+    dates = r.index
+    for s, e, side in zip(starts, ends, party):
+        a.axvspan(dates[s], dates[e - 1], color=DEM_SHADE if side == "D" else REP_SHADE, lw=0)
+    a.semilogy(dates, 100 * np.exp(np.cumsum(r.values)), color=REAL, lw=0.9)
+    a.fill_between([], [], color=DEM_SHADE, label="Democratic president")
+    a.fill_between([], [], color=REP_SHADE, label="Republican president")
+    a.set_ylabel(f"S&P 500 (start = 100, log scale)")
+    a.set_title(f"a. The S&P 500 since {dates[0].year}, shaded by the president's party "
+                f"(return gap D − R: {real['mean'] * sd:+.1%} a year)")
+    a.legend(loc="upper left", frameon=True, facecolor="white", edgecolor=GRID)
+    a.margins(x=0)
+    scale = {"mean": 100 * sd, "vol": 1, "kurtosis": 1, "crashes": 1}     # mean gap shown in % a year
+    names = {"mean": "b. Return gap, D − R (% a year)", "vol": "c. Volatility, D ÷ R",
+             "kurtosis": "d. Fat tails (kurtosis), D − R", "crashes": "e. Crash days per 1,000, D − R"}
+    rows = [("model", "model, no politics", SPX_MODEL), ("shifted", "S&P, shifted calendar", MUTED)]
+    for j, k in enumerate(politics.MEASURES):
+        b = fig.add_subplot(gs[1, j])
+        for y, (w, label, color) in enumerate(rows):
+            v = np.array([s[k] for s in nulls[w]]) * scale[k]
+            jitter = np.random.default_rng(j).uniform(-0.25, 0.25, len(v))
+            b.plot(v, y + jitter, "o", color=color, ms=3, alpha=0.5)
+        b.axvline(real[k] * scale[k], color=REAL, lw=2)
+        b.set_yticks([0, 1], [(f"{label}\n" if j == 0 else "") + f"S&P at {pct[w][k]:.0f}%"
+                              for w, label, _ in rows], fontsize=8)
+        if k == "kurtosis":
+            b.set_xscale("symlog", linthresh=10)      # one freak model history would squash the rest
+        b.set_ylim(-0.6, 1.6)
+        b.grid(axis="y", visible=False)
+        b.set_title(names[k], fontsize=10)
+    fig.tight_layout(rect=(0, 0.07, 1, 0.94))
+    plots.save(fig, path, "Fig 12. Political parties (extension): a return gap, but no difference in crashes",
+               f"Black line: the real S&P 500 ({dates[0].year}–{dates[-1].year}). Dots: what luck alone gives, two "
+               f"ways: {len(nulls['model'])} model histories with no politics in them, cut at the real "
+               f"inauguration dates (blue), and the real returns with the party calendar slid along by whole quarters "
+               f"({len(nulls['shifted'])} fake calendars, grey). Percent: share of dots below the S&P. The model's "
+               "returns reverse from day to day, so its yardstick for the return gap (b) is too narrow; the shifted "
+               "calendar is the fair one there.")
+    return dict(real=real, pct=pct, n_model=len(nulls["model"]), n_shifted=len(nulls["shifted"]))
+
+
 # ------------------------------------------------------------------ all
 def main():
     plots.style()
@@ -637,6 +692,7 @@ def main():
         for name, rows in dials.items():
             print("fig10", name, dict(zip(a1s.tolist(), np.round(rows, 2).tolist())))
         print("fig11", fig11_policy(pool, spx_p, spx))
+        print("fig12", fig12_politics(pool, spx_p))
 
 
 if __name__ == "__main__":
