@@ -397,8 +397,12 @@ def matplotlib_diverging():
 
 # ------------------------------------------------------------------ Fig 9
 def _robust(args):
+    """One random setting: (kurtosis, paper-style alpha, H of |returns|), None if it ran
+    away, or "step" if its time step is too coarse to trust (model.step_pull)."""
     i, days = args
     p = calibrate.draw(np.random.default_rng(50_000 + i), calibrate.RANGES)
+    if model.step_pull(p) >= model.STEP_LIMIT:
+        return "step"
     try:
         r = model.simulate(p, days + calibrate.BURN, seed=7)["r"][calibrate.BURN:]
     except model.RunawayError:
@@ -407,9 +411,12 @@ def _robust(args):
 
 
 def _robust_base(args):
-    """The no-chartist yardstick for Fig 9: kurtosis and H of |returns|."""
+    """The no-chartist yardstick for Fig 9: kurtosis and H of |returns| (None if the
+    time step is too coarse to trust, as in _robust)."""
     i, days = args
     p = calibrate.draw(np.random.default_rng(60_000 + i), calibrate.RANGES)
+    if model.step_pull(p) >= model.STEP_LIMIT:
+        return None
     r = model.simulate(p, days, seed=7, chartists=False)["r"]
     return stats.kurtosis(r), stats.hurst(np.abs(r), stats.dfa_scales(days))
 
@@ -418,8 +425,10 @@ def fig9_robustness(pool, n=400, days=20_000, path=FIG / "fig9_robustness.png"):
     """The paper: results hold 'for an open set of parameter values'. Do they?"""
     # chunksize=1: run times differ a lot (runaways stop early), so hand out one at a time
     out = pool.map(_robust, [(i, days) for i in range(n)], chunksize=1)
-    ok = np.array([o for o in out if o is not None])
-    base = np.array(pool.map(_robust_base, [(i, days) for i in range(40)], chunksize=1))
+    coarse = sum(isinstance(o, str) for o in out)
+    ok = np.array([o for o in out if o is not None and not isinstance(o, str)])
+    base = np.array([b for b in pool.map(_robust_base, [(i, days) for i in range(40)], chunksize=1)
+                     if b is not None])
     base_k, base_h = base[:, 0], base[:, 1]
     fat = ok[:, 0] > base_k.max()
     memory = ok[:, 2] > base_h.max()
@@ -436,22 +445,27 @@ def fig9_robustness(pool, n=400, days=20_000, path=FIG / "fig9_robustness.png"):
     a.set_title("a. Every setting that did not run away")
     a.legend(loc="upper right", frameon=True, facecolor="white", edgecolor=GRID)
     b = ax[1]
-    counts = [n - len(ok), int(np.sum(~fat)), int(np.sum(fat & ~memory)), int(np.sum(fat & memory))]
-    names = ["ran away\n(endless bubble)", "thin tails", "fat tails,\nno memory", "fat tails\nand memory"]
-    colors = [MUTED, NEWS, ORANGE_LIGHT, PAPER_MODEL]
-    b.bar(range(4), np.array(counts) / n * 100, color=colors, width=0.6)
+    counts = [coarse, n - coarse - len(ok), int(np.sum(~fat)), int(np.sum(fat & ~memory)),
+              int(np.sum(fat & memory))]
+    names = ["time step\ntoo coarse", "ran away\n(endless bubble)", "thin tails", "fat tails,\nno memory",
+             "fat tails\nand memory"]
+    colors = [GRID, MUTED, NEWS, ORANGE_LIGHT, PAPER_MODEL]
+    b.bar(range(5), np.array(counts) / n * 100, color=colors, width=0.6, edgecolor=MUTED, lw=0.6)
     for i, c in enumerate(counts):
         b.text(i, c / n * 100, f"{c / n:.0%}", ha="center", va="bottom", fontsize=9.5, color=INK)
-    b.set_xticks(range(4), names)
+    b.set_xticks(range(5), names)
     b.set_ylabel(f"share of {n} random settings (%)")
     b.set_title("b. What random settings produce")
     fig.tight_layout(rect=(0, 0.07, 1, 0.94))
     plots.save(fig, path, "Fig 9. Most stable settings give fat tails and memory, but many settings are unstable",
                f"{n} settings drawn at random from the fitting ranges, one {days:,}-day run each. 'Fat tails' = "
                "kurtosis above every no-chartist run; 'memory' = H of |returns| above every no-chartist run "
-               "(dashed line). Many random settings end in an endless bubble, so the paper's 'open set' of good "
-               "parameters is real but far from all of them.")
-    return dict(n=n, runaway=counts[0], thin=counts[1], fat_only=counts[2], fat_memory=counts[3])
+               "(dashed line). 'Time step too coarse': fundamentalists would overshoot the value more each step "
+               "(beta N gamma dt >= 2), a flaw of the simulation, not of the market, so these are not run. Many "
+               "random settings end in an endless bubble, so the paper's 'open set' of good parameters is real but "
+               "far from all of them.")
+    return dict(n=n, coarse=counts[0], runaway=counts[1], thin=counts[2], fat_only=counts[3],
+                fat_memory=counts[4])
 
 
 # ------------------------------------------------------------------ Fig 10

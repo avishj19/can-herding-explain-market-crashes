@@ -80,7 +80,7 @@ are in a paper we could not get, so they are fitted):
   - a Pareto law with known α;
   - white noise has H = 0.5.
 
-  All 366 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
+  All 368 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
 - **Every result is judged over many histories** on held-out seeds: one history can
   be calm and another wild with identical settings.
 - **The real market counts as typical** if it falls inside the middle 90% of the
@@ -145,8 +145,9 @@ index-calibrated model (companies also have their own news), though their tail
 exponents are typical; and most stocks don't reverse from day to day the way the
 model does.
 
-**9. Robust, within limits** (Fig 9). 44% of random settings run away into endless
-bubbles. Of the stable ones, 65% give fat tails with long memory. The paper's "open
+**9. Robust, within limits** (Fig 9). 40% of random settings run away into endless
+bubbles (6% more are left out because the simulation's time step is too coarse for
+them; see `model.step_pull`). Of the stable ones, 66% give fat tails with long memory. The paper's "open
 set" of good parameters is real, but stability is the main limit.
 
 **10. More herding is not always more crashes** (Fig 10). In the paper-matched
@@ -204,7 +205,7 @@ statements about government or regulation. Measured with
 | Volatility rises with the noise-trader share | ✅ 0.59× → 1.41× | ✅ 0.51× → 1.49× |
 | Price direction is unpredictable (H ≈ 0.5) | ✅ 0.47 | ⚠️ 0.39 (mild reversal) |
 | Fat tails come from traders, not news | ✅ | ✅ |
-| Results hold for many settings | ⚠️ for about a third of random settings (65% of the 56% that stay stable) | |
+| Results hold for many settings | ⚠️ for about a third of random settings (66% of the 54% that stay stable) | |
 
 ## 7. What the model gets wrong (honest limitations)
 
@@ -262,7 +263,7 @@ python3 data/download.py               # data files (already in the repository)
 python3 main.py                        # S&P vs 20 held-out histories (about 5 s)
 python3 make_figures.py                # figures 1-11 (about 2 min on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests (about 1 min)
-python3 -m pytest tests/ -q            # all 366 tests (about 1.5 min)
+python3 -m pytest tests/ -q            # all 368 tests (about 1.5 min)
 python3 -m herding.calibrate paper     # refit to the paper (about 20 min), then --refine
 python3 -m herding.calibrate spx       # refit to the S&P 500 (1.5-2.5 h; resumes if stopped)
 ```
