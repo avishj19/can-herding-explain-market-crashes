@@ -31,8 +31,8 @@ The final product is a web app where users can tune herding strength and watch c
 ## Where things live
 - `KEY_POINTS.md`: self-contained guide to the project for someone new to it (ideas, figures, findings, limits)
 - `notes/SPEC.md`: the model's equations, each with its source (rebuild of November 2026). Code and spec must agree.
-- `main.py`: quick comparison (S&P 500 vs 20 held-out S&P-calibrated histories), saves `figures/draft.png`
-- `make_figures.py`: makes `figures/fig1-11*.png`, explained in `figures/RESULTS.md`
+- `main.py`: quick comparison (S&P 500 vs 20 held-out S&P-calibrated histories), saves `figures/fig00_quick_check_sp500_vs_model.png`
+- `make_figures.py`: makes `figures/fig01-fig11*.png` (descriptive names), explained in `figures/RESULTS.md`; `figures/GALLERY.md` shows them all with plain captions
 - `herding/`: the program, one module per job
   - `model.py`: the Lux-Marchesi simulation from SPEC.md (numba-accelerated), runaway guard
   - `stats.py`: tail exponents (Hill and the paper's regression), kurtosis, autocorrelation, DFA/Hurst H,
@@ -45,10 +45,11 @@ The final product is a web app where users can tune herding strength and watch c
   - `experiments.py`: many histories in parallel, percentiles, the typical history
   - `policy.py`: extension: circuit breakers and a policy surprise (paired runs), used by Fig 11
   - `plots.py`: palette and drawing helpers (reusable by the future web app)
+- `.vscode/`: VS Code setup (hides clutter, one-click tasks for tests and figures, suggested extensions)
 - `settings/`: the two fitted settings
 - `tests/`: one test file per module; `python3 -m pytest tests/ -q` (quick: add `-m "not slow"`)
 - `analysis/`: scripts behind individual findings (see its README; older versions are in git history)
-- `proposal.pdf`: my project proposal; `notes/course_project_guide.pdf`: the course's project handout
+- `notes/proposal.pdf`: my project proposal; `notes/course_project_guide.pdf`: the course's project handout
 - `data/`: made by `data/download.py` (all series end 2026-10-30): S&P 500 1950- and 1928- (Yahoo ^GSPC),
   Nasdaq-100 (^NDX, 1985-), `stocks/` (20 large stocks with market beta 0.9-1.1, 2000-), VIX, NBER recessions (FRED USREC)
 - `paper/`: sources. The Lux & Marchesi Nature paper (doi:10.1038/17290) is `paper/LuxMarchesi1999_Nature.pdf`,

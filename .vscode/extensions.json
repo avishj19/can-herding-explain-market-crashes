@@ -1,0 +1,8 @@
+{
+  // VS Code offers to install these when the folder is opened.
+  "recommendations": [
+    "ms-python.python",          // run, debug and test Python
+    "tomoki1207.pdf",            // read the proposal and papers inside VS Code
+    "mechatroner.rainbow-csv"    // colour-coded columns for the data/*.csv files
+  ]
+}

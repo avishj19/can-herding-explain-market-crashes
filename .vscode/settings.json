@@ -1,0 +1,33 @@
+{
+  // Hide clutter in the Explorer sidebar (the files still exist on disk).
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/.DS_Store": true,
+    "scratch": true,
+    "journal/*.jsonl": true
+  },
+  // Keep big or generated folders out of Cmd-Shift-F search results.
+  "search.exclude": {
+    "journal": true,
+    "scratch": true,
+    "data/**/*.csv": true
+  },
+
+  // Fold helper files under the file they belong to (click the arrow to see them).
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "README.md": "CLAUDE.md, requirements.txt, .gitignore"
+  },
+
+  // Open the figure gallery as a rendered page instead of raw Markdown.
+  "workbench.editorAssociations": {
+    "GALLERY.md": "vscode.markdown.preview.editor"
+  },
+
+  // Testing panel (beaker icon): runs the quick tests.
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests", "-q", "-m", "not slow"]
+}
