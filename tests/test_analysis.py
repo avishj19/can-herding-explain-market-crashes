@@ -7,7 +7,7 @@ import pytest
 
 from conftest import ROOT
 
-SCRIPTS = sorted((ROOT / "analysis").glob("*.py"))
+SCRIPTS = sorted((ROOT / "scripts" / "analysis").glob("*.py"))
 
 
 @pytest.mark.parametrize("path", SCRIPTS, ids=[p.name for p in SCRIPTS])
@@ -23,12 +23,12 @@ def test_scripts_are_valid_python_with_a_docstring(path):
 
 @pytest.mark.parametrize("path", SCRIPTS, ids=[p.name for p in SCRIPTS])
 def test_every_script_is_listed_in_the_readme(path):
-    assert f"`{path.name}`" in (ROOT / "analysis" / "README.md").read_text()
+    assert f"`{path.name}`" in (ROOT / "scripts" / "analysis" / "README.md").read_text()
 
 
 def load_script(name):
     """Import an analysis script as a module (without running its main)."""
-    spec = importlib.util.spec_from_file_location(name[:-3], ROOT / "analysis" / name)
+    spec = importlib.util.spec_from_file_location(name[:-3], ROOT / "scripts" / "analysis" / name)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

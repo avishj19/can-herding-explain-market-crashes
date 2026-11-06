@@ -133,7 +133,7 @@ def test_results_reads_the_10_day_surprise_measure_in_the_right_units():
 def test_documents_do_not_compare_timing_with_size_of_a_surprise():
     from pathlib import Path
     root = Path(__file__).parent.parent
-    for name in ("figures/RESULTS.md", "KEY_POINTS.md"):
+    for name in ("figures/RESULTS.md", "docs/KEY_POINTS.md"):
         text = " ".join((root / name).read_text().split())   # ignore line breaks
         assert "matters as much as its size" not in text, name
 
@@ -166,7 +166,7 @@ def test_documents_give_the_crowded_overshoot_with_its_sample_size_and_interval(
     assert "18 histories" in results
     assert "0.29 (95% interval 0.14 to 0.41)" in results
     assert "difference of the two medians" in results     # says the table gap is a shortcut
-    key = " ".join((root / "KEY_POINTS.md").read_text().split())
+    key = " ".join((root / "docs/KEY_POINTS.md").read_text().split())
     assert "18 histories" in key
     assert "0.14 to 0.41" in key
 

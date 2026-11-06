@@ -1,4 +1,4 @@
-"""Fit the model's settings to target numbers (notes/SPEC.md, "Parameters").
+"""Fit the model's settings to target numbers (docs/SPEC.md, "Parameters").
 
 Two fits, by one method:
     paper   reproduce Lux & Marchesi (1999)'s published numbers (alpha 2.64,

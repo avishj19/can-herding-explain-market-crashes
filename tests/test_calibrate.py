@@ -285,7 +285,7 @@ def test_results_reports_the_held_out_paper_score_next_to_the_training_score():
 
 
 def test_key_points_does_not_claim_the_whole_paper_is_reproduced():
-    key = (DOCS / "KEY_POINTS.md").read_text()
+    key = (DOCS / "docs" / "KEY_POINTS.md").read_text()
     assert "**1. The rebuilt model reproduces the paper**" not in key
     assert "not reproduced" in key
 
@@ -307,7 +307,7 @@ def test_paper_fit_tolerances_are_not_called_the_papers_error_bars():
     paper_error_bars = {"alpha_reg": 0.077, "H": 0.003, "H_abs": 0.010}   # its Fig 2-3 captions
     for k, (_, tol) in calibrate.PAPER_TARGETS.items():
         assert tol > paper_error_bars[k]
-    for doc in (DOCS / "figures" / "RESULTS.md", DOCS / "notes" / "SPEC.md"):
+    for doc in (DOCS / "figures" / "RESULTS.md", DOCS / "docs" / "SPEC.md"):
         text = doc.read_text()
         assert "units of the paper's error bars" not in text
         for bar in ("0.077", "0.003", "0.010"):

@@ -14,7 +14,7 @@ its true value) and *chartists* (who follow the crowd, as optimists or pessimist
 like Kirman's ants). The model is calibrated to the S&P 500 and compared with it
 on fat tails, volatility clustering and extreme moves.
 
-**New to the project? Start with [`KEY_POINTS.md`](KEY_POINTS.md).** It explains
+**New to the project? Start with [`docs/KEY_POINTS.md`](docs/KEY_POINTS.md).** It explains
 the ideas, the figures and the findings without assuming any finance background.
 To see every figure with a short caption, open [`figures/GALLERY.md`](figures/GALLERY.md).
 Detailed results for every figure are in [`figures/RESULTS.md`](figures/RESULTS.md).
@@ -25,8 +25,8 @@ Requires Python 3.10 or newer.
 
 ```bash
 pip install -r requirements.txt
-python3 main.py                      # S&P 500 vs the model -> figures/fig00_quick_check_sp500_vs_model.png
-python3 make_figures.py              # all figures fig01-fig12 (about 2 minutes on 8 cores)
+python3 scripts/main.py              # S&P 500 vs the model -> figures/fig00_quick_check_sp500_vs_model.png
+python3 scripts/make_figures.py      # all figures fig01-fig12 (about 2 minutes on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests
 python3 -m pytest tests/ -q          # all tests
 python3 -m herding.calibrate paper   # refit to the paper's numbers (add --refine to polish)
@@ -34,22 +34,32 @@ python3 -m herding.calibrate spx     # refit to the S&P 500 (1.5-2.5 hours; reru
 python3 data/download.py             # re-download every data file (ends 2026-10-30)
 ```
 
-The model's equations, each with its source, are in [`notes/SPEC.md`](notes/SPEC.md).
+The model's equations, each with its source, are in [`docs/SPEC.md`](docs/SPEC.md).
 
-## What is where
+## Where everything is
 
-| Path | What it holds |
-|---|---|
-| `herding/` | The program: the model, statistics, data loading, Kirman's ant model, fitting, policy experiments, plots |
-| `settings/` | The two fitted settings: paper-matched and S&P-calibrated |
-| `main.py`, `make_figures.py` | Scripts that produce the figures |
-| `figures/` | Figures and `RESULTS.md`, which explains them |
-| `tests/` | One test file per module |
-| `analysis/` | Exploration scripts behind individual findings |
-| `data/` | S&P 500, Nasdaq-100, 20 large stocks, VIX (Yahoo Finance) and US recessions (FRED), from `data/download.py` |
-| `paper/`, `notes/` | Sources, the model specification and my study notes |
-| `notes/proposal.pdf` | My project proposal |
-| `journal/` | Build journal (Claude Code session logs, copied automatically) |
+Each folder has one job:
+
+```
+02-120 Project/
+├── README.md        you are here
+├── herding/         the simulation code (the model, statistics, fitting, plots)
+├── scripts/         things you RUN
+│   ├── main.py          quick check: S&P 500 vs the model
+│   ├── make_figures.py  draws every figure in figures/
+│   └── analysis/        smaller scripts behind single findings
+├── figures/         things you LOOK at: GALLERY.md (every figure + caption), RESULTS.md (details)
+├── docs/            things you READ
+│   ├── KEY_POINTS.md    the whole project explained for a newcomer
+│   ├── SPEC.md          the model's equations, each with its source
+│   ├── proposal.pdf     my project proposal
+│   └── papers/          source papers
+├── data/            real market data (S&P 500, Nasdaq-100, 20 stocks, VIX, recessions)
+├── settings/        the two fitted settings (paper-matched, S&P-calibrated)
+├── tests/           one test file per module in herding/
+├── journal/         build journal (Claude Code session logs, copied automatically)
+└── scratch/         temporary files, not in the repository
+```
 
 The web app (adjust herding strength and watch crashes) and the video demo are
 coming; links will be added here.

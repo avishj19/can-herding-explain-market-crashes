@@ -1,8 +1,8 @@
 # Results: what each figure shows
 
 **Model version:** the rebuild of November 2026. The model's equations are in
-[`notes/SPEC.md`](../notes/SPEC.md), each with its source. Figures come from
-`python3 make_figures.py` (about 2 minutes on 8 cores). Every model check uses
+[`docs/SPEC.md`](../docs/SPEC.md), each with its source. Figures come from
+`python3 scripts/make_figures.py` (about 2 minutes on 8 cores). Every model check uses
 **held-out seeds** that neither fit ever saw (mostly 1000–1039; Fig 9 and Fig 11 use
 other unused seeds, named there).
 
@@ -178,7 +178,7 @@ The S&P-calibrated model's returns **reverse** a little from day to day
   days.
 - The wildest stretch (a) shows a burst that **ends on its own** when the
   chartist share falls back, as the paper describes.
-- The paper's efficient-market claims (`analysis/efficiency_claims.py`, 4 × 100,000 days):
+- The paper's efficient-market claims (`scripts/analysis/efficiency_claims.py`, 4 × 100,000 days):
 
 | Claim | Paper-matched | S&P-calibrated |
 |---|---|---|
@@ -258,7 +258,7 @@ the paper's own point (α 2.64, H|r| 0.85).
 
 ## Fig 11 — Policy experiments (an extension, not in the paper)
 [`fig11_circuit_breakers_and_policy.png`](fig11_circuit_breakers_and_policy.png). S&P-calibrated settings; code in `herding/policy.py`; the rules in
-`notes/SPEC.md` ("Policy experiments").
+`docs/SPEC.md` ("Policy experiments").
 
 **Circuit breakers.** The US rules since 2013 (NYSE Rule 7.12): trading pauses for
 15 minutes when the market is 7% or 13% below the previous close, **but only before
@@ -311,7 +311,7 @@ value), next to a placebo (the same history without the surprise: ordinary wobbl
 
 ## Fig 12 — Political parties (an extension, not in the paper)
 [`fig12_political_parties.png`](fig12_political_parties.png). Code in `herding/politics.py`; the
-numbers below come from `python3 analysis/party.py`. The president's party is taken from inauguration
+numbers below come from `python3 scripts/analysis/party.py`. The president's party is taken from inauguration
 dates (13 changes of party from 1928 to 2026). The "presidential puzzle" (Santa-Clara &
 Valkanov 2003; Pástor & Veronesi 2020) says US stocks return more under Democratic presidents,
 with no matching difference in risk.
@@ -347,6 +347,69 @@ compared. Two yardsticks:
   Veronesi argue, through investors' fear, which this model does not have. Party is correlation,
   not cause: this test cannot say what drives the gap.
 
+## Fig 12b — Term by term: which presidencies can the model explain? (extension)
+
+Code: `python3 scripts/analysis/party_terms.py` (no figure; merged from three agents' analyses). Fig 12 pooled the
+days of each party. Here each of the 18 terms since 1928 is checked on its own: the S&P 500 and
+40 politics-free model histories (rescaled to the S&P's daily sd and mean) are cut at the same
+days. For seven measures we find the S&P's **percentile**, the share of histories below it
+(50 = typical; 0 or 100 = none of the 40 did that). A measure outside 5–95 is a **flag**: the
+model does not explain it.
+
+**Luck check.** Letting each model history play the S&P against the other 39 gives 0.63 flags
+per term, a median of 10 over 18 terms (95th percentile 19). The S&P gets **29**, reached by
+only 2% of luck runs. So some misses are real.
+
+**By party.** Democrats: 8 flags in 8 terms (1.00 per term). Republicans: 21 in 10 (2.10). If we
+shuffle the party labels over the 18 terms, a gap this big turns up 24% of the time (36%
+without the return measure), so it may well be luck. Hoover (5) and Bush 2001 (6) give 11 of
+the 21 Republican flags; without them Republicans have 1.25 per term.
+
+**By kind of event.** Three groups, each with both parties in it:
+- *Long crises, too wild:* Hoover, Roosevelt, Bush 2001. Hoover had 36 crash days; no model
+  history had more than 8 over the same days.
+- *Calm eras, too quiet:* Eisenhower, Kennedy, Johnson, Nixon (volatility percentile 0–2). All
+  6 "too calm" flags fall in 1946–1980; only 1 of the 19 "too wild" flags does.
+- *One shock day in a calm term:* 1946 (Truman), 1962 (Kennedy), 1987 (Reagan, a 20.5% fall in
+  a day), 2025 (Trump): kurtosis at the 95th–100th percentile.
+
+**What it means.** The misses follow the era and the kind of event, not the party. Herding
+makes calm and wild spells, but they don't last long enough: the real market stayed wild for
+years and calm for a decade. And real shocks can strike a calm market out of the blue, like
+outside news; the model's news is a mild bell curve, so its big days come from herding.
+
+**Limitations.** Only 40 histories, so percentiles move in steps of 2.5. The model's returns
+reverse a little from day to day (H 0.39, Fig 7), so its multi-year returns spread too little
+and return flags come too easily. Terms run from 291 to 3,023 days; long terms show misses more
+easily. The Yahoo data probably has bad closes: 1935-04-16 (−10.5%, undone the next day) and
+four similar 1935–1938 days, unchecked against another source. Removing all five takes away
+Roosevelt's volatility flag; its kurtosis and crash-day flags stay.
+
+Table: S&P value (percentile among the 40). Falls are price falls over 1 or 20 trading days.
+Crash days: below mean − 4 sd. α: Hill tail exponent, terms of 1,000+ days only (smaller =
+fatter tails).
+
+| Term | Party | Years | Days | Return/yr | Volatility | Kurtosis | Worst day | Worst 20 days | Crash days | α | Flags |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Coolidge | R | 1928–1929 | 291 | +32.9% (100) | 15.2% (42) | 1.7 (80) | 3.8% (68) | 10.3% (62) | 0 (39) | — | **1** |
+| Hoover | R | 1929–1933 | 1,003 | −37.4% (0) | 41.5% (100) | 3.1 (72) | 12.9% (100) | 42.2% (100) | 36 (100) | 3.16 (15) | **5** |
+| Roosevelt | D | 1933–1945 | 3,023 | +7.3% (70) | 25.4% (100) | 9.5 (98) | 10.0% (85) | 26.1% (95) | 31 (98) | 2.57 (8) | **3** |
+| Truman | D | 1945–1953 | 1,938 | +8.0% (82) | 14.5% (10) | 12.9 (100) | 9.9% (92) | 19.3% (75) | 3 (54) | 2.59 (5) | **1** |
+| Eisenhower | R | 1953–1961 | 2,016 | +10.4% (75) | 11.3% (2) | 6.5 (90) | 6.6% (55) | 9.3% (5) | 1 (30) | 3.26 (35) | **1** |
+| Kennedy | D | 1961–1963 | 715 | +6.4% (45) | 12.2% (0) | 13.5 (100) | 6.7% (90) | 15.5% (85) | 1 (72) | — | **2** |
+| Johnson | D | 1963–1969 | 1,271 | +7.0% (60) | 8.9% (0) | 4.4 (80) | 2.8% (2) | 9.5% (8) | 0 (18) | 3.61 (38) | **2** |
+| Nixon | R | 1969–1974 | 1,401 | −4.0% (0) | 13.0% (0) | 2.2 (48) | 3.1% (2) | 13.9% (55) | 0 (19) | 3.79 (48) | **3** |
+| Ford | R | 1974–1977 | 619 | +9.8% (68) | 16.3% (50) | 1.4 (60) | 3.7% (52) | 14.5% (82) | 0 (35) | — | **0** |
+| Carter | D | 1977–1981 | 1,009 | +6.4% (52) | 12.6% (5) | 1.5 (55) | 3.0% (5) | 13.0% (50) | 0 (25) | 4.47 (68) | **0** |
+| Reagan | R | 1981–1989 | 2,024 | +9.4% (82) | 18.0% (42) | 86.9 (100) | 20.5% (98) | 29.6% (95) | 5 (70) | 3.00 (18) | **2** |
+| Bush | R | 1989–1993 | 1,011 | +10.4% (75) | 13.4% (5) | 4.3 (78) | 6.1% (72) | 13.7% (60) | 1 (49) | 3.65 (45) | **0** |
+| Clinton | D | 1993–2001 | 2,021 | +14.0% (95) | 15.7% (18) | 5.3 (80) | 6.9% (57) | 13.9% (40) | 3 (46) | 3.77 (48) | **0** |
+| Bush | R | 2001–2009 | 2,009 | −5.7% (0) | 21.5% (98) | 9.9 (100) | 9.0% (90) | 28.2% (100) | 14 (99) | 2.49 (0) | **6** |
+| Obama | D | 2009–2017 | 2,015 | +12.2% (95) | 17.3% (52) | 4.7 (80) | 6.7% (70) | 22.1% (90) | 5 (75) | 3.34 (30) | **0** |
+| Trump | R | 2017–2021 | 1,006 | +13.0% (88) | 20.6% (78) | 20.8 (95) | 12.0% (95) | 30.9% (98) | 6 (88) | 2.14 (0) | **2** |
+| Biden | D | 2021–2025 | 1,005 | +11.4% (80) | 16.5% (40) | 1.9 (60) | 4.3% (40) | 12.1% (48) | 0 (20) | 4.00 (50) | **0** |
+| Trump | R | 2025–2026 | 448 | +13.2% (85) | 16.3% (40) | 16.8 (100) | 6.0% (78) | 12.1% (62) | 2 (74) | — | **1** |
+
 ## Limitations (honest list)
 1. **Parameters are fitted, not the paper's.** The paper's parameter tables
    (Lux & Marchesi 2000) were not available. The remembered "set I" gives a
@@ -358,10 +421,10 @@ compared. Two yardsticks:
    (H 0.39 vs 0.50).
 4. **No bounce-back after big days:** after a 3-std day the S&P tends to reverse
    (next-day correlation −0.19). The model doesn't (+0.02; S&P at the 0th
-   percentile, `analysis/crash_shape.py`). The old model's slow-motion slides
+   percentile, `scripts/analysis/crash_shape.py`). The old model's slow-motion slides
    (+0.31) are gone.
 5. **Stability:** the S&P-calibrated settings run away in 2 of 40 held-out histories
-   of 100,000 days (about 400 years each; `analysis/stability.py`) and 2 of 20 on
+   of 100,000 days (about 400 years each; `scripts/analysis/stability.py`) and 2 of 20 on
    the stability-screen seeds. The paper-matched settings: 0 of 40 and 0 of 20.
    (The rejected stability-first refit: 0 of 40, but it lost the fat tails.)
 6. **Long-horizon tails:** the real S&P keeps fat tails at 25 days (kurtosis 3.3);
@@ -374,7 +437,7 @@ compared. Two yardsticks:
    The paper fit only rejects bubbles that last 250 days, like the finished model,
    which keeps bubbles that burst on their own (SPEC.md, "Runaways").
 9. **The paper-matched results depend on the time step** (found by a stress test,
-   November 2026; `python3 analysis/dt_check.py paper`, 12 held-out histories of
+   November 2026; `python3 scripts/analysis/dt_check.py paper`, 12 held-out histories of
    19,329 days, medians):
 
    | dt | kurtosis | tail α (paper's fit) | clustering, 1 day | H of \|returns\| |

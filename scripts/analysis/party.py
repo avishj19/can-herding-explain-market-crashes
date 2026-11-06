@@ -1,12 +1,12 @@
 """Is the S&P 500 different under Democratic and Republican presidents, and is the gap
 bigger than a model with no politics produces by chance at the same dates?
 
-Run from the project folder:  python3 analysis/party.py
+Run from the project folder:  python3 scripts/analysis/party.py
 """
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import numpy as np
 
 from herding import calibrate, experiments, politics

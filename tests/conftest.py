@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))     # main.py and make_figures.py
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 SEEDS = [0, 1, 2, 3, 4]

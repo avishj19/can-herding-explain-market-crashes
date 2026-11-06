@@ -28,7 +28,7 @@ moments that matter. Line numbers are in `journal/readable/<session>.md`.
 - 1902–1951: I asked for every decision made without me and every bug: 4 bugs found, then fixed (1910).
 - 2867–3136: stress test; the `dt` bug and the Kirman bug (2844); recalibration.
 - 3162–3569: checked the project against the paper's PDF (figures included); `KEY_POINTS.md` made.
-- 3764–4622: full rebuild from the paper's equations (`notes/SPEC.md`). Findings and bugs at 4595.
+- 3764–4622: full rebuild from the paper's equations (`docs/SPEC.md`). Findings and bugs at 4595.
 - 5018–5442: independent review by a subagent, and a recalibration that I **rejected** because it
   dropped the fat tails (5406).
 

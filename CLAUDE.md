@@ -29,10 +29,12 @@ The final product is a web app where users can tune herding strength and watch c
 - Later: reproduce Kirman's ant model first as a check against his math.
 
 ## Where things live
-- `KEY_POINTS.md`: self-contained guide to the project for someone new to it (ideas, figures, findings, limits)
-- `notes/SPEC.md`: the model's equations, each with its source (rebuild of November 2026). Code and spec must agree.
-- `main.py`: quick comparison (S&P 500 vs 20 held-out S&P-calibrated histories), saves `figures/fig00_quick_check_sp500_vs_model.png`
-- `make_figures.py`: makes `figures/fig01-fig12*.png` (descriptive names), explained in `figures/RESULTS.md`; `figures/GALLERY.md` shows them all with plain captions
+Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to look at), `docs/` (things to read),
+`data/`, `settings/`, `tests/`, `journal/`, `scratch/`. Run scripts from the project folder, e.g. `python3 scripts/main.py`.
+- `docs/KEY_POINTS.md`: self-contained guide to the project for someone new to it (ideas, figures, findings, limits)
+- `docs/SPEC.md`: the model's equations, each with its source (rebuild of November 2026). Code and spec must agree.
+- `scripts/main.py`: quick comparison (S&P 500 vs 20 held-out S&P-calibrated histories), saves `figures/fig00_quick_check_sp500_vs_model.png`
+- `scripts/make_figures.py`: makes `figures/fig01-fig12*.png` (descriptive names), explained in `figures/RESULTS.md`; `figures/GALLERY.md` shows them all with plain captions
 - `herding/`: the program, one module per job
   - `model.py`: the Lux-Marchesi simulation from SPEC.md (numba-accelerated), runaway guard
   - `stats.py`: tail exponents (Hill and the paper's regression), kurtosis, autocorrelation, DFA/Hurst H,
@@ -49,15 +51,15 @@ The final product is a web app where users can tune herding strength and watch c
 - `.vscode/`: VS Code setup (hides clutter, one-click tasks for tests and figures, suggested extensions)
 - `settings/`: the two fitted settings
 - `tests/`: one test file per module; `python3 -m pytest tests/ -q` (quick: add `-m "not slow"`)
-- `analysis/`: scripts behind individual findings (see its README; older versions are in git history)
-- `notes/proposal.pdf`: my project proposal; `notes/course_project_guide.pdf`: the course's project handout
+- `scripts/analysis/`: scripts behind individual findings (see its README; older versions are in git history)
+- `docs/proposal.pdf`: my project proposal; `docs/course_project_guide.pdf`: the course's project handout
 - `data/`: made by `data/download.py` (all series end 2026-10-30): S&P 500 1950- and 1928- (Yahoo ^GSPC),
   Nasdaq-100 (^NDX, 1985-), `stocks/` (20 large stocks with market beta 0.9-1.1, 2000-), VIX, NBER recessions (FRED USREC)
-- `paper/`: sources. The Lux & Marchesi Nature paper (doi:10.1038/17290) is `paper/LuxMarchesi1999_Nature.pdf`,
+- `docs/papers/`: sources. The Lux & Marchesi Nature paper (doi:10.1038/17290) is `docs/papers/LuxMarchesi1999_Nature.pdf`,
   kept locally only (git-ignored: copyrighted, and this repo is public). The equations come from the
   Samanidou et al. (2007) review (see SPEC.md); the parameter tables of Lux & Marchesi (2000) are still
   needed via CMU library access.
-- `notes/`: my own notes from tutoring sessions; `notes/journal_guide.md` points to the key moments in `journal/`
+- `docs/`: everything to read (KEY_POINTS, SPEC, proposal, papers/), plus my notes from tutoring sessions; `docs/journal_guide.md` points to the key moments in `journal/`
 - `scratch/`: temporary files (git-ignored)
 - `journal/`: build journal logs (copied automatically; don't edit by hand)
 

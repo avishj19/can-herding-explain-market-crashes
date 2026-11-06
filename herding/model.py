@@ -1,4 +1,4 @@
-"""The Lux-Marchesi (1999) market model, built from the equations in notes/SPEC.md.
+"""The Lux-Marchesi (1999) market model, built from the equations in docs/SPEC.md.
 
 N traders are in one of three groups:
     fundamentalists  buy when the price is below the fundamental value, sell above it
@@ -9,7 +9,7 @@ price trend and the profits of each strategy. Excess demand (buyers minus seller
 moves the price one tick at a time. News moves the fundamental value as Gaussian
 noise, so any fat tails or volatility clustering must come from the traders.
 
-Section numbers (sec. 1-5) refer to notes/SPEC.md.
+Section numbers (sec. 1-5) refer to docs/SPEC.md.
 
 Policy options (an extension, not part of the paper; SPEC.md "Policy experiments"):
 circuit breakers that pause or close trading after a big fall within the day, and

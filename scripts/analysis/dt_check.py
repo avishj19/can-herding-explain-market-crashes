@@ -6,12 +6,12 @@ difference from dt = 0.01 in units of the seed-to-seed spread.
 Finding (November 2026): the S&P-calibrated settings barely change; the paper-matched
 settings lose most of their fat tails and clustering as dt shrinks (RESULTS.md, Limitations).
 
-Run from the project folder:  python3 analysis/dt_check.py [spx|paper]
+Run from the project folder:  python3 scripts/analysis/dt_check.py [spx|paper]
 """
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import numpy as np
 
 from herding import calibrate, experiments, stats
