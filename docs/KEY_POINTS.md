@@ -4,8 +4,8 @@ A self-contained guide to this project for someone who has never seen it and
 doesn't know finance or agent-based modeling. It explains the ideas behind the
 code, what each figure shows and how to read it, and what the model gets right
 and wrong. Every number comes from code in this repository (section 10).
-Figure-by-figure details: [`figures/RESULTS.md`](figures/RESULTS.md). The
-model's equations, each with its source: [`notes/SPEC.md`](notes/SPEC.md).
+Figure-by-figure details: [`figures/RESULTS.md`](../figures/RESULTS.md). The
+model's equations, each with its source: [`docs/SPEC.md`](SPEC.md).
 
 ---
 
@@ -62,7 +62,7 @@ Imagine 500 traders. Each trading day is cut into 100 small steps. In each step:
    only outside input; it has no fat tails and no memory.
 
 The equations, and which source each comes from, are in
-[`notes/SPEC.md`](notes/SPEC.md); the code is [`herding/model.py`](herding/model.py).
+[`docs/SPEC.md`](SPEC.md); the code is [`herding/model.py`](../herding/model.py).
 
 **Two fitted settings are compared throughout** (the paper's own parameter values
 are in a paper we could not get, so they are fitted):
@@ -80,7 +80,7 @@ are in a paper we could not get, so they are fitted):
   - a Pareto law with known α;
   - white noise has H = 0.5.
 
-  All 393 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
+  All 400 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
 - **Every result is judged over many histories** on held-out seeds: one history can
   be calm and another wild with identical settings.
 - **The real market counts as typical** if it falls inside the middle 90% of the
@@ -181,13 +181,24 @@ no politics, can't produce the return gap, but it is a poor yardstick for averag
 returns reverse from day to day. *How to read:* each dot is what luck alone gives, and the black
 line is the real S&P. A line far outside the dots means the difference is unlikely to be luck.
 
+**12b. Term by term, the model's misses follow the era, not the party** (RESULTS.md,
+"Fig 12b"). Each of the 18 presidencies since 1928 was checked on its own against 40 model
+histories cut at the same days. Republicans have more "flags" (measures the model can't
+explain): 2.1 per term against 1.0. But shuffling the party labels gives a gap that big 24% of
+the time, and Hoover and Bush 2001 alone carry 11 of the 21. The misses fall into three kinds,
+each with both parties in it. **Long crises** (Hoover, Roosevelt, Bush 2001) are wilder than any
+model history. **Calm decades** (Eisenhower, Kennedy, Johnson, Nixon) are quieter. And there
+are **single shock days in calm markets** (1946, 1962, 1987, 2025). So herding makes wild and
+calm spells, but they don't last as long as real ones, and a sudden outside shock is not
+something it produces.
+
 **Recalibration (November 2026).** Both fits were rerun with a wider search and a new
 stability screen (each finalist run for 100,000 days on 20 extra seeds). The old
 settings were kept for both: the new paper fit scored worse, and the new S&P fit,
 although it scored better and never ran away, had thin tails and almost no herding,
 so the S&P looked typical on only 6 of 11 measures (old settings: 9 of 11). Lesson:
 the S&P score can trade away the fat tails this project is about
-([`figures/RESULTS.md`](figures/RESULTS.md), "Recalibration").
+([`figures/RESULTS.md`](../figures/RESULTS.md), "Recalibration").
 
 **Overnight recalibration (November 2026).** Three more fits were tried, judged by a rule
 fixed before any result was seen (40 held-out histories against the S&P). None beat the
@@ -204,7 +215,7 @@ current settings (S&P typical on 9 of 11 measures), so they were kept:
 Lux & Marchesi argue **against the efficient market hypothesis** as the explanation
 of fat tails, while agreeing that the market is efficient *on average*. They make no
 statements about government or regulation. Measured with
-[`analysis/efficiency_claims.py`](analysis/efficiency_claims.py) (4 histories ×
+[`scripts/analysis/efficiency_claims.py`](../scripts/analysis/efficiency_claims.py) (4 histories ×
 100,000 days):
 
 | Paper's claim | Paper-matched | S&P-calibrated |
@@ -251,7 +262,7 @@ statements about government or regulation. Measured with
 ## 9. Sources
 
 - Lux, T. & Marchesi, M. (1999). Scaling and criticality in a stochastic multi-agent
-  model of a financial market. *Nature* 397, 498–500. (Kept locally in `paper/`,
+  model of a financial market. *Nature* 397, 498–500. (Kept locally in `docs/papers/`,
   not in the public repository, because it is copyrighted.)
 - Samanidou, E., Zschischang, E., Stauffer, D. & Lux, T. (2007). Agent-based models
   of financial markets. *Rep. Prog. Phys.* 70, 409–450 (arXiv physics/0701140).
@@ -262,7 +273,7 @@ statements about government or regulation. Measured with
   microsimulation of interacting agents. *Int. J. Theor. Appl. Finance* 3, 675–702.
   (The parameter tables; not in hand.)
 - Gopikrishnan, P. et al. (1998). Inverse cubic law for the distribution of stock
-  price variations. *Eur. Phys. J. B* 3, 139–140. (In `paper/`.)
+  price variations. *Eur. Phys. J. B* 3, 139–140. (In `docs/papers/`.)
 - Kirman, A. (1993). Ants, rationality, and recruitment. *Q. J. Econ.* 108, 137–156.
 - Santa-Clara, P. & Valkanov, R. (2003). The presidential puzzle: political cycles and
   the stock market. *J. Finance* 58, 1841–1872. (Fig 12.)
@@ -278,10 +289,10 @@ statements about government or regulation. Measured with
 ```bash
 python3 -m pip install -r requirements.txt
 python3 data/download.py               # data files (already in the repository)
-python3 main.py                        # S&P vs 20 held-out histories (about 5 s)
-python3 make_figures.py                # figures 1-11 (about 2 min on 8 cores)
+python3 scripts/main.py                # S&P vs 20 held-out histories (about 5 s)
+python3 scripts/make_figures.py        # figures 1-12 (about 2 min on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests (about 1 min)
-python3 -m pytest tests/ -q            # all 393 tests (about 1.5 min)
+python3 -m pytest tests/ -q            # all 400 tests (about 1.5 min)
 python3 -m herding.calibrate paper     # refit to the paper (about 20 min), then --refine
 python3 -m herding.calibrate spx       # refit to the S&P 500 (1.5-2.5 h; resumes if stopped)
 ```

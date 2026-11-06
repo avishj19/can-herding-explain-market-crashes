@@ -3,12 +3,12 @@
 The fits use runs of 20,000-50,000 days; a runaway could still be rare but real
 over longer horizons. Runs 40 held-out histories of 100,000 days for each setting.
 
-Run from the project folder:  python3 analysis/stability.py
+Run from the project folder:  python3 scripts/analysis/stability.py
 """
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from herding import calibrate, experiments
 

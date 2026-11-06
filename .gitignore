@@ -4,4 +4,4 @@ __pycache__/
 scratch/
 
 # Copyrighted paper (Nature 1999): kept locally, never pushed to the public repo
-paper/LuxMarchesi1999_Nature.pdf
+docs/papers/LuxMarchesi1999_Nature.pdf

@@ -7,7 +7,7 @@ If the code and this file disagree, one of them is a bug.
 
 | Tag | Source | What it gives |
 |---|---|---|
-| **[N]** | Lux & Marchesi (1999), *Nature* 397:498 (`paper/`, local only) | The model in words, the results to reproduce (Figs 1-3). **No equations, no parameter values.** |
+| **[N]** | Lux & Marchesi (1999), *Nature* 397:498 (`docs/papers/`, local only) | The model in words, the results to reproduce (Figs 1-3). **No equations, no parameter values.** |
 | **[S]** | Samanidou, Zschischang, Stauffer & **Lux** (2007), *Rep. Prog. Phys.* 70:409, sec. 9 ([arXiv physics/0701140](https://arxiv.org/abs/physics/0701140)) | All the equations, plus simulation details (time step, trend window, group floors). Co-written by Lux, so the most trusted. |
 | **[C]** | Cristelli, Pietronero & Zaccaria (2011), sec. 4.5 ([arXiv 1101.1847](https://arxiv.org/abs/1101.1847)) | The same equations; used as a cross-check. |
 | **[L]** | Lux & Marchesi (2000), *IJTAF* 3:675 | The parameter tables. **Paywalled and not in hand.** Values below marked [L?] are from secondary memory and are unverified. |
@@ -70,7 +70,7 @@ ln p_f(t) - ln p_f(t-1) = eps_t, eps ~ Normal(0, sigma_eps). Gaussian, with no m
   ([S]'s rate*dt is the same to first order; [S] also refined dt to 0.002 in bursts.
   This project keeps dt = 0.01 throughout, so dt = 0.01 is part of the model as fitted:
   the S&P-calibrated results barely change at dt = 0.002, but the paper-matched ones do
-  (most of their fat tails and clustering go; `analysis/dt_check.py`, RESULTS.md
+  (most of their fat tails and clustering go; `scripts/analysis/dt_check.py`, RESULTS.md
   Limitations). The exact switching form does not remove that dependence.)
 - Price ticks within dt: Poisson(rate*dt) of them. This is the exact Poisson process
   [S] approximates, so there is no cap of one tick per step.

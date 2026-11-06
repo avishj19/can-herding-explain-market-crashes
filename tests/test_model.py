@@ -1,4 +1,4 @@
-"""Tests for herding/model.py, the rebuilt Lux-Marchesi model (notes/SPEC.md).
+"""Tests for herding/model.py, the rebuilt Lux-Marchesi model (docs/SPEC.md).
 
 Most tests compare the simulation with an answer worked out by hand from the
 model's equations, not with the code's own earlier output.

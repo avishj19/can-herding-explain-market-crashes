@@ -74,3 +74,25 @@ def test_shifted_calendars():
     assert politics.party_gap(r, np.roll(dem, 2000)) == politics.party_gap(r, dem)
     with pytest.raises(ValueError, match="too few shifts"):
         politics.shifted_gaps(r[:1200], dem[:1200])
+
+
+def test_terms_cut_the_days_at_inaugurations():
+    dates = pd.bdate_range("2016-01-04", "2026-10-30")
+    t = politics.terms(dates)
+    assert [x["name"] for x in t] == ["Obama", "Trump", "Biden", "Trump"]
+    assert [x["party"] for x in t] == ["D", "R", "D", "R"]
+    # the terms tile the days with no gap or overlap
+    assert t[0]["a"] == 0 and t[-1]["b"] == len(dates)
+    assert all(x["b"] == y["a"] for x, y in zip(t[:-1], t[1:]))
+    assert t[1]["start"] == pd.Timestamp("2017-01-20") and t[1]["end"] == pd.Timestamp("2021-01-19")
+
+
+def test_permutation_test_by_hand():
+    from test_analysis import load_script
+    pt = load_script("party_terms.py")
+    # D = [2, 0], R = [0, 0]: observed +1; of the 6 ways to pick 2 of 4 as "D", the 3 that
+    # include the 2 give +1 and the 3 that do not give -1, so every one is as extreme: p = 1
+    assert pt.permutation_p([2, 0, 0, 0], ["D", "D", "R", "R"]) == (1.0, 1.0)
+    # D = [3, 3], R = [0, 0]: only the real labelling and its mirror are that extreme: p = 2/6
+    diff, p = pt.permutation_p([3, 3, 0, 0], ["D", "D", "R", "R"])
+    assert diff == 3.0 and p == pytest.approx(2 / 6)

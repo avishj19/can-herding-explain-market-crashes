@@ -1,12 +1,16 @@
 """Make every results figure (figures/fig01-fig11*.png), explained in figures/RESULTS.md.
 
-Run:  python3 make_figures.py        (a few minutes with numba, using every core)
+Run:  python3 scripts/make_figures.py        (a few minutes with numba, using every core)
 
 Two fitted settings are used (both from python3 -m herding.calibrate):
     paper-matched  settings/paper.json  reproduces Lux & Marchesi (1999)'s numbers
     S&P-calibrated settings/spx.json    reproduces the S&P 500's fingerprint
 Every model check uses held-out seeds that neither fit ever saw.
 """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # the project folder, so `herding` imports
 from multiprocessing import Pool
 
 import numpy as np

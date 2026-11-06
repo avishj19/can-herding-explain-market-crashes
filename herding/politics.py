@@ -109,3 +109,17 @@ def compare(market, p, seeds, pool=None, days=None):
     pct = {name: {k: experiments.percentile(real[k], [s[k] for s in null]) for k in MEASURES}
            for name, null in nulls.items()}
     return r, dem, real, nulls, pct
+
+
+def terms(dates, min_days=20):
+    """Each presidency's stretch of `dates` (sorted trading days): a list of dicts with
+    name, party and the day indexes a:b (b not included). Terms with fewer than
+    min_days trading days in `dates` (e.g. before the data start) are left out."""
+    dates = pd.DatetimeIndex(dates)
+    starts = [pd.Timestamp(d) for d, _, _ in PRESIDENTS] + [pd.Timestamp("2100-01-01")]
+    out = []
+    for i, (_, party, name) in enumerate(PRESIDENTS):
+        a, b = int(dates.searchsorted(starts[i])), int(dates.searchsorted(starts[i + 1]))
+        if b - a >= min_days:
+            out.append(dict(name=name, party=party, a=a, b=b, start=dates[a], end=dates[b - 1]))
+    return out

@@ -1,6 +1,6 @@
 """Can herding explain market crashes? The Lux-Marchesi model and its checks.
 
-Modules (the equations are in notes/SPEC.md):
+Modules (the equations are in docs/SPEC.md):
     model        the Lux-Marchesi market simulation
     stats        tail exponents, kurtosis, autocorrelation, DFA, the fingerprint
     market_data  the S&P 500 and other market data, loaded with checks

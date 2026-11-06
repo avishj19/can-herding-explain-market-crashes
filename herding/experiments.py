@@ -1,4 +1,4 @@
-"""Running the model many times (used by main.py, make_figures.py and analysis/).
+"""Running the model many times (used by main.py, make_figures.py and scripts/analysis/).
 
 A "history" is one simulated run with the first BURN days dropped, so the
 starting state does not matter. The model is random, so every claim about it is
