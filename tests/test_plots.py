@@ -37,9 +37,46 @@ def test_dfa_label_reports_the_same_H_as_stats():
     x = np.random.default_rng(3).standard_normal(20000)
     s = stats.dfa_scales(len(x))
     fig, ax = plt.subplots()
-    H = plots.dfa(ax, x, s, "noise", plots.AQUA)
+    H, n0, F0 = plots.dfa(ax, x, s, "noise", plots.AQUA, shift=2.0)
     assert H == pytest.approx(stats.hurst(x, s))
     assert f"H = {H:.2f}" in ax.lines[0].get_label()
+    # the anchor is the first point of the drawn (shifted) fit line
+    assert n0 == s[0] and F0 == pytest.approx(ax.lines[1].get_ydata()[0])
+    plt.close(fig)
+
+
+def test_ccdf_markers_sit_on_real_data_points():
+    import matplotlib.pyplot as plt
+    r = series(5)[0]
+    fig, ax = plt.subplots()
+    plots.ccdf(ax, r, "x", plots.BLUE, points=40)
+    x, y = ax.lines[0].get_data()
+    z, cc = stats.ccdf(r)
+    i = np.searchsorted(z, x)
+    assert 10 < len(x) <= 41 and np.array_equal(z[i], x) and np.array_equal(cc[i], y)
+    assert x[-1] == z[-1] and ax.lines[0].get_linestyle() == "None"
+    plt.close(fig)
+
+
+def test_power_law_has_the_requested_slope():
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    plots.power_law(ax, 2.0, 0.3, -2.64, 40.0)
+    x, y = ax.lines[0].get_data()
+    assert y[0] == 0.3 and np.log(y[1] / y[0]) / np.log(x[1] / x[0]) == pytest.approx(-2.64)
+    plt.close(fig)
+
+
+def test_bell_curve_line_is_the_two_sided_normal_tail():
+    """Share of a standard normal beyond +-x: 1 at x=0, 0.3173 at 1, 0.0455 at 2 (the
+    68-95 rule), checked against scipy, which plots.py no longer imports."""
+    import matplotlib.pyplot as plt
+    from scipy.stats import norm
+    fig, ax = plt.subplots()
+    plots.gaussian_ccdf(ax)
+    x, y = ax.lines[0].get_data()
+    assert np.allclose(y, 2 * norm.sf(x), rtol=1e-12)
+    assert np.interp(1.0, x, y) == pytest.approx(0.3173, abs=2e-3)
     plt.close(fig)
 
 

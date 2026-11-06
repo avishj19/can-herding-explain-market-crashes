@@ -28,7 +28,7 @@ def is_image(path):
 
 
 def test_fig1_snapshot(tmp_path):
-    assert is_image(mf.fig1_snapshot(run(0), run(1), tmp_path / "f1.png"))
+    assert is_image(mf.fig1_snapshot(run(0), run(1), fat(9, 5000), tmp_path / "f1.png"))
 
 
 def test_fig2_and_fig3(tmp_path):

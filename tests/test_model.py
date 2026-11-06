@@ -40,6 +40,7 @@ def test_known_settings_pass():
     (dict(v1=0.0), "above 0"),
     (dict(N=500.5), "whole number"),
     (dict(floor=2.5), "whole number"),
+    (dict(floor=0), "above 0"),      # bug fix: floor 0 crashed simulate() (division by 0)
     (dict(s=1.0), "below 1"),
     (dict(tick=1.0), "below 1"),
     (dict(dt=0.03), "whole steps"),
@@ -253,6 +254,13 @@ def test_groups_never_fall_below_the_floor():
         assert nc.min() >= BASE["floor"]
         assert BASE["N"] - nc.max() >= BASE["floor"]
         assert np.all(np.abs(o["x"]) <= 1)
+
+
+def test_smallest_floor_keeps_one_chartist():
+    """floor=1 (the smallest allowed): a strong pull to fundamentals empties the
+    chartist group down to exactly 1 trader, and the run does not crash."""
+    o = model.simulate(settings(a3=50.0, floor=1), 300, seed=7, max_gap=None)
+    assert np.round(o["z"] * BASE["N"]).min() == 1
 
 
 # ------------------------------------------------------------------ runaways

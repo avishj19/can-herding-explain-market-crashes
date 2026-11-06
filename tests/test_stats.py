@@ -302,6 +302,17 @@ def test_alpha_regression_rejects_bad_window():
         stats.alpha_regression(np.random.default_rng(0).standard_normal(100), top=1.5)
 
 
+def test_tail_fit_line_passes_through_its_window():
+    # The fitted window starts where 30% of days are bigger and ends at the largest
+    # move; the line c * x^-alpha should hit about 30% at the start of the window.
+    r = _symmetric_pareto(3.0)
+    alpha, c, lo, hi = stats.tail_fit(r)
+    z = np.sort(np.abs(stats._standardize(r)))
+    assert alpha == stats.alpha_regression(r)
+    assert lo == pytest.approx(np.quantile(z, 0.70), rel=1e-3) and hi == z[-1]
+    assert c * lo ** -alpha == pytest.approx(0.30, rel=0.05)
+
+
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_hurst_of_white_noise_is_one_half(seed):
     # no memory at all -> H = 0.5 (the paper's news series: 0.49-0.51)

@@ -89,7 +89,8 @@ def check(p):
             raise ValueError(f"setting {k} must be a finite number, got {v!r}")
         if v < 0:
             raise ValueError(f"setting {k} must not be negative, got {v}")
-    for k in ("N", "v1", "v2", "beta", "tick", "dt"):
+    # floor 0 would let the chartists die out: then opinion x = (n+ - n-)/n_c divides by 0
+    for k in ("N", "v1", "v2", "beta", "tick", "dt", "floor"):
         if p[k] <= 0:
             raise ValueError(f"setting {k} must be above 0, got {p[k]}")
     for k in ("N", "floor"):

@@ -22,7 +22,7 @@ The news is the same in both: Gaussian, 0.5% a day, no memory.
 **The paper-matched fit does not reproduce H of |returns|.** Its score of 0.06 is a
 *training* score. Measured the way the figures are (held-out seeds, 100,000-day
 runs), the score is about 2.0, and nearly all of it is one number: H of |returns| is
-**0.81 ± 0.02** (mean ± spread between runs) against the paper's **0.85 ± 0.01**. That
+**0.81 ± 0.03** (mean ± spread between runs) against the paper's **0.85 ± 0.01**. That
 gap is about 4 of the paper's error bars, so H|r| is not reproduced; α (2.62) and
 H (0.47) are, within the project's tolerances. Model outputs and settings are
 unchanged; this is only how the score is reported.
@@ -31,7 +31,7 @@ unchanged; this is only how the score is reported.
 a yardstick this project chose: α ± 0.15, H ± 0.03, H|r| ± 0.03. The paper's own
 error bars are much smaller: α ± 0.077, H ± 0.003, H|r| ± 0.010 (Figs 2 and 3). Those
 are regression errors from one long run, smaller than how much the numbers change
-from one run of the model to the next (H|r| varies by about 0.02 between runs), so
+from one run of the model to the next (H|r| varies by about 0.03 between runs), so
 no setting could match them on every seed. Measured against the paper's bars, H
 (0.47 vs 0.48) is also several error bars off; only α is inside them.
 
@@ -51,9 +51,42 @@ seeds and the same screen. **Both fitted settings above were kept**:
   nothing. A model of herding that does not herd answers a different question, so
   the old settings stay (the rejected fit: `scratch/recalibration/`, not in the repository).
 - **Lesson:** the S&P score treats every measure by its own uncertainty, so it can
-  trade away fat tails, the very thing this project is about. A better score would
-  weigh the tails more (a decision for later).
+  trade away fat tails, the very thing this project is about. Weighing the tails more
+  by hand was considered and not done: published fits of these models (Winker, Gilli &
+  Jeleskovic 2007; Franke 2009) weight each measure by its own uncertainty, as this score
+  does, and a hand-picked weight would have no basis.
 - Rerunning `make_figures.py` with the kept settings reproduced figures 1–10 pixel for pixel.
+
+**Overnight recalibration (November 2026).** Three more fits were tried, to test the
+search method and the choice of data (`scratch/overnight/refits.py`, not in the repository).
+Each ended with the same stability screen (20 runs of 100,000 days, seeds 2000–2019).
+The judging rule was fixed **before** any result was seen: on 40 held-out histories
+(seeds 1000–1039) against the S&P 1950– fingerprint, a new fit wins only if the S&P
+is typical on more of the 11 measures (or on as many, with a lower held-out loss),
+**and** it runs away in no more of the 20 long runs.
+
+| Fit | What was different | Typical (of 11) | Held-out loss | Runaways (of 20) |
+|---|---|---|---|---|
+| **Current S&P settings (kept)** | | **9** | 4.15 | 2 |
+| Differential evolution | a population search instead of random search + Nelder-Mead | 8 | 2.78 | 0 |
+| S&P 1928– | fitted to the S&P from 1928 (1929 and the 1930s included) | 8 | 11.10 | 0 |
+
+None ran away in the 40 held-out histories. The paper fit was also redone by
+differential evolution: training score 0.012 (saved: 0.06), but on 4 held-out seeds of
+50,000 days 1.39 (saved: 0.81), so it learned its training seeds rather than the paper.
+
+What they teach:
+- **The search was not badly stuck.** Differential evolution found settings of the same
+  kind (strong herding, a1 1.18) and only a little better in training (2.72 vs 2.94).
+  Its best training score (2.47) ran away in 7 of 20 long runs, and the screen threw it
+  out. It has the lowest held-out loss and no runaways, but the S&P's kurtosis is above
+  all 40 of its histories, so it is typical on one measure fewer.
+- **The 1930s are a different market:** fitted to them, the model's daily sd is too
+  large for 1950–2026 (the S&P is below every history), hence the large loss.
+- **H of returns is unusual (100th percentile) in every fit:** the model's returns
+  reverse from day to day more than the S&P's, whatever the settings.
+
+By the rule fixed in advance, **the current settings were kept** (`settings/` is unchanged).
 
 | Colour | Means |
 |---|---|
@@ -70,16 +103,29 @@ share of model histories below the real value; under 5% or over 95% = unusual.
 ---
 
 ## Fig 1 — The price follows its value, but returns are wilder than the news (paper's Fig 1)
-`fig1_snapshot.png`. 4,000 days of one held-out history per setting.
+`fig1_snapshot.png`. 4,000 days of one held-out history per setting, drawn as in the
+paper's Fig 1: price solid, value dotted and **shifted down** so both lines show (by 20
+and 35 points; the legend says how much), and the output (b) and input (c) on the same
+y scale.
 - The price (a) tracks its fundamental value closely, as in the paper.
 - The news (c) has kurtosis 0.0: a plain bell curve. The returns (b) have bursts
   (kurtosis 2.9 in this stretch), and the bursts line up with a high share of
   chartists (d).
 - The S&P-calibrated model keeps few chartists most of the time (d, right), so
-  this stretch is calm; its bursts are rarer and are shown in Fig 5.
+  this stretch is calm (returns kurtosis 0.9, news −0.1); its bursts are rarer and
+  are shown in Fig 5.
+- **New third column: the real S&P 500**, its last 4,000 trading days (price and daily
+  returns, on its own y scale). Kurtosis **14.5**: wilder than either model's stretch.
+  A real market's news and chartist share cannot be measured, so c and d are model-only.
 
 ## Fig 2 — Fat tails over a day, a bell curve over weeks (paper's Fig 2)
-`fig2_tails.png`.
+`fig2_tails.png`. Drawn as in the paper's Fig 2: each horizon τ = 1, 5, 15, 25 days
+is a set of markers in the paper's symbols (▲ + ◆ ▼), and the bell curve is the solid
+line. New in every panel: the paper's tail fit itself (dotted, a straight line through
+the largest 30% of daily moves, labelled with its α) and a dashed line with the paper's
+slope (α = 2.64) from the same starting point, so only the slopes are compared. The
+fitted α: 2.84 (a, the run shown), 2.63 (b, all 40 histories pooled; median of the
+histories 2.64), 2.35 (c, S&P).
 - **Paper-matched:** tail α (the paper's log-log fit to the largest 30% of moves)
   is **2.62 on average over 8 held-out runs of 100,000 days** (paper: 2.64 ± 0.08).
   The run shown gives 2.84. Kurtosis falls from 68 at 1 day to 1.8 at 25 days:
@@ -91,7 +137,12 @@ share of model histories below the real value; under 5% or over 95% = unusual.
 - The news collapses onto the bell curve at every horizon, as in the paper.
 
 ## Fig 3 — No memory of direction, long memory of size (paper's Fig 3)
-`fig3_memory.png`. Detrended fluctuation analysis (Peng et al. 1994).
+`fig3_memory.png`. Detrended fluctuation analysis (Peng et al. 1994), drawn as in the
+paper's Fig 3: the output as triangles with a solid fitted line, the news as plus signs
+with a dotted (a) or dashed (b) fitted line. New: a grey dashed line with the paper's
+slope (H 0.85 in a, 0.48 in b, 0.85 on the S&P's |returns| in c) and a dotted "no
+memory" line (H 0.5) on the S&P's returns in c, each starting at the first point of the
+curve it is compared with.
 
 | | Paper | Paper-matched (mean of 8 held-out runs) | S&P 500 | S&P-calibrated (median of the 40 Fig 7 histories) |
 |---|---|---|---|---|
@@ -105,7 +156,7 @@ S&P-calibrated H 0.38, H|r| 0.92 (one history). One run varies; the table is the
 better summary.
 
 The long memory in move sizes is created by the traders: the news has none.
-The paper-matched H of |returns| (0.81 ± 0.02 between runs) is below the paper's 0.85 ± 0.01: not reproduced, though still far above the news's 0.49.
+The paper-matched H of |returns| (0.81 ± 0.03 between runs) is below the paper's 0.85 ± 0.01: not reproduced, though still far above the news's 0.49.
 The S&P-calibrated model's returns **reverse** a little from day to day
 (H 0.39), while the S&P's do not (0.50). This is its clearest miss (Fig 7).
 
@@ -136,9 +187,10 @@ The S&P-calibrated model's returns **reverse** a little from day to day
 | Volatility rises with the chartist share | 0.59× (least crowded tenth) to 1.41× (most crowded) | 0.51× to 1.49× |
 
 ## Fig 6 — Kirman's ants (the herding check from the proposal)
-`fig6_kirman.png`. 40 million steps per case. The simulated time at each state
-matches Kirman's exact formula: total variation distance **0.020** (herding) and
-**0.004** (no herding). The same recruitment rule moves traders in and out of the
+`fig6_kirman.png`. 40 million steps per case, δ = 0.1 (so "switch alone *or* be recruited"
+adds up to at most 1 and the ant story holds literally). The simulated time at each state
+matches Kirman's exact formula: total variation distance **0.007** (herding) and
+**0.006** (no herding). The same recruitment rule moves traders in and out of the
 chartist group in Lux–Marchesi.
 
 ## Fig 7 — Is the S&P 500 a typical history of the model?
@@ -174,7 +226,8 @@ the stocks.
   kurtosis (all 100%).
 
 ## Fig 9 — How robust is it? (paper: "an open set of parameter values")
-`fig9_robustness.png`. 400 random settings, one 20,000-day run each.
+`fig9_robustness.png`. 400 random settings, one 20,000-day run each. The star in a is
+the paper's own point (α 2.64, H|r| 0.85).
 - **44%** run away into an endless bubble.
 - Of the 222 that stay stable: **65%** give fat tails *and* long memory, 4% fat
   tails only, 32% thin tails.

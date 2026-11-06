@@ -74,11 +74,10 @@ def aggregate(r, tau):
     return r[:n * tau].reshape(n, tau).sum(axis=1)
 
 
-def alpha_regression(r, top=0.30):
-    """Tail exponent the way Lux & Marchesi (1999, Fig 2) measure it: the slope of
-    log(share of days with a bigger move) against log(move size), fitted over the
-    largest `top` share of days. Unlike hill_alpha, this window also covers the
-    bell-shaped middle of the distribution, so the two estimates differ."""
+def tail_fit(r, top=0.30):
+    """The straight line behind alpha_regression: (alpha, c, x_min, x_max), where the
+    share of days with a bigger move is about c * x**-alpha for x_min <= x <= x_max
+    (moves in standard deviations; the window is the largest `top` share of days)."""
     if not 0 < top < 1:
         raise ValueError(f"top must be between 0 and 1, got {top}")
     z, cc = ccdf(r)
@@ -87,7 +86,16 @@ def alpha_regression(r, top=0.30):
     keep = z > 0
     if keep.sum() < 10 or np.ptp(np.log(z[keep])) == 0:
         raise ValueError("need at least 10 distinct nonzero moves in the fitted window")
-    return float(-np.polyfit(np.log(z[keep]), np.log(cc[keep]), 1)[0])
+    slope, icept = np.polyfit(np.log(z[keep]), np.log(cc[keep]), 1)
+    return float(-slope), float(np.exp(icept)), float(z[keep][0]), float(z[-1])
+
+
+def alpha_regression(r, top=0.30):
+    """Tail exponent the way Lux & Marchesi (1999, Fig 2) measure it: the slope of
+    log(share of days with a bigger move) against log(move size), fitted over the
+    largest `top` share of days. Unlike hill_alpha, this window also covers the
+    bell-shaped middle of the distribution, so the two estimates differ."""
+    return tail_fit(r, top)[0]
 
 
 def dfa(x, scales=(16, 32, 64, 128, 256, 512, 1024, 2048)):

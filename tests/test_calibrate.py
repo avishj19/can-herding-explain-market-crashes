@@ -246,6 +246,28 @@ def test_saved_loss_replays_a_stopped_nelder_mead_exactly(tmp_path):
     assert len(calls) == n_full - (len(lines) - 1)
 
 
+class _Bowl:
+    """Stands in for a Fit: a loss that is lowest (0) at known settings."""
+    ranges = calibrate.RANGES
+
+    def __init__(self, best):
+        self.best = calibrate.to_vector(best, self.ranges)
+
+    def loss_of_vector(self, v):
+        return float(np.sum((np.asarray(v) - self.best) ** 2))
+
+
+def test_refine_walks_down_to_the_bottom_of_a_known_bowl():
+    best = dict(calibrate.base(), a1=0.9, beta=8.0)            # inside RANGES
+    start = dict(calibrate.base(), a1=0.5, beta=5.0)
+    fit = _Bowl(best)
+    first = fit.loss_of_vector(calibrate.to_vector(start, fit.ranges))   # (0.4)^2 + ln(1.6)^2
+    loss, p = calibrate._refine((fit, start, 400))
+    assert first == pytest.approx(0.4 ** 2 + np.log(1.6) ** 2)
+    assert loss < 0.01 * first
+    assert p["a1"] == pytest.approx(0.9, abs=0.02) and p["beta"] == pytest.approx(8.0, rel=0.02)
+
+
 # ------------------------------------------------------------------ honest reporting
 # The paper fit's saved loss (0.06) is a training score: 50,000-day runs on training
 # seeds. The documents must also give the score on held-out seeds and long runs,

@@ -80,7 +80,7 @@ are in a paper we could not get, so they are fitted):
   - a Pareto law with known α;
   - white noise has H = 0.5.
 
-  All 359 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
+  All 366 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
 - **Every result is judged over many histories** on held-out seeds: one history can
   be calm and another wild with identical settings.
 - **The real market counts as typical** if it falls inside the middle 90% of the
@@ -98,14 +98,17 @@ are in a paper we could not get, so they are fitted):
 | H of \|returns\| | 0.85 | 0.81 |
 | H of news | 0.49 | 0.50 |
 
-H of |returns| is **0.81 ± 0.02** (spread between runs) against the paper's
+H of |returns| is **0.81 ± 0.03** (spread between runs) against the paper's
 **0.85 ± 0.01**, about 4 of the paper's error bars away, so it is **not reproduced**.
 The fit's score of 0.06 is a *training* score (50,000-day runs on training seeds);
 on these held-out runs it is about 2.0, almost all from H of |returns|.
 
-Returns cross over to a bell curve by 25 days. *How to read Fig 2:* each curve shows
+Returns cross over to a bell curve by 25 days. *How to read Fig 2:* each set of markers shows
 the share of days with a bigger move than x, on log-log axes. A bell curve drops
-like a cliff; a fat tail comes down slowly, like a straight line.
+like a cliff; a fat tail comes down slowly, like a straight line. Figs 1–3 are drawn
+the way the paper draws its own three figures, plus the S&P 500 next to the model and
+grey lines with the paper's numbers (α 2.64 in Fig 2; H 0.85 and 0.48 in Fig 3), so the
+slopes can be compared by eye.
 
 **2. Without herding, no fat tails** (Fig 4). With no chartists the returns are
 just news: kurtosis 0.01, which is a bell curve. This was the proposal's base-case
@@ -125,7 +128,7 @@ fundamentals. *How to read:* the left panels show a burst and the chartist share
 the same time; the middle panel averages over 100,000 days.
 
 **6. Kirman's ants match his math** (Fig 6). Simulated and exact distributions differ
-by 0.4–2% (total variation). This is the herding rule inside the model.
+by under 1% (total variation 0.007 and 0.006). This is the herding rule inside the model.
 
 **7. The S&P 500 looks like a typical history on 9 of 11 measures** (Fig 7). The two
 misses:
@@ -176,6 +179,16 @@ so the S&P looked typical on only 6 of 11 measures (old settings: 9 of 11). Less
 the S&P score can trade away the fat tails this project is about
 ([`figures/RESULTS.md`](figures/RESULTS.md), "Recalibration").
 
+**Overnight recalibration (November 2026).** Three more fits were tried, judged by a rule
+fixed before any result was seen (40 held-out histories against the S&P). None beat the
+current settings (S&P typical on 9 of 11 measures), so they were kept:
+- **a population search (differential evolution):** 8 of 11, but a lower held-out loss
+  (2.78 vs 4.15) and no runaways. It found the same kind of strong-herding settings,
+  so the original search was not stuck;
+- **fitted to the S&P from 1928:** 8 of 11; the 1930s are a much wilder market;
+- **the paper fit by the same population search:** better in training, worse on held-out
+  seeds (1.39 vs 0.81): it learned its training seeds.
+
 ## 6. The paper's economic standpoint, and what we found
 
 Lux & Marchesi argue **against the efficient market hypothesis** as the explanation
@@ -207,14 +220,16 @@ statements about government or regulation. Measured with
    100,000 days (about 400 years each). A refit that never ran away lost the fat
    tails instead, so it was not used.
 6. **Tails at long horizons:** the S&P keeps fat tails at 25 days (kurtosis 3.3);
-   the models return to a bell curve faster (1.6–1.8, Fig 2).
+   the models return to a bell curve faster (S&P-calibrated median 1.6; paper-matched
+   1.8 in the run Fig 2 shows, 0.4 as the median of 8 runs).
 7. **One whole market, no company news**, so single stocks look more extreme than
    the model.
 
 ## 8. How to read any figure in this project
 
 - **Colours:** black = real data, blue = S&P-calibrated, orange = paper-matched,
-  green = news or no chartists, grey dashes = reference lines (bell curve, α = 3).
+  green = news or no chartists, grey = reference lines (bell curve, α = 3, the paper's
+  α 2.64 and H values).
 - **Log-log axes:** a straight line is a power law; steeper = thinner tail.
 - **Dots in a strip:** one dot per model history; the black line is the real market.
 
@@ -244,10 +259,10 @@ statements about government or regulation. Measured with
 ```bash
 python3 -m pip install -r requirements.txt
 python3 data/download.py               # data files (already in the repository)
-python3 main.py                        # S&P vs 20 held-out histories (about 15 s)
+python3 main.py                        # S&P vs 20 held-out histories (about 5 s)
 python3 make_figures.py                # figures 1-11 (about 2 min on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests (about 1 min)
-python3 -m pytest tests/ -q            # all 359 tests (about 1.5 min)
+python3 -m pytest tests/ -q            # all 366 tests (about 1.5 min)
 python3 -m herding.calibrate paper     # refit to the paper (about 20 min), then --refine
 python3 -m herding.calibrate spx       # refit to the S&P 500 (1.5-2.5 h; resumes if stopped)
 ```
