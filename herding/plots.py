@@ -95,11 +95,6 @@ def dfa(ax, x, scales, label, color, marker="o", shift=1.0, fit_ls="-"):
     return coef[0], s[0], fit[0]
 
 
-def standardized(r):
-    r = np.asarray(r, dtype=float)
-    return (r - r.mean()) / r.std()
-
-
 def comparison(real, model_r, z, no_chartists, path):
     """main.py's quick 2x2 overview: S&P vs model returns, tails, chartist share."""
     style()
@@ -107,7 +102,7 @@ def comparison(real, model_r, z, no_chartists, path):
     n = min(len(real), len(model_r))
     for a, r, c, name in [(ax[0, 0], real[-n:], REAL, "S&P 500"),
                           (ax[0, 1], model_r[-n:], SPX_MODEL, "model (S&P-calibrated)")]:
-        a.plot(standardized(r), lw=0.35, color=c)
+        a.plot(stats.standardize(r), lw=0.35, color=c)
         a.set_ylim(-25, 25)
         a.set_title(f"{name}: daily returns ({n:,} days)")
         a.set_ylabel("return / standard deviation")

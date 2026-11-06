@@ -7,7 +7,7 @@ Two fits, by one method:
 
 Method: (1) score random settings drawn from RANGES; (2) refine the best few with
 Nelder-Mead; (3) stability screen: run each refined candidate for STABILITY_DAYS on
-STABILITY_SEEDS and keep the best-scoring one among those that never run away
+STABILITY_SEEDS and keep the best-scoring one among those with the fewest runaways
 (a runaway can be too rare to show up in the shorter fitting runs). Every score
 uses the same TRAIN_SEEDS (so two settings are compared on the same luck); checks
 of a fitted model must use other seeds (HELD_OUT_SEEDS).
@@ -208,6 +208,11 @@ class SavedLoss:
 
     def __init__(self, fn, path):
         self.fn, self.path, self.cache = fn, Path(path), {}
+        # a line cut off mid-write would glue onto the next one: end it first
+        if self.path.exists() and self.path.stat().st_size \
+                and not self.path.read_bytes().endswith(b"\n"):
+            with self.path.open("a") as f:
+                f.write("\n")
         if self.path.exists():
             for line in self.path.read_text().splitlines():
                 try:
@@ -222,8 +227,6 @@ class SavedLoss:
             self.cache[key] = float(self.fn(np.array(key)))
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with self.path.open("a") as f:
-                if f.tell() and not self.path.read_bytes().endswith(b"\n"):
-                    f.write("\n")
                 f.write(json.dumps({"v": list(key), "loss": self.cache[key]}) + "\n")
         return self.cache[key]
 
@@ -386,8 +389,13 @@ def load(kind):
 
 if __name__ == "__main__":
     which = sys.argv[1] if len(sys.argv) > 1 else ""
+    usage = "usage: python3 -m herding.calibrate paper|spx [--refine] [--draws N]"
     if which not in ("paper", "spx"):
-        sys.exit("usage: python3 -m herding.calibrate paper|spx [--refine]")
+        sys.exit(usage)
+    if "--draws" in sys.argv:
+        i = sys.argv.index("--draws") + 1
+        if i >= len(sys.argv) or not sys.argv[i].isdigit() or int(sys.argv[i]) < 1:
+            sys.exit(usage + "  (--draws needs a whole number of at least 1)")
     if "--refine" in sys.argv:
         loss, p, bad = refine_saved(which)
         print("saved", save(which, loss, p, TRAIN_SEEDS, bad))

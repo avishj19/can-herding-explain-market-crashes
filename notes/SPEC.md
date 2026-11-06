@@ -68,7 +68,10 @@ ln p_f(t) - ln p_f(t-1) = eps_t, eps ~ Normal(0, sigma_eps). Gaussian, with no m
 - Time step dt = 0.01 of a unit of time; one unit = one trading day [N: "unit time step ... daily frequencies"].
   Probability of a switch within dt = 1 - exp(-rate*dt) (exact for a constant rate).
   ([S]'s rate*dt is the same to first order; [S] also refined dt to 0.002 in bursts.
-  The exact form makes that refinement unnecessary.)
+  This project keeps dt = 0.01 throughout, so dt = 0.01 is part of the model as fitted:
+  the S&P-calibrated results barely change at dt = 0.002, but the paper-matched ones do
+  (most of their fat tails and clustering go; `analysis/dt_check.py`, RESULTS.md
+  Limitations). The exact switching form does not remove that dependence.)
 - Price ticks within dt: Poisson(rate*dt) of them. This is the exact Poisson process
   [S] approximates, so there is no cap of one tick per step.
 - Step limit (this project's check): the rate is held fixed for a whole step, so the
@@ -112,7 +115,7 @@ every check uses other seeds (1000-1039).
   These +/- values are the project's chosen yardsticks, not [N]'s error bars
   (alpha +/- 0.077, H +/- 0.003, H|r| +/- 0.010, Figs 2-3 captions). Those are
   regression errors from one run, smaller than the model's run-to-run spread
-  (H|r| varies by about 0.02), so no setting could meet them on every seed.
+  (H|r| varies by about 0.03), so no setting could meet them on every seed.
 - S&P fit: squared gaps between the model's median and the S&P 500 on all 11
   fingerprint measures, each gap divided by the S&P's own uncertainty (spread
   over 200 block-bootstrap resamples with one-year blocks).

@@ -23,7 +23,7 @@ except ImportError:
 
 
 def check(N, eps, delta):
-    if int(N) != N or N < 2:
+    if not np.isfinite(N) or int(N) != N or N < 2:
         raise ValueError(f"N must be a whole number >= 2, got {N}")
     if not 0 < eps <= 1:
         raise ValueError(f"eps must be in (0, 1], got {eps}")
@@ -51,10 +51,14 @@ def stationary(N, eps, delta):
     """Exact long-run probability of k = 0..N ants at source A."""
     check(N, eps, delta)
     k = np.arange(N)
-    ratio = up_prob(k, N, eps, delta) / down_prob(k + 1, N, eps, delta)
-    logpi = np.concatenate([[0.0], np.cumsum(np.log(ratio))])
-    pi = np.exp(logpi - logpi.max())
-    return pi / pi.sum()
+    with np.errstate(over="ignore", invalid="ignore"):     # checked just below instead
+        ratio = up_prob(k, N, eps, delta) / down_prob(k + 1, N, eps, delta)
+        logpi = np.concatenate([[0.0], np.cumsum(np.log(ratio))])
+        pi = np.exp(logpi - logpi.max())
+        pi = pi / pi.sum()
+    if not np.all(np.isfinite(pi)):
+        raise ValueError(f"eps={eps} is too small for an exact answer (the numbers underflow)")
+    return pi
 
 
 def _run_impl(g, N, eps, delta, steps, k):
@@ -62,9 +66,10 @@ def _run_impl(g, N, eps, delta, steps, k):
     out[0] = k
     for t in range(steps):
         u = g.random()
-        if u < up_prob(k, N, eps, delta):
+        up = up_prob(k, N, eps, delta)
+        if u < up:
             k += 1
-        elif u < up_prob(k, N, eps, delta) + down_prob(k, N, eps, delta):
+        elif u < up + down_prob(k, N, eps, delta):
             k -= 1
         out[t + 1] = k
     return out
@@ -84,7 +89,7 @@ def simulate(N, eps, delta, steps, seed=None, k0=None):
     if int(steps) != steps or steps < 0:
         raise ValueError(f"steps must be a whole number >= 0, got {steps}")
     k0 = N // 2 if k0 is None else k0
-    if not 0 <= k0 <= N:
-        raise ValueError(f"k0 must be between 0 and N, got {k0}")
+    if isinstance(k0, bool) or int(k0) != k0 or not 0 <= k0 <= N:
+        raise ValueError(f"k0 must be a whole number between 0 and N, got {k0}")
     return _run(np.random.default_rng(seed), int(N), float(eps), float(delta),
                 int(steps), int(k0))

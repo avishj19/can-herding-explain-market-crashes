@@ -52,3 +52,10 @@ def test_typical_picks_the_median_mismatch_not_the_best():
     assert experiments.typical(prints[:1], target) == 0
     with pytest.raises(ValueError):
         experiments.typical([], target)
+
+
+def test_worst_fall_needs_a_whole_number_of_days():
+    r = np.array([-0.01, 0.02, -0.03, 0.01, -0.02, 0.0])
+    assert experiments.worst_fall(r, 2.0) == experiments.worst_fall(r, 2)
+    with pytest.raises(ValueError, match="whole number"):
+        experiments.worst_fall(r, 2.5)

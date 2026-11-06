@@ -6,8 +6,10 @@ import numpy as np
 
 
 def _returns(r):
-    """Returns as a 1-D float array; reject empty or NaN/inf input."""
-    r = np.asarray(r, dtype=float).ravel()
+    """Returns as a 1-D float array; reject empty, NaN/inf or not 1-D input."""
+    r = np.asarray(r, dtype=float)
+    if r.ndim != 1:
+        raise ValueError(f"returns must be one list of numbers (1-D), got shape {r.shape}")
     if r.size == 0:
         raise ValueError("returns are empty")
     if not np.all(np.isfinite(r)):
@@ -15,11 +17,15 @@ def _returns(r):
     return r
 
 
-def _standardize(r):
+def standardize(r):
+    """Returns minus their mean, in units of their standard deviation."""
     r = _returns(r)
-    if r.std() == 0:
+    sd = r.std()
+    if sd == 0:
         raise ValueError("returns are constant: no spread to measure")
-    return (r - r.mean()) / r.std()
+    if not np.isfinite(sd):
+        raise ValueError("returns are too large to measure their spread (overflow)")
+    return (r - r.mean()) / sd
 
 
 def hill_alpha(r, tail=0.05):
@@ -42,20 +48,20 @@ def hill_alpha(r, tail=0.05):
 
 def kurtosis(r):
     """Excess kurtosis: 0 for a bell curve, > 0 for fat tails."""
-    return np.mean(_standardize(r) ** 4) - 3
+    return np.mean(standardize(r) ** 4) - 3
 
 
 def ccdf(r):
     """Sorted |standardized returns| x and the fraction of days with |z| >= x."""
-    z = np.sort(np.abs(_standardize(r)))
+    z = np.sort(np.abs(standardize(r)))
     return z, 1 - np.arange(len(z)) / len(z)
 
 
 def acf(r, lags):
     """Autocorrelation of r at each lag (Pearson correlation of r_t and r_t+lag)."""
-    z = _standardize(r)
+    z = standardize(r)
     lags = np.atleast_1d(lags)
-    if lags.size == 0 or not np.all(lags == np.round(lags)):
+    if lags.dtype == bool or lags.size == 0 or not np.all(lags == np.round(lags)):
         raise ValueError(f"lags must be whole numbers, got {lags}")
     lags = lags.astype(int)
     if np.any(lags < 1) or np.any(lags >= len(z) - 1):
@@ -120,6 +126,8 @@ def hurst(x, scales=(16, 32, 64, 128, 256, 512, 1024, 2048)):
     """Self-similarity exponent H: the slope of log F(n) against log n from dfa().
     H = 0.5 means no memory; H > 0.5 means memory (persistence); H < 0.5 means
     reversals. Lux & Marchesi (1999): returns 0.48, absolute returns 0.85."""
+    if len(np.unique(scales)) < 2:
+        raise ValueError(f"need at least 2 different window sizes to fit a slope, got {scales}")
     s, F = dfa(x, scales)
     return float(np.polyfit(np.log(s), np.log(F), 1)[0])
 

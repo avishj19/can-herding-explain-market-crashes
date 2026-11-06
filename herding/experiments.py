@@ -54,8 +54,9 @@ def percentile(value, sims):
 def worst_fall(r, k):
     """Largest fall over any k consecutive days, as a positive log return."""
     r = np.asarray(r, dtype=float)
-    if not 1 <= k <= len(r):
-        raise ValueError(f"k must be between 1 and {len(r)}, got {k}")
+    if isinstance(k, bool) or int(k) != k or not 1 <= k <= len(r):
+        raise ValueError(f"k must be a whole number between 1 and {len(r)}, got {k}")
+    k = int(k)
     c = np.concatenate([[0.0], np.cumsum(r)])
     return float(-(c[k:] - c[:-k]).min())
 
