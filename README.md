@@ -26,7 +26,7 @@ Requires Python 3.10 or newer.
 ```bash
 pip install -r requirements.txt
 python3 main.py                      # S&P 500 vs the model -> figures/fig00_quick_check_sp500_vs_model.png
-python3 make_figures.py              # all figures fig01-fig11 (about 2 minutes on 8 cores)
+python3 make_figures.py              # all figures fig01-fig12 (about 2 minutes on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests
 python3 -m pytest tests/ -q          # all tests
 python3 -m herding.calibrate paper   # refit to the paper's numbers (add --refine to polish)

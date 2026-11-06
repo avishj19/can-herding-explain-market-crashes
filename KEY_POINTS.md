@@ -80,7 +80,7 @@ are in a paper we could not get, so they are fitted):
   - a Pareto law with known α;
   - white noise has H = 0.5.
 
-  All 378 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
+  All 393 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
 - **Every result is judged over many histories** on held-out seeds: one history can
   be calm and another wild with identical settings.
 - **The real market counts as typical** if it falls inside the middle 90% of the
@@ -172,6 +172,15 @@ calm market, but overshoots by about a quarter when 10–20% of traders are char
 in panel c, the gap between the black and grey lines shows the overshoot roughly (the exact,
 history-by-history numbers are the ones above).
 
+**12. Political parties (an extension, Fig 12): a return gap, but no difference in
+crashes.** Since 1928 the S&P has returned 6.8% a year more under Democratic presidents (the
+"presidential puzzle"). Is that more than luck? Slide the party calendar along the real returns
+to make fake calendars: the real gap beats 98% of them, which is borderline with only 13 changes
+of party. Volatility, fat tails and crash days show no party difference. The model, which has
+no politics, can't produce the return gap, but it is a poor yardstick for averages, because its
+returns reverse from day to day. *How to read:* each dot is what luck alone gives, and the black
+line is the real S&P. A line far outside the dots means the difference is unlikely to be luck.
+
 **Recalibration (November 2026).** Both fits were rerun with a wider search and a new
 stability screen (each finalist run for 100,000 days on 20 extra seeds). The old
 settings were kept for both: the new paper fit scored worse, and the new S&P fit,
@@ -255,6 +264,10 @@ statements about government or regulation. Measured with
 - Gopikrishnan, P. et al. (1998). Inverse cubic law for the distribution of stock
   price variations. *Eur. Phys. J. B* 3, 139–140. (In `paper/`.)
 - Kirman, A. (1993). Ants, rationality, and recruitment. *Q. J. Econ.* 108, 137–156.
+- Santa-Clara, P. & Valkanov, R. (2003). The presidential puzzle: political cycles and
+  the stock market. *J. Finance* 58, 1841–1872. (Fig 12.)
+- Pástor, Ľ. & Veronesi, P. (2020). Political cycles and stock returns. *J. Political
+  Economy* 128, 4011–4045. (Fig 12.)
 - Peng, C.-K. et al. (1994). Mosaic organization of DNA nucleotides. *Phys. Rev. E*
   49, 1685–1689. (The DFA method behind H.)
 - Data (`data/download.py`, every series ends 2026-10-30): Yahoo Finance (^GSPC,
@@ -268,7 +281,7 @@ python3 data/download.py               # data files (already in the repository)
 python3 main.py                        # S&P vs 20 held-out histories (about 5 s)
 python3 make_figures.py                # figures 1-11 (about 2 min on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests (about 1 min)
-python3 -m pytest tests/ -q            # all 378 tests (about 1.5 min)
+python3 -m pytest tests/ -q            # all 393 tests (about 1.5 min)
 python3 -m herding.calibrate paper     # refit to the paper (about 20 min), then --refine
 python3 -m herding.calibrate spx       # refit to the S&P 500 (1.5-2.5 h; resumes if stopped)
 ```

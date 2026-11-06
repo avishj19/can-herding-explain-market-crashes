@@ -101,7 +101,10 @@ def check_slow_figures(pool, p, tmp_path):
         assert all(np.isnan(v).all() for v in out["diffs"].values())
     lo_hi = [v for k, v in out.items() if k.startswith("surprise_") and k.endswith("%")]
     assert sum(v["n"] for v in lo_hi) + out["surprise_runaways"] == 10
-    for name in ("f8.png", "f9.png", "f10.png", "f11.png"):
+    out = mf.fig12_politics(pool, p, tmp_path / "f12.png", market="spx", seeds=range(1000, 1003))
+    assert out["n_model"] <= 3 and out["n_shifted"] >= 20
+    assert all(0 <= v <= 100 for w in out["pct"].values() for v in w.values())
+    for name in ("f8.png", "f9.png", "f10.png", "f11.png", "f12.png"):
         assert is_image(tmp_path / name)
 
 
