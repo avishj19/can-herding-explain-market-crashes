@@ -184,7 +184,7 @@ The S&P-calibrated model's returns **reverse** a little from day to day
 |---|---|---|
 | Price equals value on average | mean gap +0.0000 | +0.0004 |
 | No persistent mispricing | over 10% off on 0.02% of days, at most 4 days in a row | 0.47% of days, at most 29 days |
-| Volatility rises with the chartist share | 0.59× (least crowded tenth) to 1.41× (most crowded) | 0.51× to 1.49× |
+| Volatility rises with the chartist share | 0.59× (least crowded tenth) to 1.41× (most crowded) | 0.51× to 1.52× |
 
 ## Fig 6 — Kirman's ants (the herding check from the proposal)
 `fig6_kirman.png`. 40 million steps per case, δ = 0.1 (so "switch alone *or* be recruited"
@@ -335,5 +335,21 @@ value), next to a placebo (the same history without the surprise: ordinary wobbl
    away from its value as a failure (the S&P never was), which favours calm settings.
    The paper fit only rejects bubbles that last 250 days, like the finished model,
    which keeps bubbles that burst on their own (SPEC.md, "Runaways").
-9. **The time step is no longer a problem:** results at dt = 0.01 and 0.005 agree
-   within about one seed-to-seed spread on every measure (`analysis/dt_check.py`).
+9. **The paper-matched results depend on the time step** (found by a stress test,
+   November 2026; `python3 analysis/dt_check.py paper`, 12 held-out histories of
+   19,329 days, medians):
+
+   | dt | kurtosis | tail α (paper's fit) | clustering, 1 day | H of \|returns\| |
+   |---|---|---|---|---|
+   | 0.01 (used everywhere) | 29 | 2.67 | 0.33 | 0.87 |
+   | 0.005 | 17 | 3.06 | 0.20 | 0.83 |
+   | 0.002 | 3.4 | 3.33 | 0.10 | 0.75 |
+
+   With a finer time step the same settings lose most of their fat tails and
+   clustering, so the paper-matched numbers (α 2.62, H|r| 0.81) belong to the model
+   *as simulated at dt = 0.01*, not to its equations alone. Lux & Marchesi also
+   simulated at dt = 0.01 (refining to 0.002 only in bursts), so this is the same
+   kind of model as theirs, but it is a real caveat. **The S&P-calibrated settings,
+   which answer this project's question, are not affected:** every measure stays
+   within about one seed-to-seed spread at dt = 0.005 and 0.002 (largest change:
+   next-day correlation, −0.02 → −0.05). The paper fit was not redone at a smaller dt.

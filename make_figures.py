@@ -523,6 +523,8 @@ def fig11_policy(pool, p, spx, path=FIG / "fig11_policy.png", breaker_seeds=BREA
     sd = np.median([r.std() for r in experiments.returns(p, breaker_seeds[:5], days, pool=pool)])
     rules, scale = policy.scaled_breakers(sd, np.std(spx))
     whole, events, bad_b = policy.breaker_experiment(pool, p, breaker_seeds, days, rules)
+    if whole is None:
+        raise model.RunawayError(f"all {bad_b} circuit-breaker histories ran away: nothing to compare", None)
     surprise, bad_s = policy.surprise_experiment(pool, p, surprise_seeds)
     # (fewer than 2 histories with a pause, e.g. in a short test run: nothing to compare)
     diffs = {k: policy.paired_difference(events["off"][k], events["on"][k])
@@ -611,7 +613,8 @@ def main():
         spx_hist = experiments.histories(spx_p, HELD_OUT, len(spx), keep=("r", "lp", "lf", "z"), pool=pool)
         spx_long = experiments.histories(spx_p, HELD_OUT[:1], LONG, keep=("r", "z"), pool=pool)[0]
         no_chart = experiments.returns(spx_p, HELD_OUT, len(spx), chartists=False, pool=pool)
-        for name, runs in [("paper-matched", paper_long), ("S&P-calibrated", spx_hist)]:
+        for name, runs in [("paper-matched", paper_long), ("S&P-calibrated", spx_hist),
+                           ("long S&P-calibrated (Fig 5)", [spx_long])]:
             bad = sum(h is None for h in runs)
             if bad:
                 raise model.RunawayError(f"{bad} held-out {name} histories ran away", None)

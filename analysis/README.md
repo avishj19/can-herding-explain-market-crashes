@@ -9,7 +9,7 @@ in `settings/` and held-out seeds only. Run from the project folder, e.g.
 |---|---|
 | `efficiency_claims.py` | Lux & Marchesi's efficient-market claims: price = value on average, no persistent mispricing, volatility vs chartist share |
 | `crash_shape.py` | After a big move, does the price bounce back (like the S&P) or keep sliding? |
-| `dt_check.py` | Do results change with the time step dt? |
+| `dt_check.py` | Do results change with the time step dt? (`spx` or `paper`; the paper-matched ones do) |
 | `stability.py` | How often do the fitted settings run away over 100,000 days? |
 
 Earlier exploration scripts (for the model before the November 2026 rebuild)

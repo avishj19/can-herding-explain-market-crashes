@@ -307,7 +307,7 @@ def test_tail_fit_line_passes_through_its_window():
     # move; the line c * x^-alpha should hit about 30% at the start of the window.
     r = _symmetric_pareto(3.0)
     alpha, c, lo, hi = stats.tail_fit(r)
-    z = np.sort(np.abs(stats._standardize(r)))
+    z = np.sort(np.abs(stats.standardize(r)))
     assert alpha == stats.alpha_regression(r)
     assert lo == pytest.approx(np.quantile(z, 0.70), rel=1e-3) and hi == z[-1]
     assert c * lo ** -alpha == pytest.approx(0.30, rel=0.05)
@@ -342,3 +342,22 @@ def test_hurst_sees_memory_in_clustered_volatility():
 def test_dfa_rejects_scales_too_large_for_the_data():
     with pytest.raises(ValueError, match="scales"):
         stats.dfa(np.random.default_rng(0).standard_normal(1000), scales=(16, 512))
+
+
+# ------------------------------------------------------------------ found by the stress test (Nov 2026)
+
+def test_hurst_needs_two_window_sizes():
+    x = np.random.default_rng(0).standard_normal(5000)
+    for scales in [(16,), (16, 16)]:
+        with pytest.raises(ValueError, match="2 different window sizes"):
+            stats.hurst(x, scales)
+
+
+def test_inputs_that_used_to_give_silent_nonsense_are_rejected():
+    x = np.random.default_rng(0).standard_normal(1000)
+    with pytest.raises(ValueError, match="1-D"):
+        stats.fingerprint(x.reshape(25, 40))        # used to be read as 1,000 days
+    with pytest.raises(ValueError, match="overflow"), np.errstate(over="ignore"):
+        stats.kurtosis(1e200 * x)                   # used to give -3.0
+    with pytest.raises(ValueError, match="whole numbers"):
+        stats.acf(x, True)                          # used to be read as lag 1

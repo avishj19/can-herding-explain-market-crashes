@@ -459,3 +459,36 @@ def test_last_pause_minute_must_be_a_minute_of_the_day(bad):
     with pytest.raises(ValueError, match="last_pause_minute"):
         model.simulate(BASE, 10, breakers=dict(levels=(0.1, 0.2, 0.3), halt_minutes=15,
                                                last_pause_minute=bad))
+
+
+# ------------------------------------------------------------------ found by the stress test (Nov 2026)
+
+def spx_settings():
+    from herding import calibrate
+    if not (calibrate.SETTINGS_DIR / "spx.json").exists():
+        pytest.skip("not fitted yet")
+    return calibrate.load("spx")
+
+
+def test_a_runaway_on_the_last_day_is_reported():
+    # seed 2013 leaves its value on day 6,810 (gap above e^20 that day). Before the fix,
+    # a run of exactly 6,810 days returned normally because the runaway was on the last day.
+    with pytest.raises(model.RunawayError):
+        model.simulate(spx_settings(), 6810, seed=2013)
+    model.simulate(spx_settings(), 6800, seed=2013)          # 10 days earlier: fine
+
+
+@pytest.mark.parametrize("change, words", [
+    (dict(dt=1 / 15), "trend window"),      # 0.1 day is 1.5 steps: the trend would be 33% too big
+    (dict(dt=1e-5), "dt must be at least"),
+    (dict(tick=1e-17), "tick must be at least"),   # log(1 + 1e-17) rounds to 0: price frozen
+    (dict(N=10**8), "N must be at most")])
+def test_settings_the_computer_cannot_handle_are_rejected(change, words):
+    with pytest.raises(ValueError, match=words):
+        model.check(settings(**change))
+
+
+def test_absurd_tick_rates_are_a_runaway_not_a_hang():
+    # noise 1e20 asks for ~1e22 ticks in one step; numba's Poisson draw would loop forever
+    with pytest.raises(model.RunawayError):
+        model.simulate(settings(sigma_mu=1e20), 5, seed=1)

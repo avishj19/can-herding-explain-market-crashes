@@ -58,6 +58,8 @@ MAX_GAP = 1.0          # a runaway: the price more than e = 2.7x away from its v
 MAX_DAYS = 250         # ...for a whole year of trading days in a row,
 HARD_GAP = 20.0        # or ever more than e^20 (5 hundred million) times away
 START_CHARTISTS = 0.1  # share of chartists at the start, split evenly into the two moods
+MIN_DT, MIN_TICK, MAX_N = 1e-4, 1e-12, 10**7   # limits of what the computer can do sensibly
+MAX_TICKS = 1e15       # ticks in one step beyond this = the price has left any sensible range
 # US market-wide circuit breakers since 2013 (NYSE Rule 7.12, formerly Rule 80B;
 # SEC-approved): a 15-minute pause when the S&P 500 is 7% or 13% below the previous
 # close, but only before 3:25 pm (minute 355 of the day); closed for the day at 20%
@@ -103,8 +105,16 @@ def check(p):
     steps = round(1 / p["dt"])
     if abs(steps * p["dt"] - 1) > 1e-9:
         raise ValueError(f"dt must split one day into whole steps (0.01, 0.005, ...), got {p['dt']}")
-    if TREND_WINDOW / p["dt"] < 1 - 1e-9:
-        raise ValueError(f"dt must be at most {TREND_WINDOW} (the trend window), got {p['dt']}")
+    w = TREND_WINDOW / p["dt"]
+    if w < 1 - 1e-9 or abs(w - round(w)) > 1e-9:
+        raise ValueError(f"dt must split the trend window ({TREND_WINDOW} day) into whole steps "
+                         f"(0.01, 0.005, ...), got {p['dt']}")
+    if p["dt"] < MIN_DT:
+        raise ValueError(f"dt must be at least {MIN_DT} (smaller steps take too long and too much memory), got {p['dt']}")
+    if p["tick"] < MIN_TICK:
+        raise ValueError(f"tick must be at least {MIN_TICK} (smaller ticks round to 0), got {p['tick']}")
+    if p["N"] > MAX_N:
+        raise ValueError(f"N must be at most {MAX_N:,}, got {p['N']}")
     if p["N"] < 4 * p["floor"]:
         raise ValueError(f"N={p['N']} is too small for floor={p['floor']}: need N >= 4*floor")
 
@@ -154,7 +164,10 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
     freezes the price for halt_steps steps (once each per day; later in the day
     nothing happens); falling to cb3 freezes it for the rest of the day, at any time.
     Traders keep switching while the price is frozen.
-    shock[day]: log change of the value at the start of that day (policy surprise)."""
+    shock[day]: log change of the value at the start of that day (policy surprise).
+    The last value returned says whether the run ran away (on any day, the last included;
+    more than MAX_TICKS ticks in one step also counts, so no random draw is asked for
+    an absurd number)."""
     dt = 1.0 / steps
     window = int(round(TREND_WINDOW * steps))
     up_step, down_step = np.log(1.0 + tick), np.log(1.0 - tick)
@@ -227,6 +240,11 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
             if halts[day] == 3 or paused > 0:  # trading halted: the price is frozen
                 paused = max(0, paused - 1)
             else:
+                if not abs(push) * dt < MAX_TICKS:          # also catches NaN
+                    out_lp[day + 1], out_lf[day + 1] = lp, lf
+                    out_z[day + 1] = (n_plus + n_minus) / N
+                    out_x[day + 1] = out_x[day]
+                    return out_lp, out_lf, out_z, out_x, halts, day + 1, True
                 if push > 0.0:
                     lp += g.poisson(push * dt) * up_step
                 else:
@@ -249,8 +267,8 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
         out_x[day + 1] = (n_plus - n_minus) / nc if nc > 0 else 0.0
         outside = outside + 1 if abs(lp - lf) > max_gap else 0
         if outside >= max_days or abs(lp - lf) > hard_gap:
-            return out_lp, out_lf, out_z, out_x, halts, day + 1
-    return out_lp, out_lf, out_z, out_x, halts, days
+            return out_lp, out_lf, out_z, out_x, halts, day + 1, True
+    return out_lp, out_lf, out_z, out_x, halts, days, False
 
 
 USE_NUMBA = numba is not None and os.environ.get("MODEL_NO_NUMBA") != "1"
@@ -332,7 +350,8 @@ def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_D
     Raises RunawayError if the price runs away: more than a factor e^max_gap from
     its value for max_days trading days in a row, or ever more than e^HARD_GAP
     (the paper: no *persistent* pathological mispricing). Bubbles that burst on
-    their own are kept. max_gap=None switches the check off.
+    their own are kept. max_gap=None switches every runaway check off: the price may
+    then go anywhere (meant for tests that push the model to extremes on purpose).
     """
     check(p)
     if isinstance(days, (bool, np.bool_)) or not isinstance(days, (int, np.integer)) or days < 1:
@@ -358,13 +377,13 @@ def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_D
     shock = np.zeros(int(days))
     for day, frac in (shocks or {}).items():
         shock[day] += np.log1p(frac)
-    lp, lf, z, x, halts, done = _simulate(
+    lp, lf, z, x, halts, done, ran_away = _simulate(
         np.random.default_rng(seed), int(days), int(round(1 / p["dt"])), bool(chartists),
         N, *(float(p[k]) for k in ("v1", "v2", "a1", "a2", "a3", "s", "R", "tc", "gamma",
                                    "beta", "sigma_mu", "sigma_eps", "tick")),
         floor, each, each, np.inf if max_gap is None else float(max_gap), int(max_days),
         np.inf if max_gap is None else HARD_GAP, *cb, int(halt_steps), int(pause_end), shock)
-    if done < days:
+    if ran_away:
         ratio = np.exp(min(abs(lp[done] - lf[done]), 700.0))   # 700: largest safe exponent
         raise RunawayError(f"day {done}: the price is {ratio:.3g}x away from its value with "
                            f"{z[done]:.0%} chartists and has not come back (a runaway "

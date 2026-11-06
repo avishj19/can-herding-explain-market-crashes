@@ -134,3 +134,10 @@ def test_largest_allowed_eps_still_matches_exact_answer():
     k = kirman.simulate(N, eps, delta, steps=2_000_000, seed=1)
     hist = np.bincount(k, minlength=N + 1) / len(k)
     assert 0.5 * np.abs(hist - kirman.stationary(N, eps, delta)).sum() < 0.01
+
+
+def test_bad_starts_and_underflow_are_rejected():
+    with pytest.raises(ValueError, match="whole number"):
+        kirman.simulate(10, 0.1, 0.5, 5, k0=1.7)        # used to start silently at 1
+    with pytest.raises(ValueError, match="too small"):
+        kirman.stationary(100, 5e-324, 0.1)              # used to return all NaN

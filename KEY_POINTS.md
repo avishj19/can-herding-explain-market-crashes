@@ -49,17 +49,17 @@ whether **herding alone** produces the real market's fat tails and clustering.
 
 Imagine 500 traders. Each trading day is cut into 100 small steps. In each step:
 
-1. **News** nudges the fundamental value by a small bell-curve amount. This is the
-   only outside input; it has no fat tails and no memory.
-2. **Chartists change mood** (optimist ↔ pessimist). They are pushed by the
+1. **Chartists change mood** (optimist ↔ pessimist). They are pushed by the
    **majority mood** (herding, setting `a1`) and by the **price trend** (`a2`).
-3. **Traders change strategy** (fundamentalist ↔ chartist) by comparing profits.
+2. **Traders change strategy** (fundamentalist ↔ chartist) by comparing profits.
    Chartists profit from trends; fundamentalists from the gap between price and value,
    discounted (factor `s` = 0.75) because that profit only arrives later.
    Joining a group is **recruitment**: the bigger a group, the faster it recruits
    (Kirman's ant model, Fig 6).
-4. **The price moves in small ticks** (0.1% each). More buyers than sellers (excess
+3. **The price moves in small ticks** (0.1% each). More buyers than sellers (excess
    demand) makes up-ticks more likely.
+4. **News** nudges the fundamental value by a small bell-curve amount. This is the
+   only outside input; it has no fat tails and no memory.
 
 The equations, and which source each comes from, are in
 [`notes/SPEC.md`](notes/SPEC.md); the code is [`herding/model.py`](herding/model.py).
@@ -80,7 +80,7 @@ are in a paper we could not get, so they are fitted):
   - a Pareto law with known α;
   - white noise has H = 0.5.
 
-  All 368 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
+  All 378 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
 - **Every result is judged over many histories** on held-out seeds: one history can
   be calm and another wild with identical settings.
 - **The real market counts as typical** if it falls inside the middle 90% of the
@@ -202,7 +202,7 @@ statements about government or regulation. Measured with
 |---|---|---|
 | The price equals its value on average | ✅ mean gap +0.0000 | ✅ +0.0004 |
 | No persistent pathological mispricing | ✅ over 10% off on 0.02% of days, never more than 4 days | ✅ 0.47% of days, at most 29 days |
-| Volatility rises with the noise-trader share | ✅ 0.59× → 1.41× | ✅ 0.51× → 1.49× |
+| Volatility rises with the noise-trader share | ✅ 0.59× → 1.41× | ✅ 0.51× → 1.52× |
 | Price direction is unpredictable (H ≈ 0.5) | ✅ 0.47 | ⚠️ 0.39 (mild reversal) |
 | Fat tails come from traders, not news | ✅ | ✅ |
 | Results hold for many settings | ⚠️ for about a third of random settings (66% of the 54% that stay stable) | |
@@ -225,6 +225,11 @@ statements about government or regulation. Measured with
    1.8 in the run Fig 2 shows, 0.4 as the median of 8 runs).
 7. **One whole market, no company news**, so single stocks look more extreme than
    the model.
+8. **The paper-matched results depend on the time step.** The model moves in steps
+   of dt = 0.01 day (as Lux & Marchesi's did). At dt = 0.002 the paper-matched
+   settings lose most of their fat tails (kurtosis 29 → 3.4, α 2.67 → 3.33), so their
+   match to the paper belongs to the dt = 0.01 version. The S&P-calibrated settings
+   barely change, so the main answer stands (RESULTS.md, Limitations 9).
 
 ## 8. How to read any figure in this project
 
@@ -263,7 +268,7 @@ python3 data/download.py               # data files (already in the repository)
 python3 main.py                        # S&P vs 20 held-out histories (about 5 s)
 python3 make_figures.py                # figures 1-11 (about 2 min on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests (about 1 min)
-python3 -m pytest tests/ -q            # all 368 tests (about 1.5 min)
+python3 -m pytest tests/ -q            # all 378 tests (about 1.5 min)
 python3 -m herding.calibrate paper     # refit to the paper (about 20 min), then --refine
 python3 -m herding.calibrate spx       # refit to the S&P 500 (1.5-2.5 h; resumes if stopped)
 ```

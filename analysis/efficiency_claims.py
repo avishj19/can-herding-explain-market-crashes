@@ -36,7 +36,10 @@ def main(days=DAYS, n=4):
         r = np.concatenate([x["r"] for x in h])
         z = np.concatenate([x["z"][1:] for x in h])
         vol = np.abs(r) / r.std()
-        low, high = vol[z <= np.quantile(z, 0.1)].mean(), vol[z >= np.quantile(z, 0.9)].mean()
+        # the 10% of days with the fewest / most chartists, by rank (the share z takes
+        # only the values k/N, so a quantile cut-off would sweep in ties)
+        order, tenth = np.argsort(z, kind="stable"), len(z) // 10
+        low, high = vol[order[:tenth]].mean(), vol[order[-tenth:]].mean()
         print(f"{kind}: {len(h)} histories x {days:,} days")
         print(f"  (1) mean log(price/value) {gap.mean():+.4f} (sd {gap.std():.4f})")
         print(f"  (2) days more than 10% mispriced {np.mean(np.abs(gap) > np.log(1.1)):.2%}; "

@@ -81,7 +81,7 @@ def test_bell_curve_line_is_the_two_sided_normal_tail():
 
 
 def test_standardized_has_mean_0_and_sd_1():
-    z = plots.standardized(series(4)[0])
+    z = stats.standardize(series(4)[0])
     assert abs(z.mean()) < 1e-12 and z.std() == pytest.approx(1)
 
 
