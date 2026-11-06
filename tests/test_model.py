@@ -72,6 +72,23 @@ def test_every_setting_is_documented():
 
 # ------------------------------------------------------------------ _leave()
 
+def test_step_pull_by_hand():
+    # SET_I: beta 6 * N 500 * gamma 0.01 * dt 0.01 = 0.3 (the price moves 30% of the way back per step)
+    assert model.step_pull(BASE) == pytest.approx(0.3)
+    assert model.step_pull(settings(dt=0.005)) == pytest.approx(0.15)     # half the step, half the pull
+
+
+def test_too_coarse_a_step_blows_up_without_any_chartists():
+    # With no chartists there is no herding, so a "runaway" can only come from the time
+    # step: past STEP_LIMIT every step overshoots the value by more than the last.
+    unstable = settings(beta=20.0, gamma=0.05)                  # pull 5.0
+    assert model.step_pull(unstable) >= model.STEP_LIMIT
+    with pytest.raises(model.RunawayError):
+        model.simulate(unstable, 200, seed=1, chartists=False)
+    # the same settings with a step 4x finer (pull 1.25) are fine
+    model.simulate(settings(beta=20.0, gamma=0.05, dt=0.0025), 200, seed=1, chartists=False)
+
+
 def test_nobody_leaves_an_empty_group_or_at_rate_zero():
     g = np.random.default_rng(0)
     assert model._leave(g, 0, 5.0, 5.0, 0.01) == (0, 0)

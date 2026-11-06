@@ -89,7 +89,8 @@ def check_slow_figures(pool, p, tmp_path):
     assert rows.shape == (len(names), len(keys)) and "sd" not in keys
     assert np.all((rows >= 0) & (rows <= 100))
     counts = mf.fig9_robustness(pool, n=8, days=4000, path=tmp_path / "f9.png")
-    assert counts["runaway"] + counts["thin"] + counts["fat_only"] + counts["fat_memory"] == 8
+    assert counts["coarse"] + counts["runaway"] + counts["thin"] + counts["fat_only"] \
+        + counts["fat_memory"] == 8
     a1s, dials = mf.fig10_herding(pool, p, calibrate.load("paper"), 3000, tmp_path / "f10.png", n=2)
     for rows in dials.values():
         assert rows.shape == (len(a1s), 4) and np.all((rows[:, 0] >= 0) & (rows[:, 0] <= 1))

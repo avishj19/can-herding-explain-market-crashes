@@ -228,9 +228,14 @@ the stocks.
 ## Fig 9 — How robust is it? (paper: "an open set of parameter values")
 `fig9_robustness.png`. 400 random settings, one 20,000-day run each. The star in a is
 the paper's own point (α 2.64, H|r| 0.85).
-- **44%** run away into an endless bubble.
-- Of the 222 that stay stable: **65%** give fat tails *and* long memory, 4% fat
-  tails only, 32% thin tails.
+- **6%** (26) are not run: their time step is too coarse. The fundamentalists' pull
+  in one step, β·N·γ·dt (`model.step_pull`), is 2 or more, so every step would overshoot
+  the value by more than the last and the run would blow up even with no chartists: a
+  flaw of the simulation, not a bubble. (Until November 2026 these were counted as
+  runaways; 18 of them had run away.)
+- **40%** (160) run away into an endless bubble (43% of the 374 that can be trusted).
+- Of the 214 that stay stable: **66%** give fat tails *and* long memory, 4% fat
+  tails only, 30% thin tails.
 - The paper is right that good settings form a whole region, not a single point.
   But the region is not "almost everything": stability is the main limit.
 

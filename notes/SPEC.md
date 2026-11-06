@@ -71,6 +71,11 @@ ln p_f(t) - ln p_f(t-1) = eps_t, eps ~ Normal(0, sigma_eps). Gaussian, with no m
   The exact form makes that refinement unnecessary.)
 - Price ticks within dt: Poisson(rate*dt) of them. This is the exact Poisson process
   [S] approximates, so there is no cap of one tick per step.
+- Step limit (this project's check): the rate is held fixed for a whole step, so the
+  fundamentalists can close at most beta N gamma dt of a mispricing per step
+  (`model.step_pull`). At 2 or more each step overshoots the value by more than the
+  last and the run blows up even without chartists, so Fig 9 does not run such
+  settings. Both fitted settings are far below 1.
 - mu is drawn fresh each step with standard deviation sigma_mu * sqrt(0.01/dt): exactly
   [S] at dt = 0.01, and the same noise per day at any other dt.
 - dp/dt = the average price change over the last 10 steps [t - 10 dt, t] [S].

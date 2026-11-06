@@ -50,7 +50,7 @@ SPX_RANGES = dict(RANGES, sigma_eps=(0.002, 0.02, "log"))   # the S&P also sets 
 # The tolerances are this project's own yardsticks, NOT the paper's error bars.
 # The paper's bars (from its Fig 2 and 3 captions: alpha 0.077, H 0.003, H|r| 0.010)
 # are regression errors from one long run; they are smaller than how much these numbers change from
-# one run of the model to the next (H of |returns| varies by about 0.02), so no
+# one run of the model to the next (H of |returns| varies by about 0.03), so no
 # setting could match them on every seed. The wider tolerances allow for that.
 PAPER_TARGETS = {"alpha_reg": (2.64, 0.15), "H": (0.48, 0.03), "H_abs": (0.85, 0.03)}
 PAPER_KURT_25_MAX = 1.0

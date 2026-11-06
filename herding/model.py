@@ -109,6 +109,19 @@ def check(p):
         raise ValueError(f"N={p['N']} is too small for floor={p['floor']}: need N >= 4*floor")
 
 
+STEP_LIMIT = 2.0       # above this, the time step itself makes the price blow up
+
+
+def step_pull(p):
+    """How much of a mispricing the fundamentalists remove in ONE time step, at most
+    (all N of them): beta * N * gamma * dt (from SPEC eq. 25 with ED_f = n_f gamma gap).
+    Below 1 the price moves part of the way back to its value each step; between 1
+    and 2 it overshoots but the swings shrink; at STEP_LIMIT (2) or more every step
+    overshoots by more than the last, and the run explodes even without chartists.
+    That is a flaw of stepping through time, not a bubble."""
+    return p["beta"] * p["N"] * p["gamma"] * p["dt"]
+
+
 # ------------------------------------------------------------------ one time step
 
 def _leave(g, n, rate_a, rate_b, dt):
