@@ -88,6 +88,22 @@ What they teach:
 
 By the rule fixed in advance, **the current settings were kept** (`settings/` is unchanged).
 
+**Full refit with today's code (6 November 2026, afternoon).** After the stress-test fixes and
+the folder reorganization, both fits were rerun from scratch with the standard method
+(`python3 -m herding.calibrate`, 1,200 random settings, 8 refined, the stability screen), into
+`scratch/recal_nov6/` instead of `settings/`, and judged by the same rule, fixed before the results:
+- **S&P:** the search found the saved settings again (training 2.94, 2 of 20 runaways), but
+  the screen chose another candidate: training 3.26, **0 of 20 runaways**. On the 40 held-out
+  histories the S&P is typical on **8 of 11** measures (saved: 9), with held-out loss 4.13
+  (saved: 4.15). It made 25-day kurtosis more typical (S&P at the 50th percentile; saved: 92nd)
+  but lost next-day correlation (S&P above all 40 histories; saved: 92nd). One fewer typical measure, so **the saved settings stay**. It is the
+  third fit with no runaways that is typical on one measure fewer: stability and the last
+  typical measure keep trading off.
+- **Paper:** training 0.11 (saved 0.06), held-out loss **3.04** against the saved **0.81**: it
+  learned its training seeds. **The saved settings stay.**
+- The saved settings' judge numbers came out exactly as before (9 of 11, 4.15; 0.81), and
+  regenerating every figure from the new folders gave byte-identical PNGs.
+
 | Colour | Means |
 |---|---|
 | Black | real market data |
