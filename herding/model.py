@@ -21,7 +21,7 @@ import numpy as np
 
 try:
     import numba
-except ImportError:                    # still works without numba, just ~50x slower
+except ImportError:                    # still works without numba, just ~30x slower (measured Nov 2026)
     numba = None
 
 # Settings. Every one has a fixed meaning in SPEC.md; rates are per unit of time
@@ -71,7 +71,8 @@ MINUTES_PER_DAY = 390  # 9:30 to 16:00
 # ------------------------------------------------------------------ checks
 
 class RunawayError(RuntimeError):
-    """The price left its value for good (all traders became chartists)."""
+    """The price left its value for good (SPEC.md "Runaways"; usually almost all
+    traders have become chartists, but the rule itself only looks at the price)."""
 
     def __init__(self, message, day):
         super().__init__(message)
@@ -86,8 +87,7 @@ def check(p):
     if unknown or missing:
         raise ValueError(f"unknown settings {sorted(unknown)}, missing settings {sorted(missing)}")
     for k, v in p.items():
-        if isinstance(v, (bool, np.bool_)) or not isinstance(v, (int, float, np.number)) \
-                or not np.isfinite(v):
+        if not _is_number(v):
             raise ValueError(f"setting {k} must be a finite number, got {v!r}")
         if v < 0:
             raise ValueError(f"setting {k} must not be negative, got {v}")
@@ -235,7 +235,8 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
             # sec. 3: excess demand -> random up and down ticks
             ed = (n_plus - n_minus) * tc + n_f * gamma * gap
             # ticks per day = beta (ED + mu) / tick, so that on average
-            # d(ln p)/dt = beta (ED + mu), SPEC eq. 25
+            # (dp/dt)/p = beta (ED + mu), SPEC eq. 25 (the log price moves slightly
+            # less: ln(1 + tick) per up-tick, not tick)
             push = beta * (ed + mu_sd * g.standard_normal()) / tick
             if halts[day] == 3 or paused > 0:  # trading halted: the price is frozen
                 paused = max(0, paused - 1)
@@ -293,6 +294,8 @@ def check_breakers(breakers):
     c = breakers.get("last_pause_minute", MINUTES_PER_DAY)
     if not _is_number(c) or not 0 <= c <= MINUTES_PER_DAY:
         raise ValueError(f"last_pause_minute must be a number from 0 to {MINUTES_PER_DAY}, got {c!r}")
+    if not isinstance(breakers["levels"], (list, tuple, np.ndarray)):
+        raise ValueError(f"breaker levels must be a list of 3 falls, got {breakers['levels']!r}")
     lv = tuple(breakers["levels"])
     if len(lv) != 3 or not all(_is_number(x) and 0 < x < 1 for x in lv) \
             or not lv[0] < lv[1] < lv[2]:
@@ -329,7 +332,9 @@ def minute_to_step(minute, dt):
 
 
 def _is_number(x):
-    return isinstance(x, (int, float, np.number)) and not isinstance(x, (bool, np.bool_)) \
+    """A finite real number. Not True/False, and not complex: numpy counts complex
+    numbers as numbers (np.number), so they are excluded by naming the real types."""
+    return isinstance(x, (int, float, np.integer, np.floating)) and not isinstance(x, (bool, np.bool_)) \
         and bool(np.isfinite(x))
 
 

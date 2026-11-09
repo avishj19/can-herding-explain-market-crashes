@@ -22,12 +22,16 @@ except ImportError:
     numba = None
 
 
+def _is_real(x):
+    return isinstance(x, (int, float, np.integer, np.floating)) and not isinstance(x, (bool, np.bool_))
+
+
 def check(N, eps, delta):
-    if not np.isfinite(N) or int(N) != N or N < 2:
+    if not _is_real(N) or not np.isfinite(N) or int(N) != N or N < 2:
         raise ValueError(f"N must be a whole number >= 2, got {N}")
-    if not 0 < eps <= 1:
+    if not _is_real(eps) or not 0 < eps <= 1:
         raise ValueError(f"eps must be in (0, 1], got {eps}")
-    if not 0 <= delta <= 1:
+    if not _is_real(delta) or not 0 <= delta <= 1:
         raise ValueError(f"delta must be in [0, 1], got {delta}")
     # Bug fix: a step moves the count up OR down, so the two chances must add to
     # at most 1. Their sum, eps + (1-delta)*2k(N-k)/(N(N-1)), peaks at k = N//2.

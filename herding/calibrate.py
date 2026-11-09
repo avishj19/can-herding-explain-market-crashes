@@ -33,7 +33,9 @@ SETTINGS_FILE = {"paper": "paper_matched.json", "spx": "sp500_calibrated.json"}
 
 def settings_path(kind):
     """Where the fitted settings of one kind ("paper" or "spx") are saved."""
-    return SETTINGS_DIR / SETTINGS_FILE.get(kind, f"{kind}.json")
+    if kind not in SETTINGS_FILE:
+        raise ValueError(f"unknown settings {kind!r}; choose 'paper' or 'spx'")
+    return SETTINGS_DIR / SETTINGS_FILE[kind]
 BURN = 1000                       # days dropped at the start, so the start does not matter
 TRAIN_SEEDS = tuple(range(100, 108))
 HELD_OUT_SEEDS = tuple(range(1000, 1040))
@@ -393,19 +395,32 @@ def load(kind):
     return p
 
 
-if __name__ == "__main__":
-    which = sys.argv[1] if len(sys.argv) > 1 else ""
-    usage = "usage: python3 -m herding.calibrate paper|spx [--refine] [--draws N]"
+USAGE = "usage: python3 -m herding.calibrate paper|spx [--refine] [--draws N]"
+
+
+def parse_args(argv):
+    """The command line (argv without the program name) as (kind, refine, draws);
+    exits with the usage line if it makes no sense. Kept apart from running the fit,
+    so a test can check the arguments without starting hours of work."""
+    which = argv[0] if argv else ""
     if which not in ("paper", "spx"):
-        sys.exit(usage)
-    if "--draws" in sys.argv:
-        i = sys.argv.index("--draws") + 1
-        if i >= len(sys.argv) or not sys.argv[i].isdigit() or int(sys.argv[i]) < 1:
-            sys.exit(usage + "  (--draws needs a whole number of at least 1)")
-    if "--refine" in sys.argv:
+        sys.exit(USAGE)
+    refine, draws = "--refine" in argv, 1200
+    if "--draws" in argv:
+        if refine:
+            sys.exit(USAGE + "  (--draws is for a new fit; --refine starts from the saved settings)")
+        i = argv.index("--draws") + 1
+        if i >= len(argv) or not argv[i].isdigit() or int(argv[i]) < 1:
+            sys.exit(USAGE + "  (--draws needs a whole number of at least 1)")
+        draws = int(argv[i])
+    return which, refine, draws
+
+
+if __name__ == "__main__":
+    which, refine, n = parse_args(sys.argv[1:])
+    if refine:
         loss, p, bad = refine_saved(which)
         print("saved", save(which, loss, p, TRAIN_SEEDS, bad))
     else:
-        n = int(sys.argv[sys.argv.index("--draws") + 1]) if "--draws" in sys.argv else 1200
         loss, p, bad = run(which, draws=n)
         print("saved", save(which, loss, p, runaways=bad, draws=n))

@@ -17,12 +17,20 @@ def _returns(r):
     return r
 
 
+def _varying(r):
+    """_returns(r), and reject a constant series. Decided from the values themselves
+    (largest == smallest), not from r.std() == 0: for a constant like 0.0123 the
+    computed mean is off in the last digit, so std() is about 1e-18, not 0."""
+    r = _returns(r)
+    if r.max() == r.min():
+        raise ValueError("returns are constant: no spread to measure")
+    return r
+
+
 def standardize(r):
     """Returns minus their mean, in units of their standard deviation."""
-    r = _returns(r)
+    r = _varying(r)
     sd = r.std()
-    if sd == 0:
-        raise ValueError("returns are constant: no spread to measure")
     if not np.isfinite(sd):
         raise ValueError("returns are too large to measure their spread (overflow)")
     return (r - r.mean()) / sd
@@ -108,8 +116,10 @@ def dfa(x, scales=(16, 32, 64, 128, 256, 512, 1024, 2048)):
     """Detrended fluctuation analysis (Peng et al. 1994), as in Lux & Marchesi (1999,
     Fig 3): integrate x, cut it into windows of n days, remove a straight-line trend
     in each, and measure the leftover spread F(n). Returns (scales, F)."""
-    x = _returns(x)
+    x = _varying(x)
     scales = np.asarray(scales, dtype=int)
+    if scales.size == 0:
+        raise ValueError("need at least one window size")
     if np.any(scales < 4) or np.any(scales > len(x) // 4):
         raise ValueError(f"scales must be between 4 and {len(x) // 4} (a quarter of the data)")
     y = np.cumsum(x - x.mean())

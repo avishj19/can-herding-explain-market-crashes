@@ -12,7 +12,7 @@ S&P 500's, so "7%" means the same number of typical days in both.
 import numpy as np
 
 from . import model
-from .experiments import BURN, worst_fall
+from .experiments import BURN, finite_1d, worst_fall
 
 
 def scaled_breakers(model_sd, market_sd, rules=model.US_BREAKERS):
@@ -121,12 +121,20 @@ def surprise_experiment(pool, p, seeds, size=-0.10, horizon=10):
         len(rows) - len(ok)
 
 
+def _paired(a, b):
+    """a - b for two equally long lists of finite numbers (one pair per history)."""
+    a, b = finite_1d(a, "values"), finite_1d(b, "values")
+    if a.shape != b.shape:
+        raise ValueError(f"need one value of each per history, got {a.size} and {b.size}")
+    return a - b
+
+
 def median_overshoot(peak, placebo_peak, draws=2000, seed=0):
     """The overshoot caused by the surprise, history by history: the median of
     peak - (placebo_peak + 1) (each history minus its own placebo), with a 95%
     bootstrap interval (resampling the histories). Returns (median, low, high).
     (The difference of the two medians, as read off the table, is only a shortcut.)"""
-    d = np.asarray(peak, dtype=float) - (np.asarray(placebo_peak, dtype=float) + 1)
+    d = _paired(peak, placebo_peak) - 1
     if d.size < 2:
         raise ValueError(f"need at least 2 histories, got {d.size}")
     g = np.random.default_rng(seed)
@@ -137,7 +145,7 @@ def median_overshoot(peak, placebo_peak, draws=2000, seed=0):
 def paired_difference(off, on, draws=2000, seed=0):
     """Mean of on - off over paired runs, with a 95% bootstrap interval (resampling
     the pairs). Returns (mean, low, high)."""
-    d = np.asarray(on, dtype=float) - np.asarray(off, dtype=float)
+    d = -_paired(off, on)
     if d.size < 2:
         raise ValueError(f"need at least 2 pairs, got {d.size}")
     g = np.random.default_rng(seed)

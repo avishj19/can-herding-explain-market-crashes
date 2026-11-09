@@ -24,6 +24,9 @@ Rate per trader per unit time (first index = group moved TO):
     pi_{-+} = v1 (n_c/N) exp(-U1)         (optimist -> pessimist)
     U1 = a1 x + (a2/v1) (dp/dt)/p
 
+In the code U1 (and U21, U22 below) is capped at +/-30 (exp(30) = 1e13), only so that
+exp(U) cannot overflow; this cap is not in [S].
+
 a1 = herding (copy the majority mood), a2 = trend following. [N] "a weighted combination of both factors".
 
 ## 2. Traders switch strategy (chartist <-> fundamentalist) [S eqs 18-21]; [C eqs 14-15] check the rate forms only
@@ -85,7 +88,8 @@ ln p_f(t) - ln p_f(t-1) = eps_t, eps ~ Normal(0, sigma_eps). Gaussian, with no m
   In the code, (dp/dt)/p is (p_t - p_(t-10dt)) / (0.1 p_(t-10dt)): divided by the price
   at the start of the window, not the current one (they differ by the price's move over
   the window, usually well under 1%; [S] does not say which). At the start the window
-  is filled with the starting price, so the trend is 0 for the first 0.1 day.
+  is filled with the starting price, so for the first 0.1 day the trend is measured
+  from the starting price (0 until the price first moves).
 - Order within a step: traders switch (secs. 1-2, all from the same state), then the
   price ticks (sec. 3), then the news moves the value (sec. 4) by Normal(0, sigma_eps sqrt(dt)).
 - Floors: n_c and n_f never fall below a minimum, so neither group can die out for
@@ -99,7 +103,9 @@ With some settings the price leaves its value for good: almost all traders becom
 chartists and the bubble never ends (parameter set I does this after about 28,500
 days). The paper says this does not happen ("no persistent deviations"), so:
 - a **runaway** = the price more than e (2.7x) away from its value for 250 trading
-  days in a row, or ever more than e^20 away. The run stops with RunawayError.
+  days in a row, or more than e^20 away at any day's close (both are checked at
+  each day's close). The run stops with RunawayError. So does a step that would need
+  more than 10^15 ticks, which only happens once the price has left any sensible range.
 - A bubble that goes past 2.7x and **bursts on its own** is not a runaway; it is
   the paper's mechanism, and it is kept.
 - The S&P fit is stricter: the S&P 500 never sat 2.7x from any sensible value, so

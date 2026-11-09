@@ -141,3 +141,10 @@ def test_bad_starts_and_underflow_are_rejected():
         kirman.simulate(10, 0.1, 0.5, 5, k0=1.7)        # used to start silently at 1
     with pytest.raises(ValueError, match="too small"):
         kirman.stationary(100, 5e-324, 0.1)              # used to return all NaN
+
+
+# Audit of November 2026, issue 5: N as text gave a TypeError from inside numpy
+@pytest.mark.parametrize("N", ["10", None, True, 10 + 0j])
+def test_N_that_is_not_a_number_gives_a_clear_error(N):
+    with pytest.raises(ValueError, match="N must be"):
+        kirman.check(N, 0.1, 0.5)

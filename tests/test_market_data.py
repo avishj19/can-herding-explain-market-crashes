@@ -183,3 +183,17 @@ def test_every_file_ends_on_the_same_fixed_day():
         assert data.load_prices(f).index[-1] == end, f.name
     months = data.pd.read_csv(data.DATA / "us_recessions_monthly.csv", parse_dates=[0])
     assert months.iloc[-1, 0] == end.to_period("M").to_timestamp()
+
+
+# Audit of November 2026, issue 4: three broken files that used to slip through or give a
+# confusing error (inf passed "> 0"; text gave TypeError; no Close column gave KeyError)
+@pytest.mark.parametrize("body, words", [
+    ("Date,Close\n2020-01-02,100\n2020-01-03,inf\n", "finite"),
+    ("Date,Close\n2020-01-02,100\n2020-01-03,abc\n", "number"),
+    ("Date,Price\n2020-01-02,100\n", "Close"),
+    ("Close\n100\n", "Date")])
+def test_load_prices_explains_broken_files(tmp_path, body, words):
+    f = tmp_path / "broken.csv"
+    f.write_text(body)
+    with pytest.raises(ValueError, match=words):
+        data.load_prices(f)

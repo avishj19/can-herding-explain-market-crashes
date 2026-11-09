@@ -492,3 +492,44 @@ def test_absurd_tick_rates_are_a_runaway_not_a_hang():
     # noise 1e20 asks for ~1e22 ticks in one step; numba's Poisson draw would loop forever
     with pytest.raises(model.RunawayError):
         model.simulate(settings(sigma_mu=1e20), 5, seed=1)
+
+
+# ------------------------------------------------------------------ audit of November 2026
+# Issue 2: numpy counts complex numbers as numbers, so they slipped through every check
+# (sigma_mu = 0.05+0.3j ran with the 0.3j silently dropped; a complex dt crashed with TypeError).
+
+@pytest.mark.parametrize("key", ["sigma_mu", "dt", "N", "a1"])
+@pytest.mark.parametrize("value", [np.complex128(0.05 + 0.3j), np.complex128(1 + 0j), 1 + 0j])
+def test_complex_settings_are_rejected(key, value):
+    with pytest.raises(ValueError, match="finite number"):
+        model.check(settings(**{key: value}))
+
+
+@pytest.mark.parametrize("breakers", [
+    dict(levels=(0.1, 0.2, np.complex128(0.3)), halt_minutes=15),
+    dict(levels=(0.1, 0.2, 0.3), halt_minutes=np.complex128(15)),
+    dict(levels=(0.1, 0.2, 0.3), halt_minutes=15, last_pause_minute=1j)])
+def test_complex_breaker_rules_are_rejected(breakers):
+    with pytest.raises(ValueError):
+        model.check_breakers(breakers)
+
+
+def test_complex_shock_is_rejected():
+    with pytest.raises(ValueError, match="shock"):
+        model.check_shocks({2: np.complex128(0.1)}, 10)
+
+
+# Issue 5: levels that are not a list gave "'float' object is not iterable"
+@pytest.mark.parametrize("levels", [0.1, None, "0.1 0.2 0.3"])
+def test_breaker_levels_that_are_not_a_list_give_a_clear_error(levels):
+    with pytest.raises(ValueError, match="levels"):
+        model.check_breakers(dict(levels=levels, halt_minutes=15))
+
+
+# Issue 9: check_breakers and check_shocks on their own, valid input included
+def test_check_breakers_and_check_shocks_accept_valid_rules():
+    assert model.check_breakers(None) is None
+    assert model.check_breakers(model.US_BREAKERS) is None
+    assert model.check_breakers(dict(levels=[0.01, 0.02, 0.99], halt_minutes=390, last_pause_minute=0)) is None
+    assert model.check_shocks(None, 5) is None
+    assert model.check_shocks({0: -0.99, 4: 2.0, np.int64(3): 0}, 5) is None

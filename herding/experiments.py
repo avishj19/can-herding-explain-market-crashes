@@ -42,18 +42,30 @@ def returns(p, seeds, days, chartists=True, pool=None):
     return [h["r"] for h in out]
 
 
+def finite_1d(x, name):
+    """x as a 1-D float array; reject NaN/inf (they would turn into a quiet wrong answer)."""
+    x = np.asarray(x, dtype=float)
+    if x.ndim != 1:
+        raise ValueError(f"{name} must be one list of numbers (1-D), got shape {x.shape}")
+    if not np.all(np.isfinite(x)):
+        raise ValueError(f"{name} contain NaN or infinity")
+    return x
+
+
 def percentile(value, sims):
     """Where a real value sits among simulated ones, from 0 to 100: the share of
     simulations below it, counting ties as half. 50 = typical; near 0 or 100 = unusual."""
-    sims = np.asarray(sims, dtype=float)
+    sims = finite_1d(sims, "simulated values")
     if sims.size == 0:
         raise ValueError("need at least one simulated value")
+    if not np.isfinite(value):
+        raise ValueError(f"the real value must be a finite number, got {value}")
     return float(100 * (np.mean(sims < value) + 0.5 * np.mean(sims == value)))
 
 
 def worst_fall(r, k):
     """Largest fall over any k consecutive days, as a positive log return."""
-    r = np.asarray(r, dtype=float)
+    r = finite_1d(r, "returns")
     if isinstance(k, bool) or int(k) != k or not 1 <= k <= len(r):
         raise ValueError(f"k must be a whole number between 1 and {len(r)}, got {k}")
     k = int(k)

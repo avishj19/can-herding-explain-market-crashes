@@ -174,3 +174,12 @@ def test_documents_give_the_crowded_overshoot_with_its_sample_size_and_interval(
 def test_scaled_breakers_keeps_the_3_25_pm_cutoff():
     rules, _ = policy.scaled_breakers(0.02, 0.01)
     assert rules["last_pause_minute"] == 355 and rules["halt_minutes"] == 15
+
+
+# Audit of November 2026, issue 3: NaN used to give (nan, nan, nan) without an error
+@pytest.mark.parametrize("f", [policy.paired_difference, policy.median_overshoot])
+@pytest.mark.parametrize("a, b", [([1.0, np.nan, 3.0], [1.0, 2.0, 2.0]),
+                                  ([1.0, 2.0, 3.0], [1.0, 2.0])])
+def test_bootstrap_helpers_reject_nan_and_unequal_lengths(f, a, b):
+    with pytest.raises(ValueError):
+        f(a, b)

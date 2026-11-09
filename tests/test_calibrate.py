@@ -319,3 +319,29 @@ def test_paper_fit_tolerances_are_not_called_the_papers_error_bars():
         assert "units of the paper's error bars" not in text
         for bar in ("0.077", "0.003", "0.010"):
             assert bar in text, f"{doc.name} should give the paper's error bar {bar}"
+
+
+# Audit of November 2026, issue 7: an unknown kind used to suggest the invalid command
+# "python3 -m herding.calibrate nasdaq"
+@pytest.mark.parametrize("kind", ["nasdaq", "", "SPX", None])
+def test_load_rejects_an_unknown_kind_and_names_the_choices(kind):
+    with pytest.raises(ValueError, match="paper.*spx"):
+        calibrate.load(kind)
+
+
+# parse_args only reads the arguments: a test of the command line must never start a
+# real fit (an earlier version of this test ran "spx --refine" for real and re-saved
+# settings/sp500_calibrated.json).
+@pytest.mark.parametrize("argv", [[], ["nasdaq"], ["paper", "--draws"], ["paper", "--draws", "0"],
+                                  ["paper", "--draws", "abc"], ["spx", "--draws", "-5"],
+                                  ["spx", "--refine", "--draws", "5"]])
+def test_cli_rejects_bad_arguments(argv):
+    with pytest.raises(SystemExit, match="usage"):
+        calibrate.parse_args(argv)
+
+
+@pytest.mark.parametrize("argv, want", [(["paper"], ("paper", False, 1200)),
+                                        (["spx", "--draws", "3000"], ("spx", False, 3000)),
+                                        (["spx", "--refine"], ("spx", True, 1200))])
+def test_cli_reads_good_arguments(argv, want):
+    assert calibrate.parse_args(argv) == want

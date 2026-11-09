@@ -30,10 +30,18 @@ def load_prices(path):
     if not path.exists():
         raise FileNotFoundError(f"{path} not found. Download every data file with: "
                                 f"python3 data/download_market_data.py")
+    missing = {"Date", "Close"} - set(pd.read_csv(path, nrows=0).columns)
+    if missing:
+        raise ValueError(f"{path}: needs a Date and a Close column, missing {sorted(missing)}")
     df = pd.read_csv(path, parse_dates=["Date"], index_col="Date")
-    close = df["Close"]
-    if close.isna().any() or not (close > 0).all():
-        raise ValueError(f"{path}: every Close price must be positive (found NaN or <= 0)")
+    close = pd.to_numeric(df["Close"], errors="coerce")       # text -> NaN
+    if close.isna().any():
+        raise ValueError(f"{path}: every Close price must be a number (found a blank or text)")
+    if not np.isfinite(close).all():
+        raise ValueError(f"{path}: every Close price must be finite (found inf)")
+    if not (close > 0).all():
+        raise ValueError(f"{path}: every Close price must be positive (found <= 0)")
+    df["Close"] = close
     if not df.index.is_monotonic_increasing or df.index.duplicated().any():
         raise ValueError(f"{path}: dates must be sorted and unique")
     return df

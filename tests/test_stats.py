@@ -48,6 +48,27 @@ def test_kurtosis_constant_input_is_rejected():
         stats.kurtosis(np.ones(50))
 
 
+# A constant like 0.0123 is the hard case: its mean is not exactly 0.0123 in floating
+# point, so the computed sd is tiny (about 1e-18) instead of 0. np.ones() above has an
+# exact mean and cannot catch that (audit of November 2026: kurtosis gave -2.0, hurst -0.47).
+@pytest.mark.parametrize("value", [0.0123, -1.49256087, 1e-7, 3.3])
+@pytest.mark.parametrize("n", [501, 1000, 5000])
+@pytest.mark.parametrize("name, measure", [
+    ("standardize", stats.standardize), ("kurtosis", stats.kurtosis), ("ccdf", stats.ccdf),
+    ("acf", lambda r: stats.acf(r, [1])), ("dfa", lambda r: stats.dfa(r, (16, 32, 64))),
+    ("hurst", lambda r: stats.hurst(r, (16, 32, 64))), ("fingerprint", stats.fingerprint)])
+def test_every_spread_measure_rejects_any_constant(value, n, name, measure):
+    with pytest.raises(ValueError, match="constant"):
+        measure(np.full(n, value))
+
+
+def test_tiny_but_varying_returns_are_still_measured():
+    # The other side of the boundary: returns of size 1e-100 do vary, so they must
+    # NOT be called constant, and kurtosis must not care about the scale.
+    r = np.random.default_rng(0).standard_normal(5000)
+    assert stats.kurtosis(r * 1e-100) == pytest.approx(stats.kurtosis(r), abs=1e-9)
+
+
 # -------------------------------------------------------------- hill_alpha
 # Spec: for |r| with a Pareto tail P(|r|>x) ~ x^-alpha, return about alpha.
 
@@ -361,3 +382,9 @@ def test_inputs_that_used_to_give_silent_nonsense_are_rejected():
         stats.kurtosis(1e200 * x)                   # used to give -3.0
     with pytest.raises(ValueError, match="whole numbers"):
         stats.acf(x, True)                          # used to be read as lag 1
+
+
+# Audit of November 2026, issue 6: dfa with no window sizes returned two empty arrays
+def test_dfa_needs_at_least_one_window_size():
+    with pytest.raises(ValueError, match="window"):
+        stats.dfa(np.random.default_rng(0).standard_normal(1000), ())

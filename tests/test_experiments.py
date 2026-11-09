@@ -59,3 +59,18 @@ def test_worst_fall_needs_a_whole_number_of_days():
     assert experiments.worst_fall(r, 2.0) == experiments.worst_fall(r, 2)
     with pytest.raises(ValueError, match="whole number"):
         experiments.worst_fall(r, 2.5)
+
+
+# Audit of November 2026, issue 3: NaN used to come out as a quiet answer
+# (percentile(nan, [1, 2, 3]) was 0.0, which reads as "below every history").
+@pytest.mark.parametrize("value, sims", [(np.nan, [1, 2, 3]), (1.0, [1, np.nan, 3]),
+                                         (np.inf, [1, 2, 3]), (1.0, [[1, 2], [3, 4]])])
+def test_percentile_rejects_nan_and_not_1d(value, sims):
+    with pytest.raises(ValueError):
+        experiments.percentile(value, sims)
+
+
+@pytest.mark.parametrize("r", [[np.nan, 1.0], [1.0, np.inf], [[1.0, 2.0]]])
+def test_worst_fall_rejects_nan_and_not_1d(r):
+    with pytest.raises(ValueError):
+        experiments.worst_fall(r, 1)
