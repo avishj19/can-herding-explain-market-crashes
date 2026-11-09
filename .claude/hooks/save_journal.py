@@ -43,7 +43,14 @@ SECRET_PATTERN = re.compile(
     r"(sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
     r"|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[abprs]-[A-Za-z0-9-]{10,}"
     r"|-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----"
-    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----)",
+    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"
+    # email addresses (personal info; Claude Code puts the user's email in each session's
+    # context). The name before @ starts and ends with a letter or digit, and starts
+    # either after an escaped newline/tab (\n, \t, \r in the saved JSON) or after a
+    # character that cannot be part of it. So "\n@pytest.mark.slow" (JSON for a newline
+    # then a decorator), "+@pytest.mark.slow" (a diff line) and "react@18.3.1" are left alone.
+    r"|(?:(?<=\\[ntr])|(?<![\\A-Za-z0-9._%+-]))"
+    r"[A-Za-z0-9](?:[A-Za-z0-9._%+-]*[A-Za-z0-9])?@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})",
     re.DOTALL,
 )
 
@@ -62,6 +69,21 @@ def copy_if_changed(source: Path, destination: Path) -> int:
     destination.write_text(scrub(text), encoding="utf-8")
     os.utime(destination, (source_time, source_time))
     return 1
+
+
+def scrub_existing(journal: Path) -> int:
+    """Clean journal files already saved, including old sessions whose original log is
+    gone (copy_if_changed only revisits files that still have a source). Keeps each
+    file's time, so copy_if_changed still sees it as up to date."""
+    cleaned = 0
+    for path in sorted(journal.glob("*.jsonl")) + sorted(journal.glob("codex/*.jsonl")):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if SECRET_PATTERN.search(text):
+            stat = path.stat()
+            path.write_text(scrub(text), encoding="utf-8")
+            os.utime(path, (stat.st_atime, stat.st_mtime))
+            cleaned += 1
+    return cleaned
 
 
 def copy_claude_logs(source: Path, journal: Path) -> int:
@@ -216,6 +238,7 @@ def main() -> None:
     journal.mkdir(exist_ok=True)
     copied_count = copy_claude_logs(claude_log_folder(read_hook_input(), project), journal)
     copied_count += copy_codex_logs(project, journal)
+    scrub_existing(journal)
     write_all_readable(journal)
     print(f"save_journal: {copied_count} session log(s) updated in {journal}")
 

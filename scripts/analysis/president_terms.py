@@ -16,7 +16,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import numpy as np
-import pandas as pd
 
 from herding import calibrate, experiments, market_data, politics, stats
 
@@ -24,8 +23,6 @@ Y = politics.DAYS_PER_YEAR
 MIN_HILL = 1000                  # the tail exponent only for terms this long
 KEYS = ("ret", "vol", "kurt", "worst1", "worst20", "crash", "alpha")
 WILD_HIGH = dict(vol=True, kurt=True, worst1=True, worst20=True, crash=True, alpha=False)
-# falls in the 1930s undone the next day: suspected bad closes, not checked against another source
-SUSPECT = ("1935-04-16", "1935-05-16", "1935-08-16", "1936-09-16", "1938-10-10")
 
 
 def measures(seg, mu, sd):
@@ -99,13 +96,8 @@ def main(days=None, n=40):
     kinds = [w for r in rows for w in r["kinds"]]
     print(f"kinds of flag: wild {kinds.count('wild')}, calm {kinds.count('calm')}, "
           f"return {kinds.count('ret-high') + kinds.count('ret-low')}")
-    for r, sims in zip(rows, sims_of):
-        if r["name"] == "Roosevelt":           # how much the suspect 1930s closes matter
-            i = s.index.get_indexer(pd.DatetimeIndex(SUSPECT))
-            y = x.copy()
-            y[np.concatenate([i, i + 1])] = 0.0
-            print(f"Roosevelt without the {len(SUSPECT)} suspect days: flags "
-                  f"{flags(measures(y[r['a']:r['b']], mu, sd), sims)[1]} (with them: {r['flags']})")
+    # (the 1930s closes once suspected here are now checked against the Dow and left out
+    # by market_data.returns: BAD_CLOSES)
 
 
 if __name__ == "__main__":

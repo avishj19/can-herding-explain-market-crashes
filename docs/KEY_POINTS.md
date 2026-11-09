@@ -175,7 +175,7 @@ history-by-history numbers are the ones above).
 **12. Political parties (an extension, Fig 12): a return gap, but no difference in
 crashes.** Since 1928 the S&P has returned 6.8% a year more under Democratic presidents (the
 "presidential puzzle"). Is that more than luck? Slide the party calendar along the real returns
-to make fake calendars: the real gap beats 98% of them, which is borderline with only 13 changes
+to make fake calendars: the real gap beats 97% of them, which is borderline with only 12 changes
 of party. Volatility, fat tails and crash days show no party difference. The model, which has
 no politics, can't produce the return gap, but it is a poor yardstick for averages, because its
 returns reverse from day to day. *How to read:* each dot is what luck alone gives, and the black
@@ -184,11 +184,11 @@ line is the real S&P. A line far outside the dots means the difference is unlike
 **12b. Term by term, the model's misses follow the era, not the party** (RESULTS.md,
 "Fig 12b"). Each of the 18 presidencies since 1928 was checked on its own against 40 model
 histories cut at the same days. Republicans have more "flags" (measures the model can't
-explain): 2.1 per term against 1.0. But shuffling the party labels gives a gap that big 24% of
+explain): 2.1 per term against 1.25. But shuffling the party labels gives a gap that big 37% of
 the time, and Hoover and Bush 2001 alone carry 11 of the 21. The misses fall into three kinds,
 each with both parties in it. **Long crises** (Hoover, Roosevelt, Bush 2001) are wilder than any
 model history. **Calm decades** (Eisenhower, Kennedy, Johnson, Nixon) are quieter. And there
-are **single shock days in calm markets** (1946, 1962, 1987, 2025). So herding makes wild and
+are **single shock days in calm markets** (1962, 1987, 2025). So herding makes wild and
 calm spells, but they don't last as long as real ones, and a sudden outside shock is not
 something it produces.
 

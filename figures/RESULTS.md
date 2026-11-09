@@ -328,29 +328,35 @@ value), next to a placebo (the same history without the surprise: ordinary wobbl
 ## Fig 12 — Political parties (an extension, not in the paper)
 [`fig12_political_parties.png`](fig12_political_parties.png). Code in `herding/politics.py`; the
 numbers below come from `python3 scripts/analysis/president_party_gap.py`. The president's party is taken from inauguration
-dates (13 changes of party from 1928 to 2026). The "presidential puzzle" (Santa-Clara &
+dates (12 changes of party from 1928 to 2026). The "presidential puzzle" (Santa-Clara &
 Valkanov 2003; Pástor & Veronesi 2020) says US stocks return more under Democratic presidents,
 with no matching difference in risk.
+
+The 1928 file has 11 wrong closes (a 3–10% "move" undone the next day while the Dow barely
+moved, e.g. 1935-04-16: S&P −10.0%, Dow +0.4%). They were found by checking every day from 1928
+to 1952 against the Dow Jones average (MeasuringWorth) and are left out when the data is loaded
+(`market_data.BAD_CLOSES`, November 2026). The numbers below are from after that fix.
 
 The model has no politics in it, so it can serve as a yardstick for luck. Every gap is
 measured in units of the series' own daily sd, so that markets of different volatility can be
 compared. Two yardsticks:
 - **the model:** 40 S&P-calibrated histories, cut at the real inauguration dates;
 - **the real returns with the party calendar slid along:** whole quarters, at least a year away
-  from the real calendar (387 fake calendars for 1928–, 299 for 1950–). This keeps the market's own
+  from the real calendar (386 fake calendars for 1928–, 299 for 1950–). This keeps the market's own
   calm and wild spells.
 
 | S&P 500 | 1928–2026 | 1950–2026 |
 |---|---|---|
 | Return gap, Democrats − Republicans | **+6.8% a year** | +5.3% a year |
-| ... percentile among shifted calendars / model | **98% / 100%** | 95% / 100% |
-| Volatility D ÷ R | 0.88 (32% / 15%) | 0.86 (13% / 10%) |
-| Fat tails (kurtosis) D − R | −9.5 (24% / 12%) | −28 (13% / 0%) |
-| Crash days (below −4 sd) per 1,000, D − R | −2.2 (29% / 15%) | −1.6 (27% / 22%) |
+| ... percentile among shifted calendars / model | **97% / 100%** | 95% / 100% |
+| Volatility D ÷ R | 0.87 (26% / 10%) | 0.86 (13% / 10%) |
+| Fat tails (kurtosis) D − R | −11.2 (20% / 10%) | −28 (13% / 0%) |
+| Crash days (below −4 sd) per 1,000, D − R | −2.2 (30% / 15%) | −1.6 (27% / 22%) |
 
 - **The return gap is real but borderline.** Against the fair yardstick (shifted calendars) it
-  sits at the 95th–98th percentile. With only 13 changes of party, a few eras carry much of it:
-  leaving out 1929–1932 (Hoover) shrinks it to 3.7% a year, and leaving out 2008 (Bush) as well
+  sits at the 95th–97th percentile. With only 12 changes of party, a few eras carry much of it:
+  leaving out the years 1929–1932 (the crash, under Hoover) shrinks it to 3.7% a year (leaving out
+  exactly Hoover's term, March 1929 to March 1933: 3.1%), and leaving out 2008 (Bush) as well
   shrinks it to 2.4%.
 - **The model is the wrong yardstick for average returns.** Its returns reverse from day to day
   (H 0.39, the miss in Fig 7), so its long-run averages wobble too little, and every real gap
@@ -373,21 +379,22 @@ days. For seven measures we find the S&P's **percentile**, the share of historie
 model does not explain it.
 
 **Luck check.** Letting each model history play the S&P against the other 39 gives 0.63 flags
-per term, a median of 10 over 18 terms (95th percentile 19). The S&P gets **29**, reached by
+per term, a median of 10 over 18 terms (95th percentile 20). The S&P gets **31**, reached by
 only 2% of luck runs. So some misses are real.
 
-**By party.** Democrats: 8 flags in 8 terms (1.00 per term). Republicans: 21 in 10 (2.10). If we
-shuffle the party labels over the 18 terms, a gap this big turns up 24% of the time (36%
+**By party.** Democrats: 10 flags in 8 terms (1.25 per term). Republicans: 21 in 10 (2.10). If we
+shuffle the party labels over the 18 terms, a gap this big turns up 37% of the time (39%
 without the return measure), so it may well be luck. Hoover (5) and Bush 2001 (6) give 11 of
 the 21 Republican flags; without them Republicans have 1.25 per term.
 
 **By kind of event.** Three groups, each with both parties in it:
-- *Long crises, too wild:* Hoover, Roosevelt, Bush 2001. Hoover had 36 crash days; no model
+- *Long crises, too wild:* Hoover, Roosevelt, Bush 2001. Hoover had 37 crash days; no model
   history had more than 8 over the same days.
 - *Calm eras, too quiet:* Eisenhower, Kennedy, Johnson, Nixon (volatility percentile 0–2). All
   6 "too calm" flags fall in 1946–1980; only 1 of the 19 "too wild" flags does.
-- *One shock day in a calm term:* 1946 (Truman), 1962 (Kennedy), 1987 (Reagan, a 20.5% fall in
-  a day), 2025 (Trump): kurtosis at the 95th–100th percentile.
+- *One shock day in a calm term:* 1962 (Kennedy), 1987 (Reagan, a 20.5% fall in a day), 2025
+  (Trump): kurtosis at the 95th–100th percentile. (Truman's 1946 "shock" was a wrong close: with
+  it left out his kurtosis falls from 12.9 to 7.0 and his term has no flags.)
 
 **What it means.** The misses follow the era and the kind of event, not the party. Herding
 makes calm and wild spells, but they don't last long enough: the real market stayed wild for
@@ -396,10 +403,10 @@ outside news; the model's news is a mild bell curve, so its big days come from h
 
 **Limitations.** Only 40 histories, so percentiles move in steps of 2.5. The model's returns
 reverse a little from day to day (H 0.39, Fig 7), so its multi-year returns spread too little
-and return flags come too easily. Terms run from 291 to 3,023 days; long terms show misses more
-easily. The Yahoo data probably has bad closes: 1935-04-16 (−10.5%, undone the next day) and
-four similar 1935–1938 days, unchecked against another source. Removing all five takes away
-Roosevelt's volatility flag; its kurtosis and crash-day flags stay.
+and return flags come too easily. Terms run from 291 to 3,015 days; long terms show misses more
+easily. Flags sit close to the 5/95 lines: leaving out the 11 wrong closes (Fig 12) moved Clinton's
+and Obama's returns from the 95th to the 98th percentile (two new flags), because every model
+history is rescaled to the whole series' spread, which the wrong closes had inflated.
 
 Table: S&P value (percentile among the 40). Falls are price falls over 1 or 20 trading days.
 Crash days: below mean − 4 sd. α: Hill tail exponent, terms of 1,000+ days only (smaller =
@@ -407,24 +414,24 @@ fatter tails).
 
 | Term | Party | Years | Days | Return/yr | Volatility | Kurtosis | Worst day | Worst 20 days | Crash days | α | Flags |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| Coolidge | R | 1928–1929 | 291 | +32.9% (100) | 15.2% (42) | 1.7 (80) | 3.8% (68) | 10.3% (62) | 0 (39) | — | **1** |
-| Hoover | R | 1929–1933 | 1,003 | −37.4% (0) | 41.5% (100) | 3.1 (72) | 12.9% (100) | 42.2% (100) | 36 (100) | 3.16 (15) | **5** |
-| Roosevelt | D | 1933–1945 | 3,023 | +7.3% (70) | 25.4% (100) | 9.5 (98) | 10.0% (85) | 26.1% (95) | 31 (98) | 2.57 (8) | **3** |
-| Truman | D | 1945–1953 | 1,938 | +8.0% (82) | 14.5% (10) | 12.9 (100) | 9.9% (92) | 19.3% (75) | 3 (54) | 2.59 (5) | **1** |
-| Eisenhower | R | 1953–1961 | 2,016 | +10.4% (75) | 11.3% (2) | 6.5 (90) | 6.6% (55) | 9.3% (5) | 1 (30) | 3.26 (35) | **1** |
-| Kennedy | D | 1961–1963 | 715 | +6.4% (45) | 12.2% (0) | 13.5 (100) | 6.7% (90) | 15.5% (85) | 1 (72) | — | **2** |
-| Johnson | D | 1963–1969 | 1,271 | +7.0% (60) | 8.9% (0) | 4.4 (80) | 2.8% (2) | 9.5% (8) | 0 (18) | 3.61 (38) | **2** |
-| Nixon | R | 1969–1974 | 1,401 | −4.0% (0) | 13.0% (0) | 2.2 (48) | 3.1% (2) | 13.9% (55) | 0 (19) | 3.79 (48) | **3** |
-| Ford | R | 1974–1977 | 619 | +9.8% (68) | 16.3% (50) | 1.4 (60) | 3.7% (52) | 14.5% (82) | 0 (35) | — | **0** |
-| Carter | D | 1977–1981 | 1,009 | +6.4% (52) | 12.6% (5) | 1.5 (55) | 3.0% (5) | 13.0% (50) | 0 (25) | 4.47 (68) | **0** |
-| Reagan | R | 1981–1989 | 2,024 | +9.4% (82) | 18.0% (42) | 86.9 (100) | 20.5% (98) | 29.6% (95) | 5 (70) | 3.00 (18) | **2** |
-| Bush | R | 1989–1993 | 1,011 | +10.4% (75) | 13.4% (5) | 4.3 (78) | 6.1% (72) | 13.7% (60) | 1 (49) | 3.65 (45) | **0** |
-| Clinton | D | 1993–2001 | 2,021 | +14.0% (95) | 15.7% (18) | 5.3 (80) | 6.9% (57) | 13.9% (40) | 3 (46) | 3.77 (48) | **0** |
-| Bush | R | 2001–2009 | 2,009 | −5.7% (0) | 21.5% (98) | 9.9 (100) | 9.0% (90) | 28.2% (100) | 14 (99) | 2.49 (0) | **6** |
-| Obama | D | 2009–2017 | 2,015 | +12.2% (95) | 17.3% (52) | 4.7 (80) | 6.7% (70) | 22.1% (90) | 5 (75) | 3.34 (30) | **0** |
+| Coolidge | R | 1928–1929 | 291 | +32.9% (100) | 15.2% (45) | 1.7 (80) | 3.8% (68) | 10.3% (65) | 0 (39) | — | **1** |
+| Hoover | R | 1929–1933 | 1,001 | −37.4% (0) | 41.2% (100) | 3.2 (75) | 12.9% (100) | 42.2% (100) | 37 (100) | 3.10 (12) | **5** |
+| Roosevelt | D | 1933–1945 | 3,015 | +7.3% (60) | 24.3% (98) | 9.1 (98) | 9.1% (78) | 26.1% (98) | 31 (98) | 2.93 (15) | **4** |
+| Truman | D | 1945–1953 | 1,937 | +8.0% (80) | 14.2% (10) | 7.0 (90) | 7.1% (68) | 20.0% (75) | 4 (65) | 2.64 (8) | **0** |
+| Eisenhower | R | 1953–1961 | 2,016 | +10.4% (75) | 11.3% (2) | 6.5 (90) | 6.6% (57) | 9.3% (5) | 1 (30) | 3.26 (28) | **1** |
+| Kennedy | D | 1961–1963 | 715 | +6.4% (48) | 12.2% (0) | 13.5 (100) | 6.7% (90) | 15.5% (85) | 1 (72) | — | **2** |
+| Johnson | D | 1963–1969 | 1,271 | +7.0% (57) | 8.9% (0) | 4.4 (78) | 2.8% (2) | 9.5% (8) | 0 (18) | 3.61 (38) | **2** |
+| Nixon | R | 1969–1974 | 1,401 | −4.0% (0) | 13.0% (2) | 2.2 (48) | 3.1% (2) | 13.9% (57) | 0 (19) | 3.79 (45) | **3** |
+| Ford | R | 1974–1977 | 619 | +9.8% (68) | 16.3% (55) | 1.4 (65) | 3.7% (52) | 14.5% (82) | 0 (35) | — | **0** |
+| Carter | D | 1977–1981 | 1,009 | +6.4% (52) | 12.6% (5) | 1.5 (48) | 3.0% (5) | 13.0% (52) | 0 (25) | 4.47 (65) | **0** |
+| Reagan | R | 1981–1989 | 2,024 | +9.4% (82) | 18.0% (48) | 86.9 (100) | 20.5% (98) | 29.6% (95) | 5 (70) | 3.00 (18) | **2** |
+| Bush | R | 1989–1993 | 1,011 | +10.4% (72) | 13.4% (5) | 4.3 (78) | 6.1% (72) | 13.7% (60) | 1 (46) | 3.65 (45) | **0** |
+| Clinton | D | 1993–2001 | 2,021 | +14.0% (98) | 15.7% (20) | 5.3 (82) | 6.9% (57) | 13.9% (40) | 3 (46) | 3.77 (55) | **1** |
+| Bush | R | 2001–2009 | 2,009 | −5.7% (0) | 21.5% (98) | 9.9 (98) | 9.0% (90) | 28.2% (100) | 14 (99) | 2.49 (2) | **6** |
+| Obama | D | 2009–2017 | 2,015 | +12.2% (98) | 17.3% (57) | 4.7 (80) | 6.7% (70) | 22.1% (92) | 5 (75) | 3.34 (28) | **1** |
 | Trump | R | 2017–2021 | 1,006 | +13.0% (88) | 20.6% (78) | 20.8 (95) | 12.0% (95) | 30.9% (98) | 6 (88) | 2.14 (0) | **2** |
-| Biden | D | 2021–2025 | 1,005 | +11.4% (80) | 16.5% (40) | 1.9 (60) | 4.3% (40) | 12.1% (48) | 0 (20) | 4.00 (50) | **0** |
-| Trump | R | 2025–2026 | 448 | +13.2% (85) | 16.3% (40) | 16.8 (100) | 6.0% (78) | 12.1% (62) | 2 (74) | — | **1** |
+| Biden | D | 2021–2025 | 1,005 | +11.4% (75) | 16.5% (45) | 1.9 (57) | 4.3% (40) | 12.1% (48) | 0 (20) | 4.00 (48) | **0** |
+| Trump | R | 2025–2026 | 448 | +13.2% (88) | 16.3% (42) | 16.8 (100) | 6.0% (78) | 12.1% (65) | 2 (74) | — | **1** |
 
 ## Limitations (honest list)
 1. **Parameters are fitted, not the paper's.** The paper's parameter tables
