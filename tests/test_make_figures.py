@@ -77,7 +77,7 @@ def test_fig6_kirman(tmp_path):
 
 @pytest.mark.slow
 def test_fig8_fig9_fig10_with_the_fitted_settings(tmp_path):
-    if not (calibrate.SETTINGS_DIR / "spx.json").exists():
+    if not calibrate.settings_path("spx").exists():
         pytest.skip("not fitted yet")
     p = calibrate.load("spx")
     with Pool(4) as pool:                        # independent jobs: a real pool is faster

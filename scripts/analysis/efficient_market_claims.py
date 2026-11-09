@@ -5,7 +5,7 @@ The paper (p. 499-500): (1) "a price which on average equals the fundamental val
 fundamentals"; (3) volatility is above average when the share of noise traders is
 high (near a critical value).
 
-Run from the project folder:  python3 scripts/analysis/efficiency_claims.py
+Run from the project folder:  python3 scripts/analysis/efficient_market_claims.py
 """
 import sys
 from pathlib import Path

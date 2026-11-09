@@ -139,9 +139,16 @@ def test_save_then_load_round_trip(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("kind", ["paper", "spx"])
 def test_saved_settings_are_valid(kind):
-    if not (calibrate.SETTINGS_DIR / f"{kind}.json").exists():
+    if not calibrate.settings_path(kind).exists():
         pytest.skip("not fitted yet")
     model.check(calibrate.load(kind))
+
+
+def test_settings_files_have_descriptive_names():
+    assert calibrate.settings_path("paper").name == "paper_matched.json"
+    assert calibrate.settings_path("spx").name == "sp500_calibrated.json"
+    for kind in ("paper", "spx"):
+        assert calibrate.settings_path(kind).exists()     # so the test above never skips
 
 
 def test_saved_file_records_the_seeds_the_fit_really_used(tmp_path, monkeypatch):
@@ -296,7 +303,7 @@ def test_held_out_paper_score_matches_what_the_documents_say():
     fp = calibrate.ensemble(calibrate.load("paper"), calibrate.HELD_OUT_SEEDS[:8], 100_000)
     assert np.mean(fp["H_abs"]) == pytest.approx(0.81, abs=0.005)
     assert calibrate.paper_loss(fp) == pytest.approx(2.0, abs=0.05)
-    saved = json.loads((calibrate.SETTINGS_DIR / "paper.json").read_text())["loss"]
+    saved = json.loads(calibrate.settings_path("paper").read_text())["loss"]
     assert calibrate.paper_loss(fp) > 10 * saved     # far worse than the training score
 
 

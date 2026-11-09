@@ -3,8 +3,8 @@
 Run:  python3 scripts/make_figures.py        (a few minutes with numba, using every core)
 
 Two fitted settings are used (both from python3 -m herding.calibrate):
-    paper-matched  settings/paper.json  reproduces Lux & Marchesi (1999)'s numbers
-    S&P-calibrated settings/spx.json    reproduces the S&P 500's fingerprint
+    paper-matched  settings/paper_matched.json  reproduces Lux & Marchesi (1999)'s numbers
+    S&P-calibrated settings/sp500_calibrated.json    reproduces the S&P 500's fingerprint
 Every model check uses held-out seeds that neither fit ever saw.
 """
 import sys

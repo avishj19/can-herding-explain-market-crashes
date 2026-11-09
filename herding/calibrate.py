@@ -12,8 +12,8 @@ STABILITY_SEEDS and keep the best-scoring one among those with the fewest runawa
 uses the same TRAIN_SEEDS (so two settings are compared on the same luck); checks
 of a fitted model must use other seeds (HELD_OUT_SEEDS).
 
-Run:  python3 -m herding.calibrate paper      -> settings/paper.json
-      python3 -m herding.calibrate spx        -> settings/spx.json
+Run:  python3 -m herding.calibrate paper      -> settings/paper_matched.json
+      python3 -m herding.calibrate spx        -> settings/sp500_calibrated.json
       add --refine to polish the saved settings on all 8 training seeds
       add --draws N to score N random settings in step 1 (default 1200)
 """
@@ -28,6 +28,12 @@ import numpy as np
 from . import market_data, model, stats
 
 SETTINGS_DIR = market_data.ROOT / "settings"
+SETTINGS_FILE = {"paper": "paper_matched.json", "spx": "sp500_calibrated.json"}
+
+
+def settings_path(kind):
+    """Where the fitted settings of one kind ("paper" or "spx") are saved."""
+    return SETTINGS_DIR / SETTINGS_FILE.get(kind, f"{kind}.json")
 BURN = 1000                       # days dropped at the start, so the start does not matter
 TRAIN_SEEDS = tuple(range(100, 108))
 HELD_OUT_SEEDS = tuple(range(1000, 1040))
@@ -372,14 +378,14 @@ def save(kind, loss, p, seeds=None, runaways=None, draws=None):
     if runaways is not None:
         out["stability"] = dict(seeds=[STABILITY_SEEDS[0], STABILITY_SEEDS[-1]],
                                 days=STABILITY_DAYS, runaways=int(runaways))
-    path = SETTINGS_DIR / f"{kind}.json"
+    path = settings_path(kind)
     path.write_text(json.dumps(out, indent=1) + "\n")
     return path
 
 
 def load(kind):
     """Fitted settings saved by `python3 -m herding.calibrate <kind>`."""
-    path = SETTINGS_DIR / f"{kind}.json"
+    path = settings_path(kind)
     if not path.exists():
         raise FileNotFoundError(f"{path} not found; run: python3 -m herding.calibrate {kind}")
     p = json.loads(path.read_text())["settings"]

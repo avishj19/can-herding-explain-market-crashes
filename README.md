@@ -31,7 +31,7 @@ python3 -m pytest tests/ -q -m "not slow"   # quick tests
 python3 -m pytest tests/ -q          # all tests
 python3 -m herding.calibrate paper   # refit to the paper's numbers (add --refine to polish)
 python3 -m herding.calibrate spx     # refit to the S&P 500 (1.5-2.5 hours; rerun to resume if stopped)
-python3 data/download.py             # re-download every data file (ends 2026-10-30)
+python3 data/download_market_data.py             # re-download every data file (ends 2026-10-30)
 ```
 
 The model's equations, each with its source, are in [`docs/SPEC.md`](docs/SPEC.md).

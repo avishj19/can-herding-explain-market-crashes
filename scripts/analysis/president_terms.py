@@ -8,7 +8,7 @@ luck alone gives (each history in turn plays the S&P), whether the parties diffe
 permutation test), and what the flagged terms have in common. RESULTS.md, "Fig 12b".
 Merged from three agents' scripts (November 2026; drafts in scratch/review/party_*).
 
-Run from the project folder:  python3 scripts/analysis/party_terms.py
+Run from the project folder:  python3 scripts/analysis/president_terms.py
 """
 import itertools
 import sys

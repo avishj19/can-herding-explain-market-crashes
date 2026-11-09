@@ -17,7 +17,7 @@ from herding import market_data as data
 
 @pytest.fixture(scope="module")
 def spx():
-    return pd.read_csv(ROOT / "data/spx_daily.csv", parse_dates=["Date"], index_col="Date")
+    return pd.read_csv(ROOT / "data/sp500_daily.csv", parse_dates=["Date"], index_col="Date")
 
 
 def test_spx_clean(spx):
@@ -37,7 +37,7 @@ def test_spx_no_large_gaps(spx):
 
 
 def test_vix_known_peak():
-    vix = pd.read_csv(ROOT / "data/vix_daily.csv", parse_dates=["Date"], index_col="Date")
+    vix = pd.read_csv(ROOT / "data/vix_fear_index_daily.csv", parse_dates=["Date"], index_col="Date")
     # Published record close: 82.69 on 2020-03-16
     assert vix["Close"].idxmax().date().isoformat() == "2020-03-16"
     assert vix["Close"].max() == pytest.approx(82.69, abs=0.01)
@@ -53,7 +53,7 @@ def test_recessions_match_nber():
 
 
 def test_load_spx_missing_file_explains_fix(tmp_path):
-    with pytest.raises(FileNotFoundError, match="data/download.py"):
+    with pytest.raises(FileNotFoundError, match="data/download_market_data.py"):
         data.load_spx(tmp_path / "nope.csv")
 
 
@@ -65,7 +65,7 @@ def test_load_spx_rejects_bad_prices(tmp_path):
 
 
 def test_load_spx_real_file_ok():
-    spx = data.load_spx(ROOT / "data/spx_daily.csv")
+    spx = data.load_spx(ROOT / "data/sp500_daily.csv")
     assert len(spx) > 19000 and spx.index.is_monotonic_increasing
 
 
@@ -170,10 +170,10 @@ def test_unknown_stock_gives_clear_error():
 
 def test_every_file_ends_on_the_same_fixed_day():
     # The old files ended on different days, and their last row was a live
-    # (mid-day) price, not the official close. data/download.py stops every
+    # (mid-day) price, not the official close. data/download_market_data.py stops every
     # series at the same END date.
     import importlib.util
-    spec = importlib.util.spec_from_file_location("download", data.DATA / "download.py")
+    spec = importlib.util.spec_from_file_location("download", data.DATA / "download_market_data.py")
     download = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(download)
     end = data.pd.Timestamp(download.END)

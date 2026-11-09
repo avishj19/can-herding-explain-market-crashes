@@ -26,7 +26,7 @@ def test_main_uses_only_held_out_seeds():
 
 @pytest.mark.slow
 def test_main_runs_end_to_end(tmp_path, capsys):
-    if not (calibrate.SETTINGS_DIR / "spx.json").exists():
+    if not calibrate.settings_path("spx").exists():
         pytest.skip("not fitted yet")
     out = tmp_path / "draft.png"
     real, shown, base = main.main(out=out, seeds=main.SEEDS[:3], days=3000)

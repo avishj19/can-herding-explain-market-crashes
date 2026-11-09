@@ -1,7 +1,7 @@
 """Is the S&P 500 different under Democratic and Republican presidents, and is the gap
 bigger than a model with no politics produces by chance at the same dates?
 
-Run from the project folder:  python3 scripts/analysis/party.py
+Run from the project folder:  python3 scripts/analysis/president_party_gap.py
 """
 import sys
 from pathlib import Path

@@ -42,8 +42,8 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
   - `market_data.py`: loads and checks the files in `data/`
   - `kirman.py`: Kirman's ant model with its exact solution (the herding check from the proposal)
   - `calibrate.py`: two fits (`python3 -m herding.calibrate paper|spx [--draws N] [--refine]`), each ending
-    with a stability screen (100k-day runs on seeds 2000-2019) -> `settings/paper.json`
-    (reproduces the paper's numbers) and `settings/spx.json` (reproduces the S&P 500)
+    with a stability screen (100k-day runs on seeds 2000-2019) -> `settings/paper_matched.json`
+    (reproduces the paper's numbers) and `settings/sp500_calibrated.json` (reproduces the S&P 500)
   - `experiments.py`: many histories in parallel, percentiles, the typical history
   - `policy.py`: extension: circuit breakers and a policy surprise (paired runs), used by Fig 11
   - `politics.py`: extension: the president's party (1923-2026) and its return gap against luck, used by Fig 12
@@ -53,7 +53,7 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
 - `tests/`: one test file per module; `python3 -m pytest tests/ -q` (quick: add `-m "not slow"`)
 - `scripts/analysis/`: scripts behind individual findings (see its README; older versions are in git history)
 - `docs/proposal.pdf`: my project proposal; `docs/course_project_guide.pdf`: the course's project handout
-- `data/`: made by `data/download.py` (all series end 2026-10-30): S&P 500 1950- and 1928- (Yahoo ^GSPC),
+- `data/`: made by `data/download_market_data.py` (all series end 2026-10-30): S&P 500 1950- and 1928- (Yahoo ^GSPC),
   Nasdaq-100 (^NDX, 1985-), `stocks/` (20 large stocks with market beta 0.9-1.1, 2000-), VIX, NBER recessions (FRED USREC)
 - `docs/papers/`: sources. The Lux & Marchesi Nature paper (doi:10.1038/17290) is `docs/papers/LuxMarchesi1999_Nature.pdf`,
   kept locally only (git-ignored: copyrighted, and this repo is public). The equations come from the

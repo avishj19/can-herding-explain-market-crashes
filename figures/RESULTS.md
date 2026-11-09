@@ -14,8 +14,8 @@ Marchesi 2000) is not in hand. So the settings are **fitted**, not copied
 
 | | Fitted to | Score | Key settings |
 |---|---|---|---|
-| **Paper-matched** (orange), `settings/paper.json` | the paper's own numbers: α 2.64, H 0.48, H\|r\| 0.85, back to a bell curve by 25 days | training 0.06 (8 training seeds, 50,000 days); held-out 2.0 (8 held-out seeds, 100,000 days; 1.7 over 40). Squared gaps in units of the project's tolerances (α ± 0.15, H ± 0.03, H\|r\| ± 0.03), which are wider than the paper's error bars (± 0.077, 0.003, 0.010; see below); almost all of the held-out score is H\|r\| | a1 0.54, a2 1.58, a3 2.21, v1 1.91, v2 1.16; chartist push T_c = 0.48, fundamentalist pull T_f = 17.1 |
-| **S&P-calibrated** (blue), `settings/spx.json` | the S&P 500's 11-number fingerprint, 1950–2026 | 2.94 (mean squared gap, in units of the S&P's own uncertainty) | a1 1.08, a2 0.13, a3 0.76, v1 2.02, v2 0.21; T_c = 6.07, T_f = 7.77 |
+| **Paper-matched** (orange), `settings/paper_matched.json` | the paper's own numbers: α 2.64, H 0.48, H\|r\| 0.85, back to a bell curve by 25 days | training 0.06 (8 training seeds, 50,000 days); held-out 2.0 (8 held-out seeds, 100,000 days; 1.7 over 40). Squared gaps in units of the project's tolerances (α ± 0.15, H ± 0.03, H\|r\| ± 0.03), which are wider than the paper's error bars (± 0.077, 0.003, 0.010; see below); almost all of the held-out score is H\|r\| | a1 0.54, a2 1.58, a3 2.21, v1 1.91, v2 1.16; chartist push T_c = 0.48, fundamentalist pull T_f = 17.1 |
+| **S&P-calibrated** (blue), `settings/sp500_calibrated.json` | the S&P 500's 11-number fingerprint, 1950–2026 | 2.94 (mean squared gap, in units of the S&P's own uncertainty) | a1 1.08, a2 0.13, a3 0.76, v1 2.02, v2 0.21; T_c = 6.07, T_f = 7.77 |
 
 The news is the same in both: Gaussian, 0.5% a day, no memory.
 
@@ -194,7 +194,7 @@ The S&P-calibrated model's returns **reverse** a little from day to day
   days.
 - The wildest stretch (a) shows a burst that **ends on its own** when the
   chartist share falls back, as the paper describes.
-- The paper's efficient-market claims (`scripts/analysis/efficiency_claims.py`, 4 × 100,000 days):
+- The paper's efficient-market claims (`scripts/analysis/efficient_market_claims.py`, 4 × 100,000 days):
 
 | Claim | Paper-matched | S&P-calibrated |
 |---|---|---|
@@ -327,7 +327,7 @@ value), next to a placebo (the same history without the surprise: ordinary wobbl
 
 ## Fig 12 — Political parties (an extension, not in the paper)
 [`fig12_political_parties.png`](fig12_political_parties.png). Code in `herding/politics.py`; the
-numbers below come from `python3 scripts/analysis/party.py`. The president's party is taken from inauguration
+numbers below come from `python3 scripts/analysis/president_party_gap.py`. The president's party is taken from inauguration
 dates (13 changes of party from 1928 to 2026). The "presidential puzzle" (Santa-Clara &
 Valkanov 2003; Pástor & Veronesi 2020) says US stocks return more under Democratic presidents,
 with no matching difference in risk.
@@ -365,7 +365,7 @@ compared. Two yardsticks:
 
 ## Fig 12b — Term by term: which presidencies can the model explain? (extension)
 
-Code: `python3 scripts/analysis/party_terms.py` (no figure; merged from three agents' analyses). Fig 12 pooled the
+Code: `python3 scripts/analysis/president_terms.py` (no figure; merged from three agents' analyses). Fig 12 pooled the
 days of each party. Here each of the 18 terms since 1928 is checked on its own: the S&P 500 and
 40 politics-free model histories (rescaled to the S&P's daily sd and mean) are cut at the same
 days. For seven measures we find the S&P's **percentile**, the share of histories below it
@@ -437,10 +437,10 @@ fatter tails).
    (H 0.39 vs 0.50).
 4. **No bounce-back after big days:** after a 3-std day the S&P tends to reverse
    (next-day correlation −0.19). The model doesn't (+0.02; S&P at the 0th
-   percentile, `scripts/analysis/crash_shape.py`). The old model's slow-motion slides
+   percentile, `scripts/analysis/bounce_back_after_big_days.py`). The old model's slow-motion slides
    (+0.31) are gone.
 5. **Stability:** the S&P-calibrated settings run away in 2 of 40 held-out histories
-   of 100,000 days (about 400 years each; `scripts/analysis/stability.py`) and 2 of 20 on
+   of 100,000 days (about 400 years each; `scripts/analysis/long_run_stability.py`) and 2 of 20 on
    the stability-screen seeds. The paper-matched settings: 0 of 40 and 0 of 20.
    (The rejected stability-first refit: 0 of 40, but it lost the fat tails.)
 6. **Long-horizon tails:** the real S&P keeps fat tails at 25 days (kurtosis 3.3);
@@ -453,7 +453,7 @@ fatter tails).
    The paper fit only rejects bubbles that last 250 days, like the finished model,
    which keeps bubbles that burst on their own (SPEC.md, "Runaways").
 9. **The paper-matched results depend on the time step** (found by a stress test,
-   November 2026; `python3 scripts/analysis/dt_check.py paper`, 12 held-out histories of
+   November 2026; `python3 scripts/analysis/time_step_check.py paper`, 12 held-out histories of
    19,329 days, medians):
 
    | dt | kurtosis | tail α (paper's fit) | clustering, 1 day | H of \|returns\| |

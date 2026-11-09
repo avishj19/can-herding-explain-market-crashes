@@ -1,13 +1,13 @@
 """Download every data file this project uses, from the original sources.
 
-    python3 data/download.py            # writes into data/
-    python3 data/download.py OUTDIR     # writes somewhere else (e.g. to compare)
+    python3 data/download_market_data.py            # writes into data/
+    python3 data/download_market_data.py OUTDIR     # writes somewhere else (e.g. to compare)
 
 Sources
     Yahoo Finance (yfinance, auto_adjust=False: split-adjusted, NOT dividend-adjusted)
-        ^GSPC  S&P 500 index        -> spx_daily.csv (1950-), spx_daily_1928.csv (1928-)
-        ^NDX   Nasdaq-100 index     -> ndx_daily.csv (1985-)
-        ^VIX   volatility index     -> vix_daily.csv (1990-)
+        ^GSPC  S&P 500 index        -> sp500_daily.csv (1950-), sp500_daily_from_1928.csv (1928-)
+        ^NDX   Nasdaq-100 index     -> nasdaq100_daily.csv (1985-)
+        ^VIX   volatility index     -> vix_fear_index_daily.csv (1990-)
         20 stocks with market beta 0.9-1.1 (see stocks/README.md) -> stocks/<TICKER>.csv
     FRED (Federal Reserve Bank of St. Louis)
         USREC  NBER recession months -> us_recessions_monthly.csv
@@ -23,10 +23,10 @@ import pandas as pd
 
 END = "2026-10-30"                  # last trading day included (a Friday)
 INDEXES = {                         # file: (ticker, first day)
-    "spx_daily.csv": ("^GSPC", "1950-01-01"),
-    "spx_daily_1928.csv": ("^GSPC", "1927-12-01"),
-    "ndx_daily.csv": ("^NDX", "1985-10-01"),
-    "vix_daily.csv": ("^VIX", "1990-01-01"),
+    "sp500_daily.csv": ("^GSPC", "1950-01-01"),
+    "sp500_daily_from_1928.csv": ("^GSPC", "1927-12-01"),
+    "nasdaq100_daily.csv": ("^NDX", "1985-10-01"),
+    "vix_fear_index_daily.csv": ("^VIX", "1990-01-01"),
 }
 STOCK_START = "2000-01-01"
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=USREC"

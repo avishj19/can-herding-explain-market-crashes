@@ -1,6 +1,6 @@
 """Real-market data, loaded with checks so a bad file fails loudly.
 
-All files come from data/download.py and end on the same day (2026-10-30).
+All files come from data/download_market_data.py and end on the same day (2026-10-30).
 
 Markets (daily closes from Yahoo Finance):
     spx       S&P 500, 1950-today   (the calibration target)
@@ -17,8 +17,8 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent      # the project folder
 DATA = ROOT / "data"
-SPX = DATA / "spx_daily.csv"
-MARKETS = {"spx": SPX, "spx_1928": DATA / "spx_daily_1928.csv", "ndx": DATA / "ndx_daily.csv"}
+SPX = DATA / "sp500_daily.csv"
+MARKETS = {"spx": SPX, "spx_1928": DATA / "sp500_daily_from_1928.csv", "ndx": DATA / "nasdaq100_daily.csv"}
 STOCKS = DATA / "stocks"
 BLACK_MONDAY = pd.Timestamp("1987-10-19")
 
@@ -29,7 +29,7 @@ def load_prices(path):
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"{path} not found. Download every data file with: "
-                                f"python3 data/download.py")
+                                f"python3 data/download_market_data.py")
     df = pd.read_csv(path, parse_dates=["Date"], index_col="Date")
     close = df["Close"]
     if close.isna().any() or not (close > 0).all():

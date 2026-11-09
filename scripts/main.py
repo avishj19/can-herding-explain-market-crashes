@@ -1,7 +1,7 @@
 """Can herding explain market crashes? The Lux-Marchesi model vs the S&P 500.
 
 Run:  python3 scripts/main.py    -> prints the comparison table, saves figures/fig00_quick_check_sp500_vs_model.png
-Uses the S&P-calibrated settings (settings/spx.json) and held-out seeds only.
+Uses the S&P-calibrated settings (settings/sp500_calibrated.json) and held-out seeds only.
 """
 import sys
 from pathlib import Path

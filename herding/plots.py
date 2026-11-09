@@ -124,4 +124,4 @@ def comparison(real, model_r, z, no_chartists, path):
     a.set_xlabel("day")
     fig.tight_layout(rect=(0, 0.04, 1, 0.95))
     return save(fig, path, "S&P 500 vs the herding model",
-                "Model settings fitted to the S&P 500 (settings/spx.json); one held-out history shown.")
+                "Model settings fitted to the S&P 500 (settings/sp500_calibrated.json); one held-out history shown.")

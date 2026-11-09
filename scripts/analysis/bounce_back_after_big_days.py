@@ -3,7 +3,7 @@
 For every day that moves more than 3 standard deviations, correlate its return with
 the next day's. The old model (before the rebuild) gave +0.31 vs the S&P's -0.19.
 
-Run from the project folder:  python3 scripts/analysis/crash_shape.py
+Run from the project folder:  python3 scripts/analysis/bounce_back_after_big_days.py
 """
 import sys
 from pathlib import Path

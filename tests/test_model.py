@@ -297,7 +297,7 @@ def test_runaway_bubble_is_stopped_and_reported():
 def test_a_bubble_that_bursts_on_its_own_is_kept():
     """S&P-like settings, seed 1038: the price reaches 7x its value for a few days
     and then returns. That is the paper's mechanism, not a runaway."""
-    # the S&P-calibrated settings (settings/spx.json), copied so this test stands alone
+    # the S&P-calibrated settings (settings/sp500_calibrated.json), copied so this test stands alone
     p = settings(v1=1.3765469570480833, v2=0.26765417701072036, a1=0.4055088690417696, a2=1.1061772057289063, a3=0.43885072878839954, tc=0.0013005916669113352, gamma=0.004258471901282281, beta=1.1109772899398405, sigma_mu=0.0419025394459388, sigma_eps=0.0051115116615288465)
     o = model.simulate(p, 6000, seed=1038)
     gap = o["lp"] - o["lf"]
@@ -323,7 +323,7 @@ def test_matches_golden_output():
     (November 2026). If this fails, the model's behaviour changed: check whether
     that was intended, and only then save a new golden file."""
     from conftest import ROOT
-    gold = np.load(ROOT / "tests" / "golden_v3.npz")
+    gold = np.load(ROOT / "tests" / "model_reference_output_v3.npz")
     o = model.simulate(BASE, 300, seed=0)
     for k in ("lp", "lf", "z", "x"):
         assert np.array_equal(o[k], gold[k]), k
@@ -465,7 +465,7 @@ def test_last_pause_minute_must_be_a_minute_of_the_day(bad):
 
 def spx_settings():
     from herding import calibrate
-    if not (calibrate.SETTINGS_DIR / "spx.json").exists():
+    if not calibrate.settings_path("spx").exists():
         pytest.skip("not fitted yet")
     return calibrate.load("spx")
 

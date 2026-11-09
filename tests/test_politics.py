@@ -89,7 +89,7 @@ def test_terms_cut_the_days_at_inaugurations():
 
 def test_permutation_test_by_hand():
     from test_analysis import load_script
-    pt = load_script("party_terms.py")
+    pt = load_script("president_terms.py")
     # D = [2, 0], R = [0, 0]: observed +1; of the 6 ways to pick 2 of 4 as "D", the 3 that
     # include the 2 give +1 and the 3 that do not give -1, so every one is as extreme: p = 1
     assert pt.permutation_p([2, 0, 0, 0], ["D", "D", "R", "R"]) == (1.0, 1.0)
