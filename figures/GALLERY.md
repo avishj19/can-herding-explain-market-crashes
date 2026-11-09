@@ -126,6 +126,6 @@ strong herding. This dial is what the future web app will let users turn.
 
 **fig12 — Political parties** (an extension beyond the paper).
 - Since 1928 the S&P returned about 6.8% a year more under Democratic presidents. That is
-  more than 98% of "fake" party calendars give, so it's borderline: only 13 changes of party.
+  more than 97% of "fake" party calendars give, so it's borderline: only 12 changes of party.
 - Crashes, volatility and fat tails show **no** party difference, so herding works the
   same whoever is president.

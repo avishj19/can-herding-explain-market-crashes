@@ -11,6 +11,10 @@ Sources
         20 stocks with market beta 0.9-1.1 (see stocks/README.md) -> stocks/<TICKER>.csv
     FRED (Federal Reserve Bank of St. Louis)
         USREC  NBER recession months -> us_recessions_monthly.csv
+    MeasuringWorth (S. H. Williamson, "Daily Closing Values of the DJA in the United States,
+    1885 to Present", measuringworth.com/datasets/DJA)
+        Dow Jones Industrial Average 1927-1952 -> dow_jones_daily_1927_1952.csv
+        (used only to find bad closes in the early S&P file: herding/market_data.py)
 
 Every series stops at the same fixed date (END), so results can be reproduced
 exactly even after new trading days are published.
@@ -30,6 +34,7 @@ INDEXES = {                         # file: (ticker, first day)
 }
 STOCK_START = "2000-01-01"
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=USREC"
+DOW_URL = "https://www.measuringworth.com/datasets/DJA/result.php"
 
 
 def daily_closes(ticker, start, end=END):
@@ -59,6 +64,26 @@ def recessions(end=END):
     return df[df["observation_date"] <= pd.Timestamp(end)]
 
 
+def dow_jones(first=1927, last=1952):
+    """Daily Dow closes from MeasuringWorth (its query form returns an HTML table)."""
+    import html
+    import re
+    import ssl
+    import certifi
+    from urllib.parse import urlencode
+    form = urlencode(dict(monthStartD=1, dayStartD=1, yearStartD=first,
+                          monthEndD=12, dayEndD=31, yearEndD=last)).encode()
+    req = urllib.request.Request(DOW_URL, data=form, headers={"User-Agent": "Mozilla/5.0"})
+    ctx = ssl.create_default_context(cafile=certifi.where())
+    with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
+        page = resp.read().decode("utf-8", errors="replace")
+    text = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", page)).replace("\xa0", " "))
+    rows = re.findall(r"\b(\d{1,2})/(\d{1,2})/(\d{4}) ([\d.]+)", text)
+    df = pd.DataFrame({"Date": pd.to_datetime([f"{y}-{m}-{d}" for m, d, y, _ in rows]),
+                       "Close": [float(c) for *_, c in rows]})
+    return df[(df["Date"].dt.year >= first) & (df["Date"].dt.year <= last)].set_index("Date")
+
+
 def main(outdir):
     outdir = Path(outdir)
     (outdir / "stocks").mkdir(parents=True, exist_ok=True)
@@ -71,6 +96,8 @@ def main(outdir):
         print("saved stocks/" + ticker)
     recessions().to_csv(outdir / "us_recessions_monthly.csv", index=False)
     print("saved us_recessions_monthly.csv")
+    dow_jones().to_csv(outdir / "dow_jones_daily_1927_1952.csv")
+    print("saved dow_jones_daily_1927_1952.csv")
 
 
 if __name__ == "__main__":

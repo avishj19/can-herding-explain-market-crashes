@@ -94,7 +94,8 @@ def test_black_monday_missing_date_explains_fix():
 def test_spx_1928_great_crash_and_depression():
     r = data.returns("spx_1928")
     s = data.load_prices(data.MARKETS["spx_1928"])["Close"]
-    # Published: Oct 28 1929 -12.94%, Oct 29 1929 -10.16%
+    # Oct 28 1929 -12.94% (from Friday's close: Yahoo has no Saturday sessions before 1952;
+    # S&P's own record, from Saturday's close, is -12.34%), Oct 29 1929 -10.16%
     assert np.expm1(r.loc["1929-10-28"]) == pytest.approx(-0.1294, abs=0.0005)
     assert np.expm1(r.loc["1929-10-29"]) == pytest.approx(-0.1016, abs=0.0005)
     # Sept 1929 peak 31.86 -> June 1932 low 4.40: an 86% fall
@@ -197,3 +198,48 @@ def test_load_prices_explains_broken_files(tmp_path, body, words):
     f.write_text(body)
     with pytest.raises(ValueError, match=words):
         data.load_prices(f)
+
+
+# ---------------------------------------------------------------- bad closes (November 2026)
+# Yahoo's early S&P file has single wrong closes: a 6-10% "move" undone the next day while
+# the Dow (MeasuringWorth) barely moved. Rule: S&P minus Dow beyond `gap` on a day AND beyond
+# it the opposite way the next day, while the two days together agree within `agree`.
+
+def _series(values, start="1935-01-02"):
+    return pd.Series(values, index=pd.bdate_range(start, periods=len(values)), dtype=float)
+
+
+def test_find_bad_closes_finds_a_planted_spike_and_nothing_else():
+    ref = _series(100 * np.exp(np.cumsum(np.random.default_rng(0).normal(0, 0.01, 300))))
+    close = ref * 0.1 * np.exp(np.random.default_rng(1).normal(0, 0.002, 300))   # same market, small noise
+    close.iloc[[50, 200]] *= [0.9, 1.08]                                         # two wrong closes
+    assert list(data.find_bad_closes(close, ref)) == list(close.index[[50, 200]])
+
+
+def test_find_bad_closes_keeps_a_real_crash_that_both_indexes_share():
+    ref = _series([100, 101, 88, 89, 90])            # a real 13% fall that stays
+    assert len(data.find_bad_closes(ref * 0.1, ref)) == 0
+
+
+def test_listed_bad_closes_are_exactly_what_the_rule_finds_against_the_dow():
+    spx = data.load_prices(data.MARKETS["spx_1928"])["Close"]
+    dow = data.load_prices(data.DOW)["Close"]
+    found = data.find_bad_closes(spx[spx.index <= dow.index[-1]], dow)
+    assert [str(d.date()) for d in found] == list(data.BAD_CLOSES["spx_1928"])
+
+
+def test_spx_1928_returns_skip_the_bad_closes():
+    r = data.returns("spx_1928")
+    s = data.load_prices(data.MARKETS["spx_1928"])["Close"]
+    for d in data.BAD_CLOSES["spx_1928"]:
+        assert pd.Timestamp(d) not in r.index
+        # the next day's return now spans the two days, from the last good close
+        i = s.index.get_loc(pd.Timestamp(d))
+        assert r.loc[s.index[i + 1]] == pytest.approx(np.log(s.iloc[i + 1] / s.iloc[i - 1]))
+    # after the fix, nothing left that the rule would flag
+    dow = data.load_prices(data.DOW)["Close"]
+    kept = s.drop(pd.DatetimeIndex(data.BAD_CLOSES["spx_1928"]))
+    assert len(data.find_bad_closes(kept[kept.index <= dow.index[-1]], dow)) == 0
+    # largest early moves now agree with S&P's own published list (Wikipedia, "largest daily
+    # changes in the S&P 500": no 1935-1938 day beyond -7.47% / +7.66%)
+    assert r.loc["1935":"1938"].abs().max() < np.log(1 / (1 - 0.0927))      # 1937-10-18, -9.27%
