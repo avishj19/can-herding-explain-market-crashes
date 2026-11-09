@@ -52,11 +52,11 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
 - `settings/`: the two fitted settings
 - `tests/`: one test file per module; `python3 -m pytest tests/ -q` (quick: add `-m "not slow"`)
 - `scripts/analysis/`: scripts behind individual findings (see its README; older versions are in git history)
-- `docs/proposal.pdf`: my project proposal; `docs/course_project_guide.pdf`: the course's project handout
+- `docs/proposal.pdf`: my project proposal; `docs/course_project_guide.pdf`: the course's project handout (local only, git-ignored)
 - `data/`: made by `data/download_market_data.py` (all series end 2026-10-30): S&P 500 1950- and 1928- (Yahoo ^GSPC),
   Nasdaq-100 (^NDX, 1985-), `stocks/` (20 large stocks with market beta 0.9-1.1, 2000-), VIX, NBER recessions (FRED USREC),
   Dow Jones 1927-1952 (MeasuringWorth; used to find 11 wrong closes in the 1928 S&P file)
-- `docs/papers/`: sources. The Lux & Marchesi Nature paper (doi:10.1038/17290) is `docs/papers/LuxMarchesi1999_Nature.pdf`,
+- `docs/papers/`: sources, all kept locally only (git-ignored). The Lux & Marchesi Nature paper (doi:10.1038/17290) is `docs/papers/LuxMarchesi1999_Nature.pdf`,
   kept locally only (git-ignored: copyrighted, and this repo is public). The equations come from the
   Samanidou et al. (2007) review (see SPEC.md); the parameter tables of Lux & Marchesi (2000) are still
   needed via CMU library access.

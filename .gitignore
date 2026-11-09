@@ -3,5 +3,8 @@ __pycache__/
 .coverage
 scratch/
 
-# Copyrighted paper (Nature 1999): kept locally, never pushed to the public repo
-docs/papers/LuxMarchesi1999_Nature.pdf
+# Kept on this computer only, never pushed to the public repo: the papers (copyrighted;
+# arXiv preprints may be read but not redistributed) and the course handout. The journal
+# hook removes their text from session logs (.claude/hooks/private_fingerprints.txt).
+docs/papers/
+docs/course_project_guide.pdf

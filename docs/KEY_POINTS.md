@@ -278,7 +278,7 @@ statements about government or regulation. Measured with
   microsimulation of interacting agents. *Int. J. Theor. Appl. Finance* 3, 675–702.
   (The parameter tables; not in hand.)
 - Gopikrishnan, P. et al. (1998). Inverse cubic law for the distribution of stock
-  price variations. *Eur. Phys. J. B* 3, 139–140. (In `docs/papers/`.)
+  price variations. *Eur. Phys. J. B* 3, 139–140. (Kept locally in `docs/papers/`; free preprint: arXiv:cond-mat/9803374.)
 - Kirman, A. (1993). Ants, rationality, and recruitment. *Q. J. Econ.* 108, 137–156.
 - Santa-Clara, P. & Valkanov, R. (2003). The presidential puzzle: political cycles and
   the stock market. *J. Finance* 58, 1841–1872. (Fig 12.)

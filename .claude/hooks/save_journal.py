@@ -8,10 +8,13 @@ Claude Code runs it at the start and end of every session, and git runs it
 before every commit. You can also run it by hand: python save_journal.py
 """
 
+import hashlib
 import json
 import os
 import re
 import sys
+import unicodedata
+import zlib
 from pathlib import Path
 
 
@@ -59,6 +62,72 @@ def scrub(text: str) -> str:
     return SECRET_PATTERN.sub("[REDACTED]", text)
 
 
+# Private documents (copyrighted papers, the course handout) are git-ignored, but a session
+# that reads one puts its text in the journal. private_fingerprints.txt holds only hashes of
+# every ~8th 8-word phrase of each document (make them with make_private_fingerprints.py);
+# a hash cannot be turned back into words. Any text in a log line with MIN_HITS or more
+# matching phrases is a copied passage and is replaced; a short quote has too few to match.
+FINGERPRINTS = Path(__file__).with_name("private_fingerprints.txt")
+SHINGLE, SAMPLE, MIN_HITS = 8, 8, 3
+REMOVED = "[text of a private document removed: copyrighted paper or course material (save_journal.py)]"
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", unicodedata.normalize("NFKC", text).lower())
+
+
+def fingerprints(text: str) -> set[str]:
+    """Hashes (12 hex digits) of about one in SAMPLE of the 8-word phrases of text."""
+    words, out = _words(text), set()
+    for i in range(len(words) - SHINGLE + 1):
+        phrase = " ".join(words[i:i + SHINGLE]).encode()
+        if zlib.crc32(phrase) % SAMPLE == 0:
+            out.add(hashlib.blake2b(phrase, digest_size=6).hexdigest())
+    return out
+
+
+def load_fingerprints() -> set[str]:
+    if not FINGERPRINTS.exists():
+        return set()
+    return set(FINGERPRINTS.read_text().split())
+
+
+def remove_private_text(line: str, prints: set[str]) -> str:
+    """One log line with every string that copies a private document replaced by REMOVED
+    (a line that is not valid JSON, e.g. cut off mid-write, is replaced whole)."""
+    if not prints or len(line) < 200:
+        return line
+    is_private = lambda s: len(s) >= 200 and len(fingerprints(s) & prints) >= MIN_HITS
+    try:
+        record = json.loads(line)
+    except json.JSONDecodeError:
+        return json.dumps({"type": "removed", "note": REMOVED}) if is_private(line) else line
+    changed = False
+
+    def walk(x):
+        nonlocal changed
+        if isinstance(x, str):
+            if is_private(x):
+                changed = True
+                return REMOVED
+            return x
+        if isinstance(x, list):
+            return [walk(v) for v in x]
+        if isinstance(x, dict):
+            return {k: walk(v) for k, v in x.items()}
+        return x
+
+    cleaned = walk(record)
+    return json.dumps(cleaned, ensure_ascii=False) if changed else line
+
+
+def scrub_log(text: str, prints: set[str]) -> str:
+    """A whole log: private passages removed line by line, then secrets and emails."""
+    if prints:
+        text = "\n".join(remove_private_text(line, prints) for line in text.split("\n"))
+    return scrub(text)
+
+
 def copy_if_changed(source: Path, destination: Path) -> int:
     source_time = source.stat().st_mtime
     if destination.exists() and destination.stat().st_mtime == source_time:
@@ -66,21 +135,25 @@ def copy_if_changed(source: Path, destination: Path) -> int:
         if not SECRET_PATTERN.search(existing):
             return 0
     text = source.read_text(encoding="utf-8", errors="replace")
-    destination.write_text(scrub(text), encoding="utf-8")
+    destination.write_text(scrub_log(text, load_fingerprints()), encoding="utf-8")
     os.utime(destination, (source_time, source_time))
     return 1
 
 
-def scrub_existing(journal: Path) -> int:
+def scrub_existing(journal: Path, private: bool = False) -> int:
     """Clean journal files already saved, including old sessions whose original log is
     gone (copy_if_changed only revisits files that still have a source). Keeps each
-    file's time, so copy_if_changed still sees it as up to date."""
+    file's time, so copy_if_changed still sees it as up to date. private=True also
+    removes private-document text from every file (slow: run by hand with --private,
+    once after adding fingerprints; new logs are checked as they are copied)."""
     cleaned = 0
+    prints = load_fingerprints() if private else set()
     for path in sorted(journal.glob("*.jsonl")) + sorted(journal.glob("codex/*.jsonl")):
         text = path.read_text(encoding="utf-8", errors="replace")
-        if SECRET_PATTERN.search(text):
+        new = scrub_log(text, prints) if prints else scrub(text) if SECRET_PATTERN.search(text) else text
+        if new != text:
             stat = path.stat()
-            path.write_text(scrub(text), encoding="utf-8")
+            path.write_text(new, encoding="utf-8")
             os.utime(path, (stat.st_atime, stat.st_mtime))
             cleaned += 1
     return cleaned
@@ -238,7 +311,7 @@ def main() -> None:
     journal.mkdir(exist_ok=True)
     copied_count = copy_claude_logs(claude_log_folder(read_hook_input(), project), journal)
     copied_count += copy_codex_logs(project, journal)
-    scrub_existing(journal)
+    scrub_existing(journal, private="--private" in sys.argv)
     write_all_readable(journal)
     print(f"save_journal: {copied_count} session log(s) updated in {journal}")
 
