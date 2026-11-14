@@ -243,3 +243,31 @@ def test_spx_1928_returns_skip_the_bad_closes():
     # largest early moves now agree with S&P's own published list (Wikipedia, "largest daily
     # changes in the S&P 500": no 1935-1938 day beyond -7.47% / +7.66%)
     assert r.loc["1935":"1938"].abs().max() < np.log(1 / (1 - 0.0927))      # 1937-10-18, -9.27%
+
+
+# ---------------------------------------------------------------- Dow Jones 1896- (November 2026)
+def test_dow_long_history_known_days():
+    r = data.returns("dow")
+    assert str(r.index[0].date()) == "1896-05-27" and str(r.index[-1].date()) == "2026-10-30"
+    # published record: Black Monday 1987 -22.6%, 28 Oct 1929 -12.8%, 15 Mar 1933 +15.3%
+    assert np.expm1(r.loc["1987-10-19"]) == pytest.approx(-0.226, abs=0.001)
+    assert np.expm1(r.loc["1929-10-28"]) == pytest.approx(-0.128, abs=0.001)
+    assert np.expm1(r.loc["1933-03-15"]) == pytest.approx(0.153, abs=0.001)
+    assert np.all(np.isfinite(r.values)) and r.index.is_monotonic_increasing
+
+
+def test_dow_long_history_agrees_with_the_other_files():
+    long = data.load_prices(data.MARKETS["dow"])["Close"]
+    short = data.load_prices(data.DOW)["Close"]                  # the 1927-1952 file
+    assert np.allclose(long.reindex(short.index), short)
+    # same market as the S&P 500: daily moves correlate above 0.9 since 1950
+    a, b = data.returns("dow"), data.returns("spx")
+    both = a.index.intersection(b.index)
+    assert len(both) > 19_000 and np.corrcoef(a[both], b[both])[0, 1] > 0.9
+
+
+def test_dow_1914_closure_is_one_long_gap():
+    # the NYSE was closed from 31 July to 11 December 1914 (World War I)
+    days = data.returns("dow").index
+    gap = days[1:] - days[:-1]
+    assert str(days[1:][gap.argmax()].date()) == "1914-12-12" and gap.max().days == 135

@@ -12,7 +12,8 @@ S&P 500's, so "7%" means the same number of typical days in both.
 import numpy as np
 
 from . import model
-from .experiments import BURN, finite_1d, worst_fall
+from .checks import finite_1d
+from .experiments import BURN, worst_fall
 
 
 def scaled_breakers(model_sd, market_sd, rules=model.US_BREAKERS):

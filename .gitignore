@@ -8,3 +8,6 @@ scratch/
 # hook removes their text from session logs (.claude/hooks/private_fingerprints.txt).
 docs/papers/
 docs/course_project_guide.pdf
+
+# Private words the journal hook hides (the list itself must stay off GitHub)
+.claude/hooks/private_terms.local.txt

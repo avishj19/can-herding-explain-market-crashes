@@ -4,16 +4,14 @@ Each function rejects empty, constant, NaN or infinite input with a clear error.
 """
 import numpy as np
 
+from .checks import finite_1d
+
 
 def _returns(r):
     """Returns as a 1-D float array; reject empty, NaN/inf or not 1-D input."""
-    r = np.asarray(r, dtype=float)
-    if r.ndim != 1:
-        raise ValueError(f"returns must be one list of numbers (1-D), got shape {r.shape}")
+    r = finite_1d(r, "returns")
     if r.size == 0:
         raise ValueError("returns are empty")
-    if not np.all(np.isfinite(r)):
-        raise ValueError("returns contain NaN or infinity")
     return r
 
 

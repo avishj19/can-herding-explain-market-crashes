@@ -16,7 +16,26 @@ def test_party_on_known_dates():
 
 def test_dates_before_the_table_are_rejected():
     with pytest.raises(ValueError, match="not covered"):
-        politics.democrat(["1920-01-02"])
+        politics.democrat(["1890-01-02"])
+
+
+def test_party_before_1923_matches_the_record():
+    # Cleveland (D) to 3 Mar 1897; McKinley, T. Roosevelt, Taft (R) to 3 Mar 1913;
+    # Wilson (D) to 3 Mar 1921; Harding, Coolidge (R) after. McKinley died 14 Sep 1901
+    # (T. Roosevelt took over, same party); Harding died 2 Aug 1923.
+    dates = ["1896-05-26", "1897-03-03", "1897-03-04", "1901-09-13", "1901-09-16", "1909-03-04",
+             "1913-03-03", "1913-03-04", "1921-03-03", "1921-03-04", "1923-08-01", "1923-08-03"]
+    assert politics.democrat(dates).tolist() == [True, True, False, False, False, False,
+                                                 False, True, True, False, False, False]
+
+
+def test_the_table_is_in_date_order_with_known_parties():
+    starts = [pd.Timestamp(d) for d, _, _ in politics.PRESIDENTS]
+    assert starts == sorted(starts) and len(set(starts)) == len(starts)
+    assert {p for _, p, _ in politics.PRESIDENTS} == {"D", "R"}
+    # 15 changes of party from 1896 on: 1897, 1913, 1921, then the 12 since 1928
+    dow_days = pd.bdate_range("1896-05-26", "2026-10-30")
+    assert len(politics.switches(dow_days)[0]) == 16
 
 
 def test_switches_from_1928_on():
@@ -96,3 +115,31 @@ def test_permutation_test_by_hand():
     # D = [3, 3], R = [0, 0]: only the real labelling and its mirror are that extreme: p = 2/6
     diff, p = pt.permutation_p([3, 3, 0, 0], ["D", "D", "R", "R"])
     assert diff == 3.0 and p == pytest.approx(2 / 6)
+
+
+# ---------------------------------------------------------------- shared lookups (November 2026)
+def test_president_on_known_days():
+    assert politics.president_on("1933-03-03") == ("R", "Hoover")
+    assert politics.president_on("1933-03-04") == ("D", "Roosevelt")
+    assert politics.president_on("1905-06-01") == ("R", "T. Roosevelt")
+    assert politics.president_on(pd.Timestamp("2026-10-30")) == ("R", "Trump")
+    for bad in ("1890-01-01", None):
+        with pytest.raises(ValueError, match="not covered"):
+            politics.president_on(bad)
+
+
+def test_president_on_agrees_with_democrat_on_every_dow_day():
+    days = pd.bdate_range("1896-05-26", "2026-10-30")[::37]
+    assert [politics.president_on(d)[0] == "D" for d in days] == politics.democrat(days).tolist()
+
+
+def test_return_gap_by_hand_and_against_party_gap():
+    # D days average 0.03, R days 0.01: gap 0.02 a day, x 252 a year
+    assert politics.return_gap([0.02, 0.04, 0.01, 0.01, 0.01], [True, True, False, False, False]) \
+        == pytest.approx(0.02 * politics.DAYS_PER_YEAR)
+    g = np.random.default_rng(3)
+    r, dem = g.standard_t(4, 4000) * 0.01, g.random(4000) < 0.5
+    assert politics.return_gap(r, dem) == pytest.approx(politics.party_gap(r, dem)["mean"] * r.std())
+    for bad_r, bad_dem in [([1.0, 2.0], [True, True]), ([1.0, 2.0], [True, False, True]), ([1.0, np.nan], [True, False])]:
+        with pytest.raises(ValueError):
+            politics.return_gap(bad_r, bad_dem)

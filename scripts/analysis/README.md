@@ -11,6 +11,8 @@ in `settings/` and held-out seeds only. Run from the project folder, e.g.
 | `bounce_back_after_big_days.py` | After a big move, does the price bounce back (like the S&P) or keep sliding? |
 | `president_terms.py` | Term by term: which presidencies can the politics-free model explain? (Fig 12b) |
 | `president_party_gap.py` | Is the S&P different under Democratic and Republican presidents, beyond luck? (Fig 12) |
+| `party_scale.py` | The party test at scale: 24 markets (Dow 1896–, S&P, Nasdaq, 20 stocks) against 1,000 model histories, with a bootstrap range and each presidency left out in turn |
+| `news_and_reactions.py` | Do traders react logically to news? The model's moves against its own news (with and without herding), the Dow's reaction to 33 presidential elections, and the documented causes of its 20 biggest days |
 | `time_step_check.py` | Do results change with the time step dt? (`spx` or `paper`; the paper-matched ones do) |
 | `long_run_stability.py` | How often do the fitted settings run away over 100,000 days? |
 

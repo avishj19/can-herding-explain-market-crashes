@@ -92,3 +92,33 @@ def test_a_cut_off_line_with_private_text_is_replaced_too():
 def test_fingerprints_hold_no_readable_text():
     prints = hook.fingerprints(PRIVATE)
     assert prints and all(len(p) == 12 and all(c in "0123456789abcdef" for c in p) for p in prints)
+
+
+# ---------------------------------------------------------------- private words (November 2026)
+# A full email is caught by its shape, but a fragment (the part before the @, typed in a
+# search command) is not. private_terms.local.txt (git-ignored: it holds the words
+# themselves) lists words to hide wherever they stand alone.
+
+def test_listed_private_words_are_hidden_as_whole_words_only(monkeypatch):
+    monkeypatch.setattr(hook, "TERMS", hook.terms_pattern(["jdoe7", "Secret Project"]))
+    out = hook.scrub("grep -i 'jdoe7@school' x; JDOE7 said; path /Users/jdoe7x/file; the secret project plan")
+    assert "jdoe7@" not in out and "JDOE7" not in out and "secret project" not in out
+    assert "/Users/jdoe7x/file" in out                     # part of a longer word: kept
+    assert out.count("[REDACTED]") == 3
+
+
+def test_no_list_means_nothing_extra_is_hidden(monkeypatch):
+    monkeypatch.setattr(hook, "TERMS", hook.terms_pattern([]))
+    assert hook.scrub("jdoe7 wrote this") == "jdoe7 wrote this"
+
+
+def test_existing_files_with_a_private_word_are_cleaned(tmp_path, monkeypatch):
+    monkeypatch.setattr(hook, "TERMS", hook.terms_pattern(["jdoe7"]))
+    f = tmp_path / "old.jsonl"
+    f.write_text('{"x": "search for jdoe7 here"}\n')
+    assert hook.scrub_existing(tmp_path) == 1 and "jdoe7" not in f.read_text()
+
+
+def test_the_private_word_list_is_never_committed():
+    ignored = (ROOT / ".gitignore").read_text()
+    assert hook.TERMS_FILE.name in ignored

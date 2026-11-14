@@ -9,6 +9,7 @@ from multiprocessing import Pool
 import numpy as np
 
 from . import calibrate, model
+from .checks import finite_1d       # also used as experiments.finite_1d by the scripts
 
 BURN = calibrate.BURN
 
@@ -40,16 +41,6 @@ def returns(p, seeds, days, chartists=True, pool=None):
     if bad:
         raise model.RunawayError(f"histories ran away for seeds {bad}", None)
     return [h["r"] for h in out]
-
-
-def finite_1d(x, name):
-    """x as a 1-D float array; reject NaN/inf (they would turn into a quiet wrong answer)."""
-    x = np.asarray(x, dtype=float)
-    if x.ndim != 1:
-        raise ValueError(f"{name} must be one list of numbers (1-D), got shape {x.shape}")
-    if not np.all(np.isfinite(x)):
-        raise ValueError(f"{name} contain NaN or infinity")
-    return x
 
 
 def percentile(value, sims):

@@ -129,3 +129,20 @@ strong herding. This dial is what the future web app will let users turn.
   more than 97% of "fake" party calendars give, so it's borderline: only 12 changes of party.
 - Crashes, volatility and fat tails show **no** party difference, so herding works the
   same whoever is president.
+
+![130 years of parties](fig13_parties_130_years.png)
+
+**fig13 — 130 years of the market and the president's party.** $1 in the Dow since 1896, invested
+only under Democratic presidents, became $106; only under Republican presidents, $15. But take out
+one presidency on each side (Clinton, Hoover) and the picture reverses.
+
+![Every presidency](fig14_every_presidency.png)
+
+**fig14 — Every presidency since 1896.** Booms, busts and crashes do not sort by party: the best
+and the worst yearly returns both came under Republicans (Coolidge, Hoover).
+
+![Is the gap luck?](fig15_is_the_gap_luck.png)
+
+**fig15 — Is the gap more than luck?** With 130 years of data the gap (+3.5% a year) is inside
+what luck gives (bigger than 91% of fake calendars), and for 40-year stretches ending
+1975–1995 stocks did better under Republicans.

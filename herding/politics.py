@@ -19,6 +19,9 @@ from . import experiments, market_data, stats
 
 # The party of the president from each date on (inauguration days; public record).
 PRESIDENTS = [
+    ("1893-03-04", "D", "Cleveland"), ("1897-03-04", "R", "McKinley"),
+    ("1901-09-14", "R", "T. Roosevelt"), ("1909-03-04", "R", "Taft"),
+    ("1913-03-04", "D", "Wilson"), ("1921-03-04", "R", "Harding"),
     ("1923-08-02", "R", "Coolidge"), ("1929-03-04", "R", "Hoover"),
     ("1933-03-04", "D", "Roosevelt"), ("1945-04-12", "D", "Truman"),
     ("1953-01-20", "R", "Eisenhower"), ("1961-01-20", "D", "Kennedy"),
@@ -36,17 +39,43 @@ CRASH_SD = 4.0          # a "crash day": a fall of more than 4 standard deviatio
 def democrat(dates):
     """True on each date with a Democratic president (dates: anything pandas reads)."""
     dates = pd.DatetimeIndex(dates)
+    if dates.hasnans:
+        raise ValueError("dates contain a missing value (None / NaT)")
     first = pd.Timestamp(PRESIDENTS[0][0])
     if len(dates) and dates.min() < first:
         raise ValueError(f"dates before {first.date()} are not covered")
     starts = pd.DatetimeIndex([d for d, _, _ in PRESIDENTS])
     i = starts.searchsorted(dates, side="right") - 1   # the latest inauguration on or before
-    return np.array([PRESIDENTS[j][1] == "D" for j in i])
+    return np.array([PRESIDENTS[j][1] == "D" for j in i], dtype=bool)
+
+
+def president_on(date):
+    """(party, name) of the president on one date, e.g. ("D", "Obama")."""
+    date = pd.Timestamp(date)
+    before = [row for row in PRESIDENTS if pd.Timestamp(row[0]) <= date]
+    if pd.isna(date) or not before:
+        raise ValueError(f"{date} is not covered: the table starts on {PRESIDENTS[0][0]}")
+    return before[-1][1], before[-1][2]
+
+
+def return_gap(r, dem):
+    """Mean return on Democratic days minus Republican days, per year (x DAYS_PER_YEAR).
+    In the returns' own units: with log returns, 0.05 means 5 points a year. (party_gap's
+    "mean" is this number divided by the daily standard deviation.)"""
+    r = stats._returns(r)
+    dem = np.asarray(dem, dtype=bool)
+    if dem.shape != r.shape:
+        raise ValueError(f"need one party per return: {dem.shape} vs {r.shape}")
+    if not dem.any() or dem.all():
+        raise ValueError("need at least one day under each party")
+    return float((r[dem].mean() - r[~dem].mean()) * DAYS_PER_YEAR)
 
 
 def switches(dates):
     """Day indexes where the party changes, and the party from there on."""
     dem = democrat(dates)
+    if len(dem) == 0:
+        return np.array([], dtype=int), np.array([], dtype=str)
     at = np.flatnonzero(np.diff(dem.astype(int))) + 1
     return np.concatenate([[0], at]), np.where(dem[np.concatenate([[0], at])], "D", "R")
 
@@ -114,12 +143,15 @@ def compare(market, p, seeds, pool=None, days=None):
 def terms(dates, min_days=20):
     """Each presidency's stretch of `dates` (sorted trading days): a list of dicts with
     name, party and the day indexes a:b (b not included). Terms with fewer than
-    min_days trading days in `dates` (e.g. before the data start) are left out."""
+    min_days trading days in `dates` (e.g. before the data start) are left out; a
+    presidency with no days at all is never returned, whatever min_days is."""
     dates = pd.DatetimeIndex(dates)
+    if dates.hasnans or not dates.is_monotonic_increasing:
+        raise ValueError("dates must be sorted, with no missing values")
     starts = [pd.Timestamp(d) for d, _, _ in PRESIDENTS] + [pd.Timestamp("2100-01-01")]
     out = []
     for i, (_, party, name) in enumerate(PRESIDENTS):
         a, b = int(dates.searchsorted(starts[i])), int(dates.searchsorted(starts[i + 1]))
-        if b - a >= min_days:
+        if b - a >= max(min_days, 1):
             out.append(dict(name=name, party=party, a=a, b=b, start=dates[a], end=dates[b - 1]))
     return out

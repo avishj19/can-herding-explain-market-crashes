@@ -14,6 +14,7 @@ Sources
     MeasuringWorth (S. H. Williamson, "Daily Closing Values of the DJA in the United States,
     1885 to Present", measuringworth.com/datasets/DJA)
         Dow Jones Industrial Average 1927-1952 -> dow_jones_daily_1927_1952.csv
+        Dow Jones Industrial Average 1896-     -> dow_jones_daily_from_1896.csv (first DJIA day: 26 May 1896)
         (used only to find bad closes in the early S&P file: herding/market_data.py)
 
 Every series stops at the same fixed date (END), so results can be reproduced
@@ -35,6 +36,7 @@ INDEXES = {                         # file: (ticker, first day)
 STOCK_START = "2000-01-01"
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=USREC"
 DOW_URL = "https://www.measuringworth.com/datasets/DJA/result.php"
+DOW_START = "1896-05-26"             # the first day of the Dow Jones Industrial Average
 
 
 def daily_closes(ticker, start, end=END):
@@ -80,7 +82,7 @@ def dow_jones(first=1927, last=1952):
     text = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", page)).replace("\xa0", " "))
     rows = re.findall(r"\b(\d{1,2})/(\d{1,2})/(\d{4}) ([\d.]+)", text)
     df = pd.DataFrame({"Date": pd.to_datetime([f"{y}-{m}-{d}" for m, d, y, _ in rows]),
-                       "Close": [float(c) for *_, c in rows]})
+                       "Close": [float(c) for *_, c in rows]}).drop_duplicates("Date")
     return df[(df["Date"].dt.year >= first) & (df["Date"].dt.year <= last)].set_index("Date")
 
 
@@ -98,6 +100,9 @@ def main(outdir):
     print("saved us_recessions_monthly.csv")
     dow_jones().to_csv(outdir / "dow_jones_daily_1927_1952.csv")
     print("saved dow_jones_daily_1927_1952.csv")
+    long = dow_jones(1896, pd.Timestamp(END).year)
+    long[(long.index >= DOW_START) & (long.index <= END)].to_csv(outdir / "dow_jones_daily_from_1896.csv")
+    print("saved dow_jones_daily_from_1896.csv")
 
 
 if __name__ == "__main__":

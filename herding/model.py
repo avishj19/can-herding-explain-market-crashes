@@ -19,6 +19,8 @@ import os
 
 import numpy as np
 
+from .checks import is_number as _is_number
+
 try:
     import numba
 except ImportError:                    # still works without numba, just ~30x slower (measured Nov 2026)
@@ -143,6 +145,8 @@ def _leave(g, n, rate_a, rate_b, dt):
     if n <= 0 or total <= 0.0:
         return 0, 0
     k = g.binomial(n, 1.0 - np.exp(-total * dt))
+    if k == 0:                      # nobody left: no second draw needed (binomial(0, p) is 0
+        return 0, 0                 # and uses no random numbers, so the run is unchanged)
     to_a = g.binomial(k, rate_a / total)
     return to_a, k - to_a
 
@@ -174,6 +178,7 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
     # mu is drawn fresh each step; scaled so its effect per day does not depend on
     # dt (identical to [S] at their dt = 0.01)
     mu_sd = sigma_mu * np.sqrt(REFERENCE_DT / dt)
+    news_sd = sigma_eps * np.sqrt(dt)          # the news of one step (sec. 4)
     lp = 0.0                                   # log price; starts at the value
     lf = 0.0                                   # log fundamental value
     n_f = N - n_plus - n_minus
@@ -261,7 +266,7 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
                     halts[day] = 1
                     paused = halt_steps
             # sec. 4: news
-            lf += sigma_eps * np.sqrt(dt) * g.standard_normal()
+            lf += news_sd * g.standard_normal()
         nc = n_plus + n_minus
         out_lp[day + 1], out_lf[day + 1] = lp, lf
         out_z[day + 1] = nc / N
@@ -329,13 +334,6 @@ def minute_to_step(minute, dt):
     """The time step (counting from 0 at 9:30) that a minute of the day falls in:
     steps 0 .. minute_to_step(c) - 1 are the ones before minute c."""
     return int(round(minute / MINUTES_PER_DAY / dt))
-
-
-def _is_number(x):
-    """A finite real number. Not True/False, and not complex: numpy counts complex
-    numbers as numbers (np.number), so they are excluded by naming the real types."""
-    return isinstance(x, (int, float, np.integer, np.floating)) and not isinstance(x, (bool, np.bool_)) \
-        and bool(np.isfinite(x))
 
 
 def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_DAYS,

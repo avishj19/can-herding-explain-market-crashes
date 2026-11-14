@@ -34,6 +34,7 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
 - `docs/KEY_POINTS.md`: self-contained guide to the project for someone new to it (ideas, figures, findings, limits)
 - `docs/SPEC.md`: the model's equations, each with its source (rebuild of November 2026). Code and spec must agree.
 - `scripts/main.py`: quick comparison (S&P 500 vs 20 held-out S&P-calibrated histories), saves `figures/fig00_quick_check_sp500_vs_model.png`
+- `scripts/party_figures.py`: makes `figures/fig13-fig15*.png` (parties over 130 years of the Dow)
 - `scripts/make_figures.py`: makes `figures/fig01-fig12*.png` (descriptive names), explained in `figures/RESULTS.md`; `figures/GALLERY.md` shows them all with plain captions
 - `herding/`: the program, one module per job
   - `model.py`: the Lux-Marchesi simulation from SPEC.md (numba-accelerated), runaway guard
@@ -46,8 +47,9 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
     (reproduces the paper's numbers) and `settings/sp500_calibrated.json` (reproduces the S&P 500)
   - `experiments.py`: many histories in parallel, percentiles, the typical history
   - `policy.py`: extension: circuit breakers and a policy surprise (paired runs), used by Fig 11
-  - `politics.py`: extension: the president's party (1923-2026) and its return gap against luck, used by Fig 12
+  - `politics.py`: extension: the president's party (1893-2026) and its return gap against luck, used by Fig 12-15
   - `plots.py`: palette and drawing helpers (reusable by the future web app)
+  - `checks.py`: input checks shared by every module (a finite real number; a 1-D list without NaN)
 - `.vscode/`: VS Code setup (hides clutter, one-click tasks for tests and figures, suggested extensions)
 - `settings/`: the two fitted settings
 - `tests/`: one test file per module; `python3 -m pytest tests/ -q` (quick: add `-m "not slow"`)
@@ -55,7 +57,8 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
 - `docs/proposal.pdf`: my project proposal; `docs/course_project_guide.pdf`: the course's project handout (local only, git-ignored)
 - `data/`: made by `data/download_market_data.py` (all series end 2026-10-30): S&P 500 1950- and 1928- (Yahoo ^GSPC),
   Nasdaq-100 (^NDX, 1985-), `stocks/` (20 large stocks with market beta 0.9-1.1, 2000-), VIX, NBER recessions (FRED USREC),
-  Dow Jones 1927-1952 (MeasuringWorth; used to find 11 wrong closes in the 1928 S&P file)
+  Dow Jones 1896- and 1927-1952 (MeasuringWorth; the short file is used to find 11 wrong closes in the 1928 S&P file),
+  `big_days_events.csv` (the Dow's 20 biggest days with their documented causes and sources)
 - `docs/papers/`: sources, all kept locally only (git-ignored). The Lux & Marchesi Nature paper (doi:10.1038/17290) is `docs/papers/LuxMarchesi1999_Nature.pdf`,
   kept locally only (git-ignored: copyrighted, and this repo is public). The equations come from the
   Samanidou et al. (2007) review (see SPEC.md); the parameter tables of Lux & Marchesi (2000) are still

@@ -10,4 +10,5 @@ Modules (the equations are in docs/SPEC.md):
     policy       extension: circuit breakers and a policy surprise (Fig 11)
     politics     extension: Democratic vs Republican presidents, against luck (Fig 12)
     plots        palette and drawing helpers shared by every figure
+    checks       input checks shared by every module
 """

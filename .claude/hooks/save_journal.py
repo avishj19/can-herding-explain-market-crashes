@@ -58,8 +58,32 @@ SECRET_PATTERN = re.compile(
 )
 
 
+# Private words that have no tell-tale shape (e.g. the part of an email before the @, typed
+# in a search command). One per line in private_terms.local.txt, which is git-ignored
+# because it holds the words themselves. Hidden only where they stand alone, so a word
+# inside a longer one (a folder name, say) is left as it is.
+TERMS_FILE = Path(__file__).with_name("private_terms.local.txt")
+
+
+def terms_pattern(terms):
+    """A pattern matching any of the terms as a whole word, any case (None if no terms)."""
+    terms = [t.strip() for t in terms if t.strip()]
+    if not terms:
+        return None
+    return re.compile("(?<![A-Za-z0-9])(?:" + "|".join(re.escape(t) for t in terms) + ")(?![A-Za-z0-9])",
+                      re.IGNORECASE)
+
+
+TERMS = terms_pattern(TERMS_FILE.read_text(encoding="utf-8").splitlines() if TERMS_FILE.exists() else [])
+
+
+def has_secret(text: str) -> bool:
+    return bool(SECRET_PATTERN.search(text) or (TERMS is not None and TERMS.search(text)))
+
+
 def scrub(text: str) -> str:
-    return SECRET_PATTERN.sub("[REDACTED]", text)
+    text = SECRET_PATTERN.sub("[REDACTED]", text)
+    return TERMS.sub("[REDACTED]", text) if TERMS is not None else text
 
 
 # Private documents (copyrighted papers, the course handout) are git-ignored, but a session
@@ -132,7 +156,7 @@ def copy_if_changed(source: Path, destination: Path) -> int:
     source_time = source.stat().st_mtime
     if destination.exists() and destination.stat().st_mtime == source_time:
         existing = destination.read_text(encoding="utf-8", errors="replace")
-        if not SECRET_PATTERN.search(existing):
+        if not has_secret(existing):
             return 0
     text = source.read_text(encoding="utf-8", errors="replace")
     destination.write_text(scrub_log(text, load_fingerprints()), encoding="utf-8")
@@ -150,7 +174,7 @@ def scrub_existing(journal: Path, private: bool = False) -> int:
     prints = load_fingerprints() if private else set()
     for path in sorted(journal.glob("*.jsonl")) + sorted(journal.glob("codex/*.jsonl")):
         text = path.read_text(encoding="utf-8", errors="replace")
-        new = scrub_log(text, prints) if prints else scrub(text) if SECRET_PATTERN.search(text) else text
+        new = scrub_log(text, prints) if prints else scrub(text) if has_secret(text) else text
         if new != text:
             stat = path.stat()
             path.write_text(new, encoding="utf-8")

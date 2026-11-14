@@ -7,7 +7,11 @@ Markets (daily closes from Yahoo Finance):
     spx_1928  S&P 500, 1928-today   (adds the 1929 crash and the Great Depression;
               Yahoo omits Saturday sessions before 1952, and early prices are coarser)
     ndx       Nasdaq-100, 1985-today
-Dow Jones 1927-1952 (MeasuringWorth): only to find wrong closes in spx_1928 (BAD_CLOSES).
+    dow       Dow Jones Industrial Average, 26 May 1896-today (MeasuringWorth; Saturday
+              sessions included until 1952; the NYSE was closed 31 Jul-11 Dec 1914, so that
+              one "daily" return spans 135 days; early levels are rescaled by the source to
+              join the 12-, 20- and 30-stock averages, which leaves returns unchanged)
+Dow Jones 1927-1952 (the same source): only to find wrong closes in spx_1928 (BAD_CLOSES).
 Stocks: data/stocks/<TICKER>.csv, large S&P 500 companies whose market beta
 (how much they move per 1% market move, 2005-2025) is between 0.9 and 1.1.
 """
@@ -19,7 +23,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent      # the project folder
 DATA = ROOT / "data"
 SPX = DATA / "sp500_daily.csv"
-MARKETS = {"spx": SPX, "spx_1928": DATA / "sp500_daily_from_1928.csv", "ndx": DATA / "nasdaq100_daily.csv"}
+MARKETS = {"spx": SPX, "spx_1928": DATA / "sp500_daily_from_1928.csv", "ndx": DATA / "nasdaq100_daily.csv",
+           "dow": DATA / "dow_jones_daily_from_1896.csv"}
 STOCKS = DATA / "stocks"
 BLACK_MONDAY = pd.Timestamp("1987-10-19")
 DOW = DATA / "dow_jones_daily_1927_1952.csv"     # MeasuringWorth; only to check the early S&P
@@ -74,7 +79,7 @@ def spx_returns(spx=None):
 
 
 def returns(market):
-    """Daily log returns of a named market: 'spx', 'spx_1928' or 'ndx' (without its
+    """Daily log returns of a named market: 'spx', 'spx_1928', 'ndx' or 'dow' (without its
     known bad closes, BAD_CLOSES)."""
     if market not in MARKETS:
         raise ValueError(f"unknown market {market!r}; choose from {sorted(MARKETS)}")

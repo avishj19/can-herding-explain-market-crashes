@@ -360,7 +360,9 @@ compared. Two yardsticks:
   shrinks it to 2.4%.
 - **The model is the wrong yardstick for average returns.** Its returns reverse from day to day
   (H 0.39, the miss in Fig 7), so its long-run averages wobble too little, and every real gap
-  looks extreme against it. For volatility, tails and crashes the two yardsticks agree.
+  looks extreme against it. For volatility, tails and crashes the two yardsticks agree on the
+  S&P, but the model's yardstick is too narrow for those as well (see "Is the luck test itself
+  sound?" below), so the shifted calendar is the one to trust.
 - **No party difference in crashes, volatility or fat tails.** Every one sits inside both
   yardsticks. The −28 kurtosis gap since 1950 is mostly one day: without Black Monday 1987 (under a
   Republican president) it is −8.3.
@@ -432,6 +434,95 @@ fatter tails).
 | Trump | R | 2017–2021 | 1,006 | +13.0% (88) | 20.6% (78) | 20.8 (95) | 12.0% (95) | 30.9% (98) | 6 (88) | 2.14 (0) | **2** |
 | Biden | D | 2021–2025 | 1,005 | +11.4% (75) | 16.5% (45) | 1.9 (57) | 4.3% (40) | 12.1% (48) | 0 (20) | 4.00 (48) | **0** |
 | Trump | R | 2025–2026 | 448 | +13.2% (88) | 16.3% (42) | 16.8 (100) | 6.0% (78) | 12.1% (65) | 2 (74) | — | **1** |
+
+## Fig 13–15 — Parties at scale: 130 years, 24 markets (extension, November 2026)
+
+Code: `python3 scripts/party_figures.py` (the three figures), `python3 scripts/analysis/party_scale.py`
+(the numbers; about 3 minutes), tests in `tests/test_party_figures.py`, `tests/test_party_scale.py`
+and `tests/test_politics_heavy.py`. Fig 12 used the S&P since 1928 and 40 model histories. Here
+the test is run on the **Dow Jones average since 1896** (35,247 trading days, 15 changes of
+party; from MeasuringWorth), the S&P, the Nasdaq-100 and the 20 stocks, against **1,000** model
+histories (seeds 60000–60999; 20 ran away and were left out).
+
+- [`fig13_parties_130_years.png`](fig13_parties_130_years.png): $1 in the Dow in 1896 became
+  $1,639 by 2026 (price only: no dividends, no inflation). Invested only under Democratic
+  presidents it became $106; only under Republican presidents, $15. But without Clinton the
+  Democratic $1 ends at $33, and without Hoover the Republican $1 ends at $91.
+- [`fig14_every_presidency.png`](fig14_every_presidency.png): every presidency since 1896 side by
+  side. Best yearly return: Coolidge (R, +26%); worst: Hoover (R, −36%). Wildest: Hoover;
+  calmest: Johnson (D). Both parties have rows at both ends.
+- [`fig15_is_the_gap_luck.png`](fig15_is_the_gap_luck.png): the real gap against every shifted
+  party calendar, and the gap in every 40-year window of the Dow: from −4.2% to +13.9% a year,
+  and negative (better under Republicans) for windows ending about 1975–1995.
+
+| Market | Years | Party changes | Gap D − R a year | 95% range (bootstrap) | Beats % of shifted calendars |
+|---|---|---|---|---|---|
+| Dow Jones | 1896–2026 | 15 | +3.5% | −2.7% to +10.2% | 91% |
+| S&P 500 | 1928–2026 | 12 | +6.8% | −1.0% to +15.3% | 97% |
+| S&P 500 | 1950–2026 | 11 | +5.3% | −1.2% to +11.7% | 95% |
+| Nasdaq-100 | 1985–2026 | 6 | +11.7% | −1.3% to +26.2% | 91% |
+
+(The 95% range resamples the history in 250-day blocks, 2,000 times. "A year" is 252 trading days;
+the Dow traded about 295 days a year before 1952, so its gap per calendar year is nearer 3.8%.)
+
+- **The gap shrinks with more history and could be zero.** Every one of the 24 ranges includes
+  0. With 32 more years of data the gap halves (6.8% → 3.5%) and is no longer unusual (91%).
+- **Single presidencies carry it.** Without Hoover the Dow gap is 0.8%. Without Bush 2001 the
+  Nasdaq gap is 0.9%. For 9 of the 20 stocks, leaving out one presidency flips its sign.
+- **Across everything, about what luck gives.** Of 96 tests (24 markets × 4 measures), 8 are
+  outside 5–95% against shifted calendars; luck alone gives about 10. (The tests are not
+  independent: the stocks share one calendar and move together.)
+
+### Is the luck test itself sound? (`tests/test_politics_heavy.py`)
+A test can be wrong too, so the method was tried on 1,100 made-up markets that have realistic
+calm and wild spells but **no** party effect at all (two generators, described in the test file).
+- **The shifted calendar is fair.** It called a no-effect market "unusual" 9–12% of the time on
+  every measure; a fair test gives 10%.
+- **It cannot see small gaps.** With only 12–15 changes of party, a true gap of 5% a year is
+  missed about 60% of the time, and a true 7% gap about 35% of the time. So "not unusual" does
+  not prove there is no gap; it means the data cannot tell.
+- **The model is too narrow a yardstick on every measure, not only returns.** It called the
+  no-effect markets "unusual" 29–50% of the time. Its calm and wild spells are shorter than the
+  made-up markets' (and the real market's, Fig 12b), so its gaps wobble too little.
+- The same tests found and fixed four input-handling bugs in `politics.py` (empty or missing
+  dates, unsorted dates, `min_days=0`); none affected a result.
+
+## News, elections, and "logical" reactions (extension, November 2026)
+
+Code: `python3 scripts/analysis/news_and_reactions.py`, tests in `tests/test_news_and_reactions.py`,
+events in `data/big_days_events.csv`. **A reaction is called logical when the price moves about
+as much as the news does that day.** In the model the news is known exactly (the daily change
+of the fundamental value), so this can be measured (40 histories of 20,000 days).
+
+| In the model | With herding traders | Without them |
+|---|---|---|
+| Share of day-to-day movement explained by that day's news | 27% | 69% |
+| On the biggest 1% of days: size of the move ÷ size of the news | 9.2× | 1.3× |
+| ... share of those days that had big news (top 5%) | 10% | 77% |
+
+- **With herding, the biggest days are not about the news.** They move about 9 times as much as
+  the news, and only 1 in 10 had big news. They happen when chartists are many (13% of traders,
+  against 3.6% on an average day).
+- Without herding the price follows the news; the missing 31% is the model's random trading
+  noise (with that noise switched off, news explains 88%).
+
+**Presidential elections as news (Dow, 33 elections, 1896–2024).** The move from the last close
+before election day to the first close after:
+- **Elections are bigger days than usual:** 13 of 33 are above the 90th percentile of nearby
+  days; luck gives about 3.
+- **Direction:** up after 13 of 18 Republican wins (average +1.1%), up after 5 of 15 Democratic
+  wins (average −0.4%). With 15–18 events per group, and many ways to slice them, this is
+  suggestive, not proven. It also runs opposite to the Democratic gap over whole terms above.
+- Whether the White House changed party made no measurable difference.
+- This cannot say whether the reactions were logical: nobody knows the true size of the news.
+
+**The Dow's 20 biggest days and their documented causes** (`data/big_days_events.csv`, each with
+its source): 10 had clear news or a policy decision that day (e.g. 15 Mar 1933, the first day
+after the bank holiday; 13 Oct 2008, bank rescues), 4 had no clear news (19 Oct 1987; 28 and
+29 Oct 1929), 4 were rebounds after a crash, and 2 could not be confirmed. So about half had
+news, between the model with herding (10%) and without (77%). 17 of the 20 fall in four crisis
+clusters (1929–33, 1987, 2008, 2020), the clustering that herding produces. The labels rest on
+one or two secondary sources per day and are judgement calls.
 
 ## Limitations (honest list)
 1. **Parameters are fitted, not the paper's.** The paper's parameter tables
