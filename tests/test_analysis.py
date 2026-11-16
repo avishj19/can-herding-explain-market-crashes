@@ -46,3 +46,23 @@ def test_main_takes_size_arguments(name):
 def test_analysis_script_still_runs(name):
     # tiny sizes: this checks the code path works, not the numbers it prints
     load_script(name).main(days=3000, n=2)
+
+
+def test_longest_run_agrees_with_a_plain_loop():
+    import sys
+    import numpy as np
+    sys.path.insert(0, str(ROOT / "scripts" / "analysis"))
+    from efficient_market_claims import longest_run
+
+    def by_hand(mask):
+        best = run = 0
+        for m in mask:
+            run = run + 1 if m else 0
+            best = max(best, run)
+        return best
+    g = np.random.default_rng(0)
+    for n in (0, 1, 7, 1000):
+        for p in (0, 0.3, 0.9, 1):
+            m = g.random(n) < p
+            assert longest_run(m) == by_hand(m)
+    assert longest_run([True, True, False, True]) == 2

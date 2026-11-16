@@ -388,3 +388,68 @@ def test_inputs_that_used_to_give_silent_nonsense_are_rejected():
 def test_dfa_needs_at_least_one_window_size():
     with pytest.raises(ValueError, match="window"):
         stats.dfa(np.random.default_rng(0).standard_normal(1000), ())
+
+
+# --------------------------------------------------------------- skewness, block_indices, moments
+# Spec: skewness is 0 for symmetric data, 2 for an exponential distribution, and flips sign
+# in a mirror; block_indices gives n positions in runs of consecutive days; moments gives the
+# four plain moments with intervals that contain them.
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_skewness_known_values(seed):
+    g = np.random.default_rng(seed)
+    e = g.exponential(size=400_000)
+    assert stats.skewness(e) == pytest.approx(2, abs=0.05)          # exponential: skewness 2
+    assert stats.skewness(-e) == pytest.approx(-stats.skewness(e))  # the mirror image
+    assert abs(stats.skewness(g.normal(size=400_000))) < 0.02
+    assert stats.skewness([1.0, 2, 3]) == 0
+
+
+def test_skewness_rejects_constant_input():
+    with pytest.raises(ValueError, match="constant"):
+        stats.skewness([1.0, 1.0, 1.0])
+
+
+@pytest.mark.parametrize("wrap", [True, False])
+def test_block_indices_are_runs_of_consecutive_days(wrap):
+    g = np.random.default_rng(0)
+    i = stats.block_indices(103, 10, g, wrap)
+    assert len(i) == 103 and i.min() >= 0 and i.max() < 103
+    for run in np.split(i, range(10, 103, 10)):
+        steps = np.diff(run) % 103 if wrap else np.diff(run)
+        assert (steps == 1).all()
+
+
+def test_block_indices_without_wrap_never_runs_past_the_end():
+    g = np.random.default_rng(3)
+    for _ in range(200):
+        i = stats.block_indices(50, 49, g, wrap=False)
+        assert (np.diff(i[:49]) == 1).all() and i.max() < 50
+
+
+@pytest.mark.parametrize("bad", [0, 11, 2.5, True])
+def test_block_indices_rejects_bad_blocks(bad):
+    with pytest.raises(ValueError, match="block"):
+        stats.block_indices(10, bad, np.random.default_rng(0))
+
+
+def test_moments_are_the_plain_moments_with_intervals_around_them():
+    r = np.random.default_rng(4).standard_t(5, 5000) * 0.01
+    m = stats.moments(r, block=20, draws=300)
+    assert m["mean"][0] == pytest.approx(r.mean()) and m["sd"][0] == pytest.approx(r.std())
+    assert m["skew"][0] == pytest.approx(stats.skewness(r)) and m["kurtosis"][0] == pytest.approx(stats.kurtosis(r))
+    for v, lo, hi in m.values():
+        assert lo <= v <= hi
+
+
+def test_moments_interval_has_the_textbook_width_for_white_noise():
+    # For n independent bell-curve days, the mean's 95% interval is about +-1.96 sd / sqrt(n)
+    n = 10_000
+    r = np.random.default_rng(5).normal(size=n)
+    _, lo, hi = stats.moments(r, block=1, draws=2000)["mean"]
+    assert (hi - lo) / 2 == pytest.approx(1.96 / np.sqrt(n), rel=0.1)
+
+
+def test_moments_rejects_bad_draws():
+    with pytest.raises(ValueError, match="draws"):
+        stats.moments(np.arange(10.0), draws=1)

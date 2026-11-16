@@ -54,6 +54,18 @@ def save(fig, path, title, caption):
     return path
 
 
+DEM_SHADE, REP_SHADE = "#dbe7f7", "#f8e0d5"      # party backgrounds (Figs 12-15), always labelled
+
+
+def party_bands(ax, dates, switches):
+    """Shade the background by the president's party (light blue D, light orange R);
+    `switches` = politics.switches(dates)."""
+    starts, party = switches
+    ends = np.append(starts[1:], len(dates))
+    for s, e, side in zip(starts, ends, party):
+        ax.axvspan(dates[s], dates[e - 1], color=DEM_SHADE if side == "D" else REP_SHADE, lw=0)
+
+
 def ccdf(ax, r, label, color, points=None, **kw):
     """Log-log tail plot: share of days whose |standardized return| exceeds x.
     With `points`, draw about that many markers, spaced evenly on the log x axis and

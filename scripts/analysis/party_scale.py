@@ -51,7 +51,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import numpy as np
 
-from herding import calibrate, experiments, market_data, politics
+from herding import calibrate, experiments, market_data, politics, stats
 
 SEEDS = tuple(range(60000, 61000))     # fresh: used by no fit, screen or other figure
 BLOCK = 250                            # bootstrap block, in trading days (about a year)
@@ -101,12 +101,9 @@ def bootstrap_interval(r, dem, block=BLOCK, draws=DRAWS, seed=0):
     if block > len(r):
         raise ValueError(f"block ({block} days) is longer than the data ({len(r)} days)")
     rng = np.random.default_rng(seed)
-    blocks = -(-len(r) // block)                       # enough blocks to cover the data
-    within = np.arange(block)
     gaps = []
     for _ in range(draws):
-        starts = rng.integers(0, len(r) - block + 1, blocks)
-        i = (starts[:, None] + within).ravel()[:len(r)]
+        i = stats.block_indices(len(r), int(block), rng, wrap=False)
         d = dem[i]
         if d.any() and not d.all():
             gaps.append(return_gap(r[i], d))

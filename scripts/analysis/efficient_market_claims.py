@@ -19,11 +19,9 @@ DAYS = 100_000
 
 
 def longest_run(mask):
-    best = run = 0
-    for m in mask:
-        run = run + 1 if m else 0
-        best = max(best, run)
-    return best
+    """The longest stretch of True values in a row (0 if there is none)."""
+    edges = np.flatnonzero(np.diff(np.concatenate([[0], np.asarray(mask, dtype=np.int8), [0]])))
+    return int((edges[1::2] - edges[::2]).max()) if len(edges) else 0
 
 
 def main(days=DAYS, n=4):

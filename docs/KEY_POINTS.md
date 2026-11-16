@@ -80,7 +80,7 @@ are in a paper we could not get, so they are fitted):
   - a Pareto law with known α;
   - white noise has H = 0.5.
 
-  All 400 tests pass; run them with `python3 -m pytest tests/ -q` (about 1.5 minutes).
+  All 875 tests pass; run them with `python3 -m pytest tests/ -q` (about 3 minutes).
 - **Every result is judged over many histories** on held-out seeds: one history can
   be calm and another wild with identical settings.
 - **The real market counts as typical** if it falls inside the middle 90% of the
@@ -229,6 +229,26 @@ days move 9 times as much as their news. In the real Dow, about half of the 20 b
 clear news or a policy decision; the 1987 and 1929 crashes had none. Elections do move the
 market more than ordinary days (13 of 33 are among the top 10% of nearby days).
 
+**14. Outside news that every trader sees doesn't make the fat tails or the memory** (Figs 16–18,
+an extension). Some news hits every trader at once, and a logical trader acts on it with no
+herding: an oil shock, a jump in interest rates, a Fed decision. New data: oil, gold, copper, the
+dollar, the 10-year interest rate, and every Fed decision since 1994, taken from the Fed's own calendars. The Fed
+file reproduces a published result: 33 basis points a day on scheduled Fed days in 1994–2011,
+against about 1 on other days (Lucca & Moench 2015).
+- Those markets explain 16% of the S&P's daily moves (2000–2026). Take that part out and the tail
+  exponent moves by about 0.1 and the memory (H of |r|) hardly at all. **The fat tails and the
+  memory survive**, so outside news is not what creates them.
+- What outside news adds is the **extreme** end of the tail: without it, the S&P looks like a
+  typical history of the herding model on all 8 scale-free measures (6 of 8 with it).
+- Surprise Fed moves are 5 times a normal day, but only 9 happened; scheduled decisions are
+  ordinary days. Leaving out all 271 Fed days barely changes the tails.
+- Links to oil and interest rates **change sign** over the decades, and outside markets explain
+  twice as much in wild markets (33%) as in calm ones (16%), because markets fall together
+  (Longin & Solnik 2001). Gold hardly moves with stocks, even in crashes (Baur & Lucey 2010).
+- **The four moments with error bars** (Fig 18): the S&P falls harder than it rises (skewness
+  −0.95, 95% interval −2.27 to −0.16), which the model can't do. The S&P's kurtosis is so uncertain
+  (5.5 to 53, Black Monday) that the project relies on tail exponents instead.
+
 ## 6. The paper's economic standpoint, and what we found
 
 Lux & Marchesi argue **against the efficient market hypothesis** as the explanation
@@ -261,7 +281,9 @@ statements about government or regulation. Measured with
    tails instead, so it was not used.
 6. **Tails at long horizons:** the S&P keeps fat tails at 25 days (kurtosis 3.3);
    the models return to a bell curve faster (S&P-calibrated median 1.6; paper-matched
-   1.8 in the run Fig 2 shows, 0.4 as the median of 8 runs).
+   1.8 in the run Fig 2 shows, 0.4 as the median of 8 runs). Part of the S&P's long-horizon
+   tail is outside news moving every market together (2008): over 2006–2026 its 25-day kurtosis
+   falls from 7.6 to 1.7 once commodities, the dollar and interest rates are taken out (Fig 17).
 7. **One whole market, no company news**, so single stocks look more extreme than
    the model.
 8. **The paper-matched results depend on the time step.** The model moves in steps
@@ -269,6 +291,8 @@ statements about government or regulation. Measured with
    settings lose most of their fat tails (kurtosis 29 → 3.4, α 2.67 → 3.33), so their
    match to the paper belongs to the dt = 0.01 version. The S&P-calibrated settings
    barely change, so the main answer stands (RESULTS.md, Limitations 9).
+9. **No skew:** the S&P falls harder than it rises (skewness −0.95); the model's buyers and
+   sellers are mirror images, so its skewness is about 0 (S&P at the 2nd percentile, Fig 18).
 
 ## 8. How to read any figure in this project
 
@@ -300,8 +324,25 @@ statements about government or regulation. Measured with
   Economy* 128, 4011–4045. (Fig 12.)
 - Peng, C.-K. et al. (1994). Mosaic organization of DNA nucleotides. *Phys. Rev. E*
   49, 1685–1689. (The DFA method behind H.)
+- Cutler, D., Poterba, J. & Summers, L. (1989). What moves stock prices? *J. Portfolio
+  Management* 15(3), 4–12. (Many of the biggest days had no identifiable news.)
+- Baker, S., Bloom, N., Davis, S. & Sammon, M. (2021). What triggers stock market jumps?
+  NBER Working Paper 28687. (Big days classified by next-day newspaper coverage.)
+- Lucca, D. & Moench, E. (2015). The pre-FOMC announcement drift. *J. Finance* 70, 329–371.
+  (Checks the Fed-day file, Fig 17.)
+- Savor, P. & Wilson, M. (2013). How much do investors care about macroeconomic risk? Evidence
+  from scheduled economic announcements. *J. Financial and Quantitative Analysis* 48, 343–375.
+- Dimson, E. (1979). Risk measurement when shares are subject to infrequent trading. *J. Financial
+  Economics* 7, 197–226. (Leads and lags for markets that close at different times.)
+- Kilian, L. & Park, C. (2009). The impact of oil price shocks on the U.S. stock market.
+  *International Economic Review* 50, 1267–1287.
+- Baur, D. & Lucey, B. (2010). Is gold a hedge or a safe haven? *Financial Review* 45, 217–229.
+- Longin, F. & Solnik, B. (2001). Extreme correlation of international equity markets.
+  *J. Finance* 56, 649–676.
 - Data (`data/download_market_data.py`, every series ends 2026-10-30): Yahoo Finance (^GSPC,
-  ^NDX, ^VIX, 20 stocks) and FRED (NBER recessions).
+  ^NDX, ^VIX, 20 stocks, gold and copper futures), FRED (NBER recessions, Brent oil, 10-year
+  Treasury yield, broad dollar index, Fed funds target), the Federal Reserve Board (FOMC
+  calendars, 1994–2026) and MeasuringWorth (the Dow).
 
 ## 10. Reproduce everything
 
@@ -310,8 +351,10 @@ python3 -m pip install -r requirements.txt
 python3 data/download_market_data.py               # data files (already in the repository)
 python3 scripts/main.py                # S&P vs 20 held-out histories (about 5 s)
 python3 scripts/make_figures.py        # figures 1-12 (about 2 min on 8 cores)
+python3 scripts/party_figures.py       # figures 13-15 (a few seconds)
+python3 scripts/outside_news_figures.py   # figures 16-18 (about 15 s)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests (about 1 min)
-python3 -m pytest tests/ -q            # all 400 tests (about 1.5 min)
+python3 -m pytest tests/ -q            # all 875 tests (about 3 min)
 python3 -m herding.calibrate paper     # refit to the paper (about 20 min), then --refine
 python3 -m herding.calibrate spx       # refit to the S&P 500 (1.5-2.5 h; resumes if stopped)
 ```

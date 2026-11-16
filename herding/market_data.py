@@ -15,6 +15,7 @@ Dow Jones 1927-1952 (the same source): only to find wrong closes in spx_1928 (BA
 Stocks: data/stocks/<TICKER>.csv, large S&P 500 companies whose market beta
 (how much they move per 1% market move, 2005-2025) is between 0.9 and 1.1.
 """
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -27,7 +28,7 @@ MARKETS = {"spx": SPX, "spx_1928": DATA / "sp500_daily_from_1928.csv", "ndx": DA
            "dow": DATA / "dow_jones_daily_from_1896.csv"}
 STOCKS = DATA / "stocks"
 BLACK_MONDAY = pd.Timestamp("1987-10-19")
-DOW = DATA / "dow_jones_daily_1927_1952.csv"     # MeasuringWorth; only to check the early S&P
+DOW = DATA / "dow_jones_daily_1927_1952.csv"     # MeasuringWorth; only to re-derive BAD_CLOSES (tests)
 
 # Single wrong closes in Yahoo's early S&P file, found by find_bad_closes against the Dow
 # (November 2026): each "moves" the S&P 3-10% against the Dow and is undone the next day.
@@ -88,7 +89,8 @@ def returns(market):
 
 
 def find_bad_closes(close, reference, gap=0.03, agree=0.015):
-    """Days whose close looks wrong when checked against another index of the same market:
+    """Days whose close looks wrong when checked against another index of the same market
+    (how BAD_CLOSES was found; tests/test_market_data.py re-derives it with this function):
     on the day, the two daily log moves differ by more than `gap` (0.03 = 3 points, over
     5x their usual difference of about 0.55 points in 1928-1952); the next day they differ
     by more than `gap` the opposite way; and over the two days together they agree within
@@ -101,9 +103,14 @@ def find_bad_closes(close, reference, gap=0.03, agree=0.015):
     return pd.DatetimeIndex(bad)
 
 
+@lru_cache(maxsize=1)
+def _tickers():
+    return tuple(sorted(pd.read_csv(STOCKS / "market_beta.csv")["ticker"]))
+
+
 def stock_tickers():
-    """Tickers of the saved market-beta-matched stocks."""
-    return sorted(pd.read_csv(STOCKS / "market_beta.csv")["ticker"])
+    """Tickers of the saved market-beta-matched stocks (the file is read once)."""
+    return list(_tickers())
 
 
 def stock_returns(ticker):

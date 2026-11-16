@@ -25,12 +25,11 @@ LONG = 100_000                                 # days in a long run (the paper's
 BREAKER_SEEDS = tuple(range(3000, 3200))       # policy experiments: their own seeds
 SURPRISE_SEEDS = tuple(range(4000, 4400))
 TAUS = (1, 5, 15, 25)                          # the paper's aggregation horizons
-LABEL = {k: k for k in stats.FINGERPRINT}
-LABEL.update(sd="daily sd", kurtosis="kurtosis", alpha_hill="tail α (Hill)",
+LABEL = dict(sd="daily sd", kurtosis="kurtosis", alpha_hill="tail α (Hill)",
              alpha_reg="tail α (paper's fit)", ac_r_1="next-day corr.",
              ac_abs_1="clustering, 1 day", ac_abs_50="clustering, 50 days",
              H="H of returns", H_abs="H of |returns|", kurt_5="kurtosis, 5 days",
-             kurt_25="kurtosis, 25 days")
+             kurt_25="kurtosis, 25 days")             # one short name per stats.FINGERPRINT measure
 
 
 def shade(hex_color, amount):
@@ -608,7 +607,7 @@ def fig11_policy(pool, p, spx, path=FIG / "fig11_circuit_breakers_and_policy.png
 
 
 # ------------------------------------------------------------------ Fig 12
-DEM_SHADE, REP_SHADE = "#dbe7f7", "#f8e0d5"      # light, and always labelled in the legend
+DEM_SHADE, REP_SHADE = plots.DEM_SHADE, plots.REP_SHADE
 
 
 def fig12_politics(pool, p, path=FIG / "fig12_political_parties.png", market="spx_1928", seeds=HELD_OUT):
@@ -620,15 +619,12 @@ def fig12_politics(pool, p, path=FIG / "fig12_political_parties.png", market="sp
     fig = plt.figure(figsize=(16, 8.4))
     gs = fig.add_gridspec(2, 4, height_ratios=(1.15, 1))
     a = fig.add_subplot(gs[0, :])
-    starts, party = politics.switches(r.index)
-    ends = np.append(starts[1:], len(r))
     dates = r.index
-    for s, e, side in zip(starts, ends, party):
-        a.axvspan(dates[s], dates[e - 1], color=DEM_SHADE if side == "D" else REP_SHADE, lw=0)
+    plots.party_bands(a, dates, politics.switches(dates))
     a.semilogy(dates, 100 * np.exp(np.cumsum(r.values)), color=REAL, lw=0.9)
     a.fill_between([], [], color=DEM_SHADE, label="Democratic president")
     a.fill_between([], [], color=REP_SHADE, label="Republican president")
-    a.set_ylabel(f"S&P 500 (start = 100, log scale)")
+    a.set_ylabel("S&P 500 (start = 100, log scale)")
     a.set_title(f"a. The S&P 500 since {dates[0].year}, shaded by the president's party "
                 f"(return gap D − R: {real['mean'] * sd:+.1%} a year)")
     a.legend(loc="upper left", frameon=True, facecolor="white", edgecolor=GRID)

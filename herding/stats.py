@@ -57,6 +57,46 @@ def kurtosis(r):
     return np.mean(standardize(r) ** 4) - 3
 
 
+def skewness(r):
+    """Skewness: 0 for a symmetric curve, < 0 when big falls outnumber big rises."""
+    return float(np.mean(standardize(r) ** 3))
+
+
+def block_indices(n, block, rng, wrap=True):
+    """Positions for one block-bootstrap resample of n days: random runs of `block`
+    consecutive days, so clustering inside each run survives. With wrap, a run may
+    continue from the last day to the first; without, every run fits inside the data."""
+    if isinstance(block, bool) or int(block) != block or not 1 <= block <= n:
+        raise ValueError(f"block must be a whole number from 1 to {n}, got {block}")
+    block = int(block)
+    starts = rng.integers(0, n if wrap else n - block + 1, -(-n // block))
+    i = (starts[:, None] + np.arange(block)).ravel()[:n]
+    return i % n if wrap else i
+
+
+MOMENTS = {"mean": "average daily return", "sd": "typical daily move (standard deviation)",
+           "skew": "skewness: below 0 = big falls more common than big rises",
+           "kurtosis": "excess kurtosis: 0 for a bell curve"}
+
+
+def moments(r, block=250, draws=1000, seed=0):
+    """The four moments of returns, each with a 95% block-bootstrap interval:
+    {name: (value, low, high)}. Blocks of `block` days (about a year) keep the
+    clustering of wild days, which a day-by-day resample would destroy and so make
+    the intervals far too narrow."""
+    r = _varying(r)
+    if isinstance(draws, bool) or int(draws) != draws or draws < 2:
+        raise ValueError(f"draws must be a whole number of at least 2, got {draws}")
+
+    def four(x):
+        return (x.mean(), x.std(), skewness(x), kurtosis(x))
+
+    g = np.random.default_rng(seed)
+    boot = np.array([four(r[block_indices(len(r), block, g)]) for _ in range(int(draws))])
+    lo, hi = np.percentile(boot, [2.5, 97.5], axis=0)
+    return {k: (float(v), float(a), float(b)) for k, v, a, b in zip(MOMENTS, four(r), lo, hi)}
+
+
 def ccdf(r):
     """Sorted |standardized returns| x and the fraction of days with |z| >= x."""
     z = np.sort(np.abs(standardize(r)))

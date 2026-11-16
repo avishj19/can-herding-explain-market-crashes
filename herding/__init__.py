@@ -9,6 +9,7 @@ Modules (the equations are in docs/SPEC.md):
     experiments  run many histories in parallel; percentiles; typical history
     policy       extension: circuit breakers and a policy surprise (Fig 11)
     politics     extension: Democratic vs Republican presidents, against luck (Fig 12)
+    factors      extension: outside news (oil, gold, copper, the dollar, rates, Fed days) (Figs 16-18)
     plots        palette and drawing helpers shared by every figure
     checks       input checks shared by every module
 """

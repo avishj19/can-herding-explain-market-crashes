@@ -524,6 +524,98 @@ news, between the model with herding (10%) and without (77%). 17 of the 20 fall 
 clusters (1929–33, 1987, 2008, 2020), the clustering that herding produces. The labels rest on
 one or two secondary sources per day and are judgement calls.
 
+## Fig 16–18 — Outside news: commodities, interest rates, the dollar and the Fed (extension, November 2026)
+
+Code: `python3 scripts/outside_news_figures.py` (module `herding/factors.py`), tests in
+`tests/test_factors.py`. **The question:** some news reaches every trader at the same moment,
+and a fully logical trader acts on it with no herding at all: an oil shock, a jump in interest
+rates, a Fed decision. If such news carried the S&P's fat tails and clustering, herding would
+not be needed to explain them. Lux & Marchesi assume the news is a calm bell curve; this checks
+the real outside news.
+
+**New data** (`data/factors/`, `data/fed_decisions.csv`; all end 2026-10-30, rebuilt byte for
+byte by `data/download_market_data.py`): Brent oil (FRED, 1987–; Brent because WTI closed
+below zero on 2020-04-20), gold and copper futures (Yahoo, 2000–), the broad dollar (FRED,
+2006–), the 10-year Treasury yield (FRED, 1962–), the Fed funds target (FRED), and every FOMC
+decision since February 1994 from the Federal Reserve's own calendars: 262 scheduled
+decisions and the 9 surprise moves between meetings. Check against a published number: on
+scheduled FOMC days 1994–2011 the S&P rose 33.1 basis points on average, against 1.4 on other
+days, which is what Lucca & Moench (2015) report (about 33 and 1).
+
+**Fig 16 — how the S&P moves with them** (2006–2026):
+
+| | correlation with the S&P | S&P beta | on the S&P's worst 5% of days |
+|---|---|---|---|
+| copper | +0.29 | +0.20 | +0.28 |
+| 10-year interest rate | +0.28 | +0.06 per point | +0.18 |
+| oil (Brent) | +0.20 | +0.09 | +0.21 |
+| gold | +0.05 | +0.05 | +0.05 |
+| US dollar | −0.29 | −1.03 | −0.28 |
+
+- **No fixed beta describes oil or interest rates.** The one-year stock–oil correlation was
+  positive in 68% of years and the stock–yield correlation in 42%; the stock–yield link was
+  negative 99% of the time in 1968–1998, positive 90% of the time in 1999–2021, and mixed since
+  2022 (positive 36% of the time).
+- **Gold barely moves with stocks, even in crashes** (a "safe haven", Baur & Lucey 2010).
+- **Outside markets explain more in wild markets:** 16% of the S&P's daily variance in calm
+  markets, 33% in wild ones (thirds by the volatility of the 20 days before). This is the
+  opposite of what herding alone would give (in the model, news explains less when chartists
+  crowd in), but it is what Longin & Solnik (2001) found across countries: correlations rise in
+  falling markets. It cannot say which way the cause runs: in a panic the stock market also
+  moves oil and interest rates.
+
+**Fig 17 — take out the outside news.** Each S&P day minus the part that oil, gold, copper
+and the 10-year rate explain (on the day before, the day itself and the day after, because
+futures settle before the 4 pm stock close; Dimson 1979). 2000–2026, 6,186 days; this removes
+too much rather than too little, because some of what moves with those markets is the stock
+market's own panic. Percentiles are among 40 held-out S&P-calibrated histories of the same length.
+
+| | S&P | outside news removed | S&P's percentile | after removal |
+|---|---|---|---|---|
+| share of daily variance explained | | 16% | | |
+| kurtosis | 10.8 | 8.8 | 98 | 95 |
+| tail α (Hill) | 2.82 | 2.93 | 5 | 18 |
+| tail α (paper's way) | 2.24 | 2.37 | 2 | 8 |
+| clustering, next day | 0.30 | 0.32 | 88 | 90 |
+| clustering, 50 days | 0.14 | 0.13 | 82 | 82 |
+| H of \|returns\| | 0.97 | 0.95 | 95 | 92 |
+| kurtosis, 25 days | 5.8 | 4.7 | 95 | 95 |
+
+- **The fat tails and the memory survive.** Removing every move the outside markets explain
+  changes the tail exponent by about 0.1 and the memory hardly at all. So outside news is not
+  what makes them; this is the strongest test so far of the project's answer.
+- **What outside news does add is the extreme end of the tail.** With it, the S&P's tails over
+  2000–2026 are at the edge of what the model gives (Fig 7 found the same for 1950–2026: the
+  paper-style α below every history). Without it, the S&P is typical of the herding model on all
+  8 scale-free measures (6 of 8 before). Herding explains the fat tails; outside news makes them
+  a little fatter.
+- With only oil and interest rates, back to 1987, they explain only 3% of the daily variance,
+  and the 25-day kurtosis barely moves (12.1 → 11.1). With all five factors (2006–2026,
+  24%) it falls from 7.6 to 1.7: the 2008 crisis moved stocks, commodities, the dollar and rates
+  together. This is part of Limitation 6.
+- **Fed decisions:** the 9 surprise moves between meetings were 5.3 times a normal day's size
+  (2001-09-17, 2008-01-22, 2020-03-16 ...), but scheduled decisions only 1.1 times. Leaving out
+  all 271 Fed days changes kurtosis from 10.6 to 9.6 and the Hill α from 2.87 to 2.91. They are
+  3% of days and 8% of the biggest 1% of days. News that every trader sees and expects is
+  priced calmly; only surprises are big, and there are too few of them to make the tails.
+
+**Fig 18 — the four trading moments, with error bars** (S&P 1950–2026; 95% intervals by block
+bootstrap with one-year blocks, so wild spells stay together):
+
+| | S&P (95% interval) | S&P's percentile among 40 model histories |
+|---|---|---|
+| mean | +3.2 basis points a day (1.7 to 4.5) | 100 (the model's value has no growth, by design) |
+| sd | 0.99% a day (0.88 to 1.14) | 90 |
+| skewness | −0.95 (−2.27 to −0.16) | 2: unusual |
+| kurtosis | 25 (5.5 to 53) | 95 |
+
+- **The S&P falls harder than it rises; the model does not.** Its skewness is clearly below 0
+  (the interval excludes 0), while the model's traders behave the same way in both directions.
+  This is a real miss of the model (Limitation 10).
+- **Kurtosis is a poor yardstick on its own:** its interval runs from 5.5 to 53, because one day
+  (Black Monday) dominates it. Tail exponents and the memory measures are much steadier, which
+  is why the project relies on them.
+
 ## Limitations (honest list)
 1. **Parameters are fitted, not the paper's.** The paper's parameter tables
    (Lux & Marchesi 2000) were not available. The remembered "set I" gives a
@@ -542,7 +634,9 @@ one or two secondary sources per day and are judgement calls.
    the stability-screen seeds. The paper-matched settings: 0 of 40 and 0 of 20.
    (The rejected stability-first refit: 0 of 40, but it lost the fat tails.)
 6. **Long-horizon tails:** the real S&P keeps fat tails at 25 days (kurtosis 3.3);
-   both models return to the bell curve faster.
+   both models return to the bell curve faster. Part of the S&P's long-horizon tail is outside
+   news moving every market together: over 2006–2026 the 25-day kurtosis falls from 7.6 to 1.7
+   once commodities, the dollar and interest rates are taken out (Fig 17).
 7. **The S&P score can trade away fat tails** (see "Recalibration" above): a
    stability-first refit fitted better by its own score but lost the tails, so it
    was not used.
@@ -568,3 +662,7 @@ one or two secondary sources per day and are judgement calls.
    which answer this project's question, are not affected:** every measure stays
    within about one seed-to-seed spread at dt = 0.005 and 0.002 (largest change:
    next-day correlation, −0.02 → −0.05). The paper fit was not redone at a smaller dt.
+10. **No skew:** the S&P falls harder than it rises (skewness −0.95, 95% interval −2.27 to
+    −0.16), while the model's buyers and sellers are mirror images, so its skewness is about 0
+    (S&P at the 2nd percentile, Fig 18). A model that reproduces this would need traders who
+    react differently to falls (for example, forced selling).

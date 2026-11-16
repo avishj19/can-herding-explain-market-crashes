@@ -139,16 +139,8 @@ def block_bootstrap(r, block=BOOTSTRAP_BLOCK, draws=BOOTSTRAP_DRAWS, seed=0):
     """Fingerprints of `draws` resampled histories, each built from random blocks of
     `block` consecutive days (wrapping around), so day-to-day clustering survives."""
     r = np.asarray(r, dtype=float)
-    n = len(r)
-    if not 1 <= block <= n:
-        raise ValueError(f"block must be between 1 and {n}, got {block}")
     g = np.random.default_rng(seed)
-    out = []
-    for _ in range(draws):
-        starts = g.integers(0, n, -(-n // block))
-        idx = ((starts[:, None] + np.arange(block)[None, :]).ravel()[:n]) % n
-        out.append(stats.fingerprint(r[idx]))
-    return out
+    return [stats.fingerprint(r[stats.block_indices(len(r), block, g)]) for _ in range(draws)]
 
 
 def spx_tolerance(r):
@@ -192,9 +184,10 @@ class Fit:
         if kind == "paper":
             self.days, self.seeds, self.target = PAPER_DAYS, fit_seeds(kind), None
         else:
-            self.target = spx_target()
-            self.tol = spx_tolerance(market_data.spx_returns().values)
-            self.days, self.seeds = len(market_data.spx_returns()), fit_seeds(kind)
+            spx = market_data.spx_returns().values
+            self.target = stats.fingerprint(spx)               # = spx_target()
+            self.tol = spx_tolerance(spx)
+            self.days, self.seeds = len(spx), fit_seeds(kind)
 
     def loss(self, p):
         fp = ensemble(p, self.seeds, self.days, self.max_days)

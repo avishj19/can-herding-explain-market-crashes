@@ -242,13 +242,7 @@ def reaction(r, day, k=1):
     return float(r.iloc[a:b].sum()), b - a
 
 
-def window_sums(x, n):
-    """The total of every run of n days in a row (all "same-length windows")."""
-    x = np.asarray(x, float)
-    if isinstance(n, bool) or int(n) != n or not 1 <= n <= len(x):
-        raise ValueError(f"n must be a whole number between 1 and {len(x)}, got {n!r}")
-    c = np.concatenate([[0.0], np.cumsum(x)])
-    return c[int(n):] - c[:-int(n)]
+window_sums = experiments.window_sums     # the total of every run of n days in a row
 
 
 def yardstick(r, day, n, back=None):
@@ -349,16 +343,6 @@ def biggest_days(r, n=20):
         raise ValueError(f"n must be a whole number between 1 and {len(r)}, got {n!r}")
     top = r.abs().sort_values(ascending=False, kind="stable").index[:int(n)]
     return (100 * np.expm1(r[top])).rename("move_percent")
-
-
-def fill_moves(events, r):
-    """The events table with move_percent computed from the returns r (never typed),
-    rounded to 2 decimals. Raises if a date is not a trading day in r."""
-    dates = pd.DatetimeIndex(events["date"])
-    missing = [str(d.date()) for d in dates if d not in r.index]
-    if missing:
-        raise ValueError(f"not trading days in the data: {missing}")
-    return events.assign(move_percent=np.round(100 * np.expm1(r[dates].values), 2))
 
 
 def load_events(path=EVENTS):

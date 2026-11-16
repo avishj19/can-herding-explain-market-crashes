@@ -54,14 +54,21 @@ def percentile(value, sims):
     return float(100 * (np.mean(sims < value) + 0.5 * np.mean(sims == value)))
 
 
+def window_sums(x, n):
+    """The total of every run of n days in a row (all "same-length windows")."""
+    x = finite_1d(x, "returns")
+    if isinstance(n, bool) or int(n) != n or not 1 <= n <= len(x):
+        raise ValueError(f"n must be a whole number between 1 and {len(x)}, got {n!r}")
+    c = np.concatenate([[0.0], np.cumsum(x)])
+    return c[int(n):] - c[:-int(n)]
+
+
 def worst_fall(r, k):
     """Largest fall over any k consecutive days, as a positive log return."""
     r = finite_1d(r, "returns")
     if isinstance(k, bool) or int(k) != k or not 1 <= k <= len(r):
         raise ValueError(f"k must be a whole number between 1 and {len(r)}, got {k}")
-    k = int(k)
-    c = np.concatenate([[0.0], np.cumsum(r)])
-    return float(-(c[k:] - c[:-k]).min())
+    return float(-window_sums(r, k).min())
 
 
 def typical(fingerprints, target):

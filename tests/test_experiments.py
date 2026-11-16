@@ -74,3 +74,10 @@ def test_percentile_rejects_nan_and_not_1d(value, sims):
 def test_worst_fall_rejects_nan_and_not_1d(r):
     with pytest.raises(ValueError):
         experiments.worst_fall(r, 1)
+
+
+def test_window_sums_by_hand():
+    assert list(experiments.window_sums([1, 2, 4, 8], 2)) == [3, 6, 12]
+    assert list(experiments.window_sums([1, 2, 4, 8], 4)) == [15]
+    with pytest.raises(ValueError, match="n must"):
+        experiments.window_sums([1, 2], 3)

@@ -32,6 +32,7 @@ PRESIDENTS = [
     ("2009-01-20", "D", "Obama"), ("2017-01-20", "R", "Trump"),
     ("2021-01-20", "D", "Biden"), ("2025-01-20", "R", "Trump"),
 ]
+IS_DEMOCRAT = np.array([party == "D" for _, party, _ in PRESIDENTS])
 DAYS_PER_YEAR = 252
 CRASH_SD = 4.0          # a "crash day": a fall of more than 4 standard deviations
 
@@ -46,7 +47,7 @@ def democrat(dates):
         raise ValueError(f"dates before {first.date()} are not covered")
     starts = pd.DatetimeIndex([d for d, _, _ in PRESIDENTS])
     i = starts.searchsorted(dates, side="right") - 1   # the latest inauguration on or before
-    return np.array([PRESIDENTS[j][1] == "D" for j in i], dtype=bool)
+    return IS_DEMOCRAT[i]
 
 
 def president_on(date):

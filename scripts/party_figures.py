@@ -20,7 +20,7 @@ import pandas as pd
 
 from herding import experiments, market_data, plots, politics
 from herding.plots import BLUE, GRID, INK, MUTED, ORANGE, SECOND, plt
-from make_figures import DEM_SHADE, REP_SHADE      # the same party colours as Fig 12
+from herding.plots import DEM_SHADE, REP_SHADE     # the same party colours as Fig 12
 
 FIG = market_data.ROOT / "figures"
 SHADE = {"D": DEM_SHADE, "R": REP_SHADE}           # light: background bands
@@ -103,10 +103,7 @@ def gap_percent(r, dem):
 
 def party_bands(ax, dates):
     """Shade the background by the president's party (light blue D, light orange R)."""
-    starts, party = politics.switches(dates)
-    ends = np.append(starts[1:], len(dates))
-    for s, e, side in zip(starts, ends, party):
-        ax.axvspan(dates[s], dates[e - 1], color=SHADE[side], lw=0)
+    plots.party_bands(ax, dates, politics.switches(dates))
 
 
 # ------------------------------------------------------------------ Fig 13
@@ -294,7 +291,7 @@ def rolling_gaps(r, window_years=40, min_days=500):
     return out
 
 
-def _luck_panel(ax, name, r, test, bins):
+def _luck_panel(ax, name, test, bins):
     """Grey histogram of the fake-calendar gaps with the real gap as one bold line."""
     ax.hist(test["fake"], bins=bins, color=MUTED, alpha=0.55, edgecolor="white", lw=0.6)
     ax.axvline(0, color=SECOND, lw=0.8)
@@ -323,7 +320,7 @@ def fig15_luck(markets, path=FIG / "fig15_is_the_gap_luck.png", window_years=40)
     for j, (name, r) in enumerate(markets.items()):
         ax = fig.add_subplot(gs[0, j], sharex=first, sharey=first)
         first = first or ax
-        _luck_panel(ax, name, r, tests[name], bins)
+        _luck_panel(ax, name, tests[name], bins)
         ax.set_xlabel("return under Democrats minus under Republicans (% a year)")
         if j:
             ax.tick_params(labelleft=False)
@@ -368,9 +365,8 @@ def fig15_luck(markets, path=FIG / "fig15_is_the_gap_luck.png", window_years=40)
 def main():
     dow = market_data.returns("dow")
     made = [fig13_long_view(dow), fig14_every_presidency(dow)]
-    markets = {f"{MARKET_NAMES[m]}, {market_data.returns(m).index[0].year}–{market_data.returns(m).index[-1].year}":
-               market_data.returns(m)
-               for m in ("dow", "spx_1928", "spx")}
+    loaded = {"dow": dow, "spx_1928": market_data.returns("spx_1928"), "spx": market_data.returns("spx")}
+    markets = {f"{MARKET_NAMES[m]}, {r.index[0].year}–{r.index[-1].year}": r for m, r in loaded.items()}
     made.append(fig15_luck(markets))
     for t in made[2]["tests"].items():
         print(f"{t[0]}: gap {t[1]['real']:+.2f}% a year, percentile {t[1]['percentile']:.1f}")

@@ -350,14 +350,6 @@ def test_biggest_days_of_the_dow_starts_with_black_monday(dow):
     assert np.all(np.diff(np.abs(dow[top.index].values)) <= 0)        # largest first
 
 
-def test_fill_moves_computes_the_percent_from_the_returns():
-    r = pd.Series([np.log(1.10), np.log(0.75)], index=pd.to_datetime(["2020-01-02", "2020-01-03"]))
-    ev = pd.DataFrame(dict(date=["2020-01-03", "2020-01-02"], move_percent=[0.0, 0.0]))
-    assert list(nr.fill_moves(ev, r)["move_percent"]) == [-25.0, 10.0]
-    with pytest.raises(ValueError):
-        nr.fill_moves(pd.DataFrame(dict(date=["2020-01-05"], move_percent=[0.0])), r)
-
-
 def test_events_file_is_well_formed():
     ev = nr.load_events()
     assert len(ev) == 20 and list(ev.columns) == nr.COLUMNS
