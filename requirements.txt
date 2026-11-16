@@ -3,4 +3,5 @@ pandas>=2.0
 scipy>=1.11
 matplotlib>=3.8
 pytest>=8.0
+mpmath>=1.3  # tests only: 50-digit reference values (docs/TEST_ACCURACY.md)
 numba>=0.60  # optional: makes the simulation about 30x faster

@@ -210,9 +210,9 @@ def test_regress_recovers_an_exact_line(seed):
 def test_regress_r2_matches_the_signal_share(seed):
     # y = x + noise with equal variances: R^2 should be about 1/2
     g = np.random.default_rng(seed)
-    x = g.normal(size=200_000)
+    x = g.normal(size=800_000)
     _, _, r2, resid = factors.regress(x + g.normal(size=x.size), x)
-    assert r2 == pytest.approx(0.5, abs=0.01)
+    assert r2 == pytest.approx(0.5, abs=0.0036)               # measured: bias 0, sd 0.0007
     assert abs(np.corrcoef(resid, x)[0, 1]) < 1e-10          # least squares: residual _|_ regressor
 
 

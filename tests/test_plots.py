@@ -94,3 +94,17 @@ def test_package_has_one_module_per_job():
     names = {p.stem for p in (ROOT / "herding").glob("*.py")}
     assert names == {"__init__", "model", "stats", "market_data", "kirman", "calibrate",
                      "plots", "experiments", "policy", "politics", "factors", "checks"}
+
+
+def test_bell_curve_line_against_a_50_digit_reference():
+    # mpmath computes erfc with 50 significant digits, so its value is exact for a 64-bit
+    # comparison; the line (math.erfc, 64-bit) must match it to 1e-14 (measured: 4e-15).
+    import matplotlib.pyplot as plt
+    import mpmath
+    mpmath.mp.dps = 50
+    fig, ax = plt.subplots()
+    plots.gaussian_ccdf(ax)
+    x, y = ax.lines[0].get_data()
+    exact = [float(mpmath.erfc(mpmath.mpf(float(v)) / mpmath.sqrt(2))) for v in x]
+    assert y == pytest.approx(exact, rel=1e-14)
+    plt.close(fig)

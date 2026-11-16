@@ -148,3 +148,28 @@ def test_bad_starts_and_underflow_are_rejected():
 def test_N_that_is_not_a_number_gives_a_clear_error(N):
     with pytest.raises(ValueError, match="N must be"):
         kirman.check(N, 0.1, 0.5)
+
+
+# ------------------------------------------------- exact arithmetic (November 2026)
+# Spec: stationary() equals Kirman's distribution computed with no rounding at all.
+# fractions.Fraction does exact arithmetic on whole-number fractions, and Fraction(x) is the
+# exact value of the 64-bit float x, so the reference below has no rounding error. 64-bit
+# arithmetic carries about 16 digits; the products over N ratios lose a few (measured: at
+# most 6e-15), so 1e-13 leaves room for round-off but not for a wrong formula.
+def exact_stationary(N, eps, delta):
+    from fractions import Fraction as Fr
+    eps, delta = Fr(eps), Fr(delta)
+    up = lambda k: Fr(N - k, N) * (eps + (1 - delta) * Fr(k, N - 1))       # noqa: E731
+    down = lambda k: Fr(k, N) * (eps + (1 - delta) * Fr(N - k, N - 1))     # noqa: E731
+    w = [Fr(1)]
+    for k in range(N):
+        w.append(w[-1] * up(k) / down(k + 1))
+    total = sum(w)
+    return [x / total for x in w]
+
+
+@pytest.mark.parametrize("N, eps, delta", [(10, 0.3, 0.5), (100, 0.002, 0.1), (100, 0.05, 0.1),
+                                           (100, 0.0005, 0.1), (500, 0.001, 0.1)])
+def test_stationary_matches_exact_fractions_to_13_digits(N, eps, delta):
+    exact = np.array([float(p) for p in exact_stationary(N, eps, delta)])
+    assert kirman.stationary(N, eps, delta) == pytest.approx(exact, rel=1e-13)

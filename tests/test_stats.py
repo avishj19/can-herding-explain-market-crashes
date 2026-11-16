@@ -7,7 +7,18 @@ import numpy as np
 import pytest
 
 from conftest import SEEDS
+from helpers import RECIPES, TOLERANCE, ar1, regime_vol
 from herding import stats
+
+
+def check(name, seed):
+    """Run recipe `name` (tests/helpers.py) on `seed` and compare each number with its exact
+    answer, allowing |bias| + 5 sd as measured over 200 other seeds
+    (scripts/analysis/test_accuracy_audit.py; docs/TEST_ACCURACY.md)."""
+    got, exact = RECIPES[name][0](seed), RECIPES[name][1]
+    for k, v in exact.items():
+        assert got[k] == pytest.approx(v, abs=TOLERANCE[f"{name}.{k}"]), f"{name}.{k}"
+    return got
 
 
 
@@ -16,20 +27,17 @@ from herding import stats
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_kurtosis_gaussian_is_zero(seed):
-    r = np.random.default_rng(seed).standard_normal(200_000)
-    assert abs(stats.kurtosis(r)) < 0.05
+    check("kurtosis_normal", seed)              # 800,000 draws: 0 +- 0.029
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_kurtosis_uniform_is_minus_1_2(seed):
-    r = np.random.default_rng(seed).uniform(-1, 1, 200_000)
-    assert stats.kurtosis(r) == pytest.approx(-1.2, abs=0.03)
+    check("kurtosis_uniform", seed)             # 800,000 draws: -1.2 +- 0.0068
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_kurtosis_laplace_is_3(seed):
-    r = np.random.default_rng(seed).laplace(0, 1, 500_000)
-    assert stats.kurtosis(r) == pytest.approx(3.0, abs=0.2)
+    check("kurtosis_laplace", seed)             # 2 million draws: 3 +- 0.13
 
 
 def test_kurtosis_exact_two_points():
@@ -75,16 +83,15 @@ def test_tiny_but_varying_returns_are_still_measured():
 @pytest.mark.parametrize("alpha", [1.5, 3.0, 5.0])
 @pytest.mark.parametrize("seed", SEEDS)
 def test_hill_recovers_known_pareto_exponent(alpha, seed):
-    rng = np.random.default_rng(seed)
-    r = (rng.pareto(alpha, 100_000) + 1) * rng.choice([-1, 1], 100_000)
-    assert stats.hill_alpha(r) == pytest.approx(alpha, rel=0.08)
+    check(f"hill_pareto_{alpha}", seed)         # 400,000 draws: alpha +- 3.6%
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_hill_student_t3_tail_is_about_3(seed):
-    # Student-t with 3 degrees of freedom has tail exponent exactly 3
-    r = np.random.default_rng(seed).standard_t(3, 200_000)
-    assert stats.hill_alpha(r, tail=0.01) == pytest.approx(3.0, rel=0.12)
+    # Student-t with 3 degrees of freedom has tail exponent exactly 3, but only far out: the
+    # Hill estimate is biased low nearer the middle (Hall 1982). 2 million draws, top 0.25%:
+    # bias -0.049, sd 0.042, so 3 +- 0.27 (at 200,000 draws and the top 1% the bias was -0.12)
+    check("hill_t3", seed)
 
 
 def test_hill_gaussian_gives_large_alpha():
@@ -132,9 +139,9 @@ def test_ccdf_exact_small_case():
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_ccdf_gaussian_matches_theory(seed):
-    z, p = stats.ccdf(np.random.default_rng(seed).standard_normal(200_000))
-    # P(|Z| > 2) = 0.0455 for a standard normal
-    assert np.interp(2.0, z, p) == pytest.approx(0.0455, abs=0.003)
+    # P(|Z| > 2) = 0.0455002638963584... (50-digit mpmath, not the rounded 0.0455);
+    # 800,000 draws: +- 0.00085
+    check("ccdf_normal_2", seed)
 
 
 def test_ccdf_is_monotone():
@@ -175,18 +182,22 @@ def test_hill_rejects_constant_tail():
 @pytest.mark.parametrize("phi", [0.5, -0.3, 0.8])
 @pytest.mark.parametrize("seed", SEEDS[:3])
 def test_acf_recovers_ar1(phi, seed):
-    e = np.random.default_rng(seed).standard_normal(200_000)
+    check(f"acf_ar1_{phi}", seed)               # 800,000 days: phi^k +- 0.003-0.007
+
+
+def test_ar1_helper_is_the_plain_recursion():
+    # helpers.ar1 uses scipy's lfilter (fast); it must equal x_t = phi x_(t-1) + e_t exactly
+    e = np.random.default_rng(0).standard_normal(1000)
     x = np.empty_like(e)
     x[0] = e[0]
     for t in range(1, len(e)):
-        x[t] = phi * x[t - 1] + e[t]
-    assert np.allclose(stats.acf(x, [1, 2, 3]), [phi, phi ** 2, phi ** 3], atol=0.01)
+        x[t] = 0.7 * x[t - 1] + e[t]
+    assert ar1(0.7, e) == pytest.approx(x)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_acf_of_independent_noise_is_zero(seed):
-    x = np.random.default_rng(seed).standard_normal(100_000)
-    assert np.all(np.abs(stats.acf(x, [1, 2, 10, 100])) < 0.015)
+    check("acf_noise", seed)                    # 400,000 days: 0 +- 0.009
 
 
 def test_acf_exact_alternating_series():
@@ -212,41 +223,31 @@ def test_fingerprint_has_exactly_the_documented_measures():
 
 
 def test_fingerprint_of_a_bell_curve():
-    # i.i.d. Gaussian: no fat tails at any horizon, no memory, H = 0.5
-    x = 0.01 * np.random.default_rng(1).standard_normal(200_000)
-    f = stats.fingerprint(x)
-    assert f["sd"] == pytest.approx(0.01, rel=0.01)
-    assert abs(f["kurtosis"]) < 0.05 and abs(f["kurt_5"]) < 0.1 and abs(f["kurt_25"]) < 0.2
+    # i.i.d. Gaussian: no fat tails at any horizon, no memory, H = 0.5. The average over 16
+    # series of 200,000 days: one series measures H with an sd of 0.013 (its longest DFA
+    # windows are few), too loose to test to 0.02.
+    f = check("bell_fingerprint", 1)
     assert f["alpha_hill"] > 4.5
     assert f["alpha_reg"] == pytest.approx(3.7, abs=0.3)      # see the alpha_regression test
-    assert all(abs(f[k]) < 0.015 for k in ("ac_r_1", "ac_abs_1", "ac_abs_50"))
-    assert f["H"] == pytest.approx(0.5, abs=0.03) and f["H_abs"] == pytest.approx(0.5, abs=0.03)
 
 
 def test_fingerprint_lag1_on_ar1_by_formula():
     phi = -0.3
-    e = np.random.default_rng(3).standard_normal(200_000)
-    x = np.empty_like(e)
-    x[0] = e[0]
-    for t in range(1, len(e)):
-        x[t] = phi * x[t - 1] + e[t]
-    assert stats.fingerprint(x)["ac_r_1"] == pytest.approx(phi, abs=0.01)
+    x = ar1(phi, np.random.default_rng(3).standard_normal(800_000))
+    assert stats.fingerprint(x)["ac_r_1"] == pytest.approx(phi, abs=TOLERANCE["acf_ar1_-0.3.l1"])
 
 
 def test_fingerprint_volatility_memory_50_on_known_process():
     # |x| with a slowly switching volatility regime has memory at lag 50;
     # shuffled, the same values have none
-    g = np.random.default_rng(5)
-    vol = np.repeat(g.choice([1.0, 3.0], 4000), 100)     # regimes last 100 days
-    x = vol * g.standard_normal(len(vol))
     # exact: |x| = V*|Z|. Lag 50 is inside the same 100-day block half the time, so
     # Cov = (2/pi) * 0.5 * Var(V) with Var(V) = 1; Var(|x|) = E[V^2] - (E[V] E|Z|)^2
-    expected = (2 / np.pi) * 0.5 * 1.0 / (5.0 - (2.0 * np.sqrt(2 / np.pi)) ** 2)
-    f = stats.fingerprint(x)
-    assert f["ac_abs_50"] == pytest.approx(expected, abs=0.01)
-    assert f["H_abs"] > 0.6
-    shuffled = stats.fingerprint(g.permutation(x))
-    assert abs(shuffled["ac_abs_50"]) < 0.01 and shuffled["H_abs"] == pytest.approx(0.5, abs=0.03)
+    # (helpers.REGIME_AC50); 1.6 million days: +- 0.007, shuffled 0 +- 0.004
+    check("regime_ac50", 5)
+    g = np.random.default_rng(5)
+    x = regime_vol(16_000, g)
+    assert stats.fingerprint(x)["H_abs"] > 0.6
+    assert stats.fingerprint(g.permutation(x))["H_abs"] == pytest.approx(0.5, abs=0.03)
 
 
 def test_fingerprint_of_the_sp500_has_the_published_shape():
@@ -306,7 +307,9 @@ def _symmetric_pareto(alpha, n=200_000, seed=0):
 @pytest.mark.parametrize("alpha", [2.5, 3.0, 4.0])
 def test_alpha_regression_recovers_a_pure_power_law(alpha):
     # a pure power law is a straight line on log-log axes, so any window gives alpha
-    assert stats.alpha_regression(_symmetric_pareto(alpha)) == pytest.approx(alpha, abs=0.15)
+    # measured over 200 sign draws: bias -0.0013 to -0.0020 (the fit window bends slightly
+    # because returns are standardized), sd 1e-4, so +- 0.003
+    assert stats.alpha_regression(_symmetric_pareto(alpha)) == pytest.approx(alpha, abs=0.003)
 
 
 def test_alpha_regression_is_steeper_for_a_bell_curve():
@@ -331,20 +334,19 @@ def test_tail_fit_line_passes_through_its_window():
     z = np.sort(np.abs(stats.standardize(r)))
     assert alpha == stats.alpha_regression(r)
     assert lo == pytest.approx(np.quantile(z, 0.70), rel=1e-3) and hi == z[-1]
-    assert c * lo ** -alpha == pytest.approx(0.30, rel=0.05)
+    assert c * lo ** -alpha == pytest.approx(0.30, rel=0.002)    # measured: -0.05% +- 0.02%
 
 
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_hurst_of_white_noise_is_one_half(seed):
     # no memory at all -> H = 0.5 (the paper's news series: 0.49-0.51)
-    x = np.random.default_rng(seed).standard_normal(100_000)
-    assert stats.hurst(x) == pytest.approx(0.5, abs=0.04)
+    # 400,000 days; DFA has a small upward bias here (+0.0014, measured over 200 seeds)
+    check("hurst_white", seed)
 
 
 def test_hurst_of_a_random_walk_is_three_halves():
     # DFA of an integrated (random-walk) series has slope 1.5
-    x = np.cumsum(np.random.default_rng(3).standard_normal(100_000))
-    assert stats.hurst(x) == pytest.approx(1.5, abs=0.06)
+    check("hurst_walk", 3)                      # 400,000 days: 1.5 +- 0.037
 
 
 def test_hurst_does_not_depend_on_units():
@@ -397,11 +399,10 @@ def test_dfa_needs_at_least_one_window_size():
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_skewness_known_values(seed):
-    g = np.random.default_rng(seed)
-    e = g.exponential(size=400_000)
-    assert stats.skewness(e) == pytest.approx(2, abs=0.05)          # exponential: skewness 2
+    check("skew_exponential", seed)             # exponential: skewness 2 (1.6 million draws, +- 0.034)
+    check("skew_normal", seed)                  # bell curve: 0 +- 0.011
+    e = np.random.default_rng(seed).exponential(size=1000)
     assert stats.skewness(-e) == pytest.approx(-stats.skewness(e))  # the mirror image
-    assert abs(stats.skewness(g.normal(size=400_000))) < 0.02
     assert stats.skewness([1.0, 2, 3]) == 0
 
 
@@ -446,8 +447,9 @@ def test_moments_interval_has_the_textbook_width_for_white_noise():
     # For n independent bell-curve days, the mean's 95% interval is about +-1.96 sd / sqrt(n)
     n = 10_000
     r = np.random.default_rng(5).normal(size=n)
-    _, lo, hi = stats.moments(r, block=1, draws=2000)["mean"]
-    assert (hi - lo) / 2 == pytest.approx(1.96 / np.sqrt(n), rel=0.1)
+    _, lo, hi = stats.moments(r, block=1, draws=8000)["mean"]
+    # 8,000 resamples: measured bias -0.1%, sd 1.3% of the width, so within 6.5%
+    assert (hi - lo) / 2 == pytest.approx(1.959963984540054 / np.sqrt(n), rel=0.065)
 
 
 def test_moments_rejects_bad_draws():

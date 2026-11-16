@@ -9,6 +9,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 SEEDS = [0, 1, 2, 3, 4]
 
+# Precision rule (November 2026): numbers compared with pytest.approx and no explicit
+# tolerance must agree to 12 significant digits, not pytest's default of 6. Our arithmetic is
+# 64-bit (about 16 digits; checked against exact fractions and 50-digit mpmath, which agree to
+# 1e-14), so a gap in the 7th-12th digit is a bug, not round-off. Tests that compare noisy
+# estimates say their own tolerance, worked out as bias + 5 sd (docs/TEST_ACCURACY.md).
+from _pytest.python_api import ApproxScalar
+
+ApproxScalar.DEFAULT_RELATIVE_TOLERANCE = 1e-12
+
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: long simulations (skip with -m 'not slow')")

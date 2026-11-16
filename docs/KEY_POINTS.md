@@ -80,7 +80,9 @@ are in a paper we could not get, so they are fitted):
   - a Pareto law with known α;
   - white noise has H = 0.5.
 
-  All 875 tests pass; run them with `python3 -m pytest tests/ -q` (about 3 minutes).
+  All 887 tests pass; run them with `python3 -m pytest tests/ -q` (about 3-4 minutes).
+  Exact answers must match to 12 digits; noisy ones within their bias + 5 standard deviations,
+  measured over 200 other seeds ([`docs/TEST_ACCURACY.md`](TEST_ACCURACY.md)).
 - **Every result is judged over many histories** on held-out seeds: one history can
   be calm and another wild with identical settings.
 - **The real market counts as typical** if it falls inside the middle 90% of the
@@ -354,7 +356,7 @@ python3 scripts/make_figures.py        # figures 1-12 (about 2 min on 8 cores)
 python3 scripts/party_figures.py       # figures 13-15 (a few seconds)
 python3 scripts/outside_news_figures.py   # figures 16-18 (about 15 s)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests (about 1 min)
-python3 -m pytest tests/ -q            # all 875 tests (about 3 min)
+python3 -m pytest tests/ -q            # all 887 tests (about 3-4 min)
 python3 -m herding.calibrate paper     # refit to the paper (about 20 min), then --refine
 python3 -m herding.calibrate spx       # refit to the S&P 500 (1.5-2.5 h; resumes if stopped)
 ```
