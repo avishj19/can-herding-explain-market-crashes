@@ -164,7 +164,7 @@ def test_max_gap_must_be_positive_or_none(bad):
         model.simulate(BASE, 10, max_gap=bad)
 
 
-def test_numba_and_plain_python_give_identical_histories():
+def test_numba_and_plain_python_give_identical_histories(tmp_path):
     code = ("import sys, numpy as np; sys.path.insert(0, '.');"
             "from herding import model;"
             "o = model.simulate(model.SET_I, 30, seed=9, shocks={5: -0.1},"
@@ -173,20 +173,22 @@ def test_numba_and_plain_python_give_identical_histories():
             " np.append(o['halts'], -1)]))")
     out = {}
     for flag in ("0", "1"):
-        path = f"scratch_numba_{flag}.npy"
+        # the file goes in pytest's own temporary folder: two test runs at once (the
+        # overnight stress test) once overwrote each other's file in the project folder
+        path = tmp_path / f"numba_{flag}.npy"
         env = dict(os.environ, MODEL_NO_NUMBA=flag)
-        subprocess.run([sys.executable, "-c", code, path], check=True, env=env,
+        subprocess.run([sys.executable, "-c", code, str(path)], check=True, env=env,
                        cwd=os.path.dirname(os.path.dirname(__file__)))
-        full = os.path.join(os.path.dirname(os.path.dirname(__file__)), path)
-        out[flag] = np.load(full)
-        os.remove(full)
+        out[flag] = np.load(path)
     assert np.array_equal(out["0"], out["1"])
 
 
 # ------------------------------------------------------------------ the news (SPEC sec. 4)
 
 def test_news_is_gaussian_with_no_memory():
-    lf = model.simulate(settings(sigma_eps=0.01), 20000, seed=1)["lf"]
+    # The news never depends on the traders, so they are switched off: with them on, set I
+    # ran away before day 20,000 on 4 of 39 other seeds (overnight stress test, Nov 2026).
+    lf = model.simulate(settings(sigma_eps=0.01), 20000, seed=1, chartists=False)["lf"]
     eps = np.diff(lf)
     assert abs(eps.mean()) < 4 * 0.01 / np.sqrt(len(eps))
     assert eps.std() == pytest.approx(0.01, rel=0.02)
@@ -206,11 +208,12 @@ def test_price_follows_its_value_like_a_spring():
     """With only fundamentalists, eq. 25 says the gap g = ln p - ln p_f obeys
     dg/dt = -kappa g + (news), with kappa = beta N gamma. That is a spring with
     known behaviour: spread sigma_eps / sqrt(2 kappa), one-day correlation e^-kappa.
-    (A tiny tick makes the price's own randomness negligible.)"""
+    (A tiny tick makes the price's own randomness negligible.) 80,000 days: with 20,000,
+    the one-day correlation had sd 0.0077 over 39 other seeds, only 3.5 sd of room."""
     beta, N, gamma, sig = 6.0, 500, 0.001, 0.005
     kappa = beta * N * gamma                                # 3 per day
     o = model.simulate(settings(beta=beta, gamma=gamma, sigma_eps=sig, sigma_mu=0.0,
-                                tick=1e-5), 20000, seed=2, chartists=False)
+                                tick=1e-5), 80000, seed=2, chartists=False)
     gap = o["lp"] - o["lf"]
     assert gap.std() == pytest.approx(sig / np.sqrt(2 * kappa), rel=0.05)
     assert lag1(gap) == pytest.approx(np.exp(-kappa), abs=0.03)
@@ -238,20 +241,34 @@ def test_mood_flips_match_the_two_state_formula():
     and its spread is 1/sqrt(n_c)."""
     v1, nc, z = 3.0, 50, 0.1
     # (v2 also divides the trend inside U2, so a3 = 0 is needed to make U2 = 0)
-    o = model.simulate(settings(v1=v1, v2=1e-12, a3=0.0, a1=0.0, a2=0.0), 20000, seed=5)
+    o = model.simulate(settings(v1=v1, v2=1e-12, a3=0.0, a1=0.0, a2=0.0), 40000, seed=5)
     assert np.all(o["z"] == z)
     x = o["x"]
     assert lag1(x) == pytest.approx(np.exp(-2 * v1 * z), abs=0.03)
     assert x.std() == pytest.approx(1 / np.sqrt(nc), rel=0.05)
 
 
-def test_strategy_switching_is_a_fair_game_when_profits_are_equal():
-    """With a3 = 0 the profit terms vanish and recruitment is symmetric (Kirman):
-    a fundamentalist joins a chartist group exactly as often as a chartist leaves
-    it. So the average chartist share stays at its start, 0.1."""
+def test_equal_profits_give_a_small_drift_to_chartists_set_by_the_time_step():
+    """With a3 = 0 the profit terms vanish and recruitment is symmetric (Kirman): in
+    continuous time a fundamentalist joins the chartists exactly as often as a chartist
+    leaves them (both flows are v2 n_f n_c / N per day), a fair game.
+    The code moves each trader at most once per step (SPEC sec. 5), and a chartist can
+    also use that move to change mood. Over one step a group whose members leave at total
+    rate T keeps a fraction about 1 - T dt / 2 of its first-order flow, so chartists
+    (T = v1 z + v2 (1 - z) = 2.1 a day) lose more of theirs than fundamentalists
+    (T = v2 z = 0.2). Net drift towards the chartists, per day:
+        (2.1 - 0.2) / 2 * dt * v2 z (1 - z) = 0.95 * 0.01 * 0.18 = 0.00171.
+    It shrinks in proportion to dt (measured 0.00161, 0.00085, 0.00020 per day at dt =
+    0.01, 0.005, 0.0025, each +- 0.00013, over 40,000 seeds). Found by the overnight stress
+    test (Nov 2026): the old test called this a fair game and passed on its 400 seeds by
+    luck (the drift was 20 standard errors over 40,000)."""
     p = settings(a3=0.0)
-    z = [model.simulate(p, 3, seed=s)["z"][-1] for s in range(400)]
-    assert abs(np.mean(z) - 0.1) < 4 * np.std(z) / np.sqrt(len(z))
+    z = np.array([model.simulate(p, 1, seed=s)["z"][-1] for s in range(20000)])
+    v1, v2, z0, dt = p["v1"], p["v2"], 0.1, p["dt"]
+    drift = ((v1 * z0 + v2 * (1 - z0)) - v2 * z0) / 2 * dt * v2 * z0 * (1 - z0)
+    se = z.std(ddof=1) / np.sqrt(len(z))                # about 0.00018
+    assert abs(z.mean() - 0.1 - drift) < 5 * se
+    assert z.mean() - 0.1 > 5 * se                      # really there, not chance
 
 
 def test_herding_above_one_splits_the_crowd():
@@ -270,18 +287,36 @@ def test_groups_never_fall_below_the_floor():
         nc = np.round(o["z"] * BASE["N"])
         assert nc.min() >= BASE["floor"]
         assert BASE["N"] - nc.max() >= BASE["floor"]
+        # the strong pull empties one group exactly down to the floor, not one above it
+        assert min(nc.min(), BASE["N"] - nc.max()) == BASE["floor"]
         assert np.all(np.abs(o["x"]) <= 1)
 
 
-def test_smallest_floor_keeps_one_chartist():
-    """floor=1 (the smallest allowed): a strong pull to fundamentals empties the
-    chartist group down to exactly 1 trader, and the run does not crash."""
+def test_smallest_floor_keeps_one_trader_in_each_group():
+    """floor=1 (the smallest allowed): a strong pull to the more profitable strategy empties
+    one group down to exactly 1 trader, and the run does not crash. Which group empties
+    depends on the first few moves (seed 7: the chartists; on 26 of 39 other seeds the
+    fundamentalists, found by the overnight stress test), so either may be the one."""
     o = model.simulate(settings(a3=50.0, floor=1), 300, seed=7, max_gap=None)
-    assert np.round(o["z"] * BASE["N"]).min() == 1
+    nc = np.round(o["z"] * BASE["N"])
+    assert min(nc.min(), BASE["N"] - nc.max()) == 1
+    assert nc.min() >= 1 and BASE["N"] - nc.max() >= 1
 
 
 # ------------------------------------------------------------------ runaways
 
+# Strong trend-following (a2 = 6 instead of 0.2): every one of 300 seeds ran away before
+# day 2,505 (overnight stress test, Nov 2026), so a test needing a runaway works on any seed.
+RUNAWAY = settings(a2=6.0)
+RUNAWAY_DAYS = 6000
+
+
+def test_strong_trend_following_always_runs_away():
+    with pytest.raises(model.RunawayError, match="runaway bubble"):
+        model.simulate(RUNAWAY, RUNAWAY_DAYS, seed=1)
+
+
+@pytest.mark.pinned_seed
 def test_runaway_bubble_is_stopped_and_reported():
     # with set I, seed 1 leaves its value on day 28,511 and never comes back (all
     # chartists, an endless bubble); it is stopped once the 2.7x gap has lasted
@@ -294,6 +329,7 @@ def test_runaway_bubble_is_stopped_and_reported():
     assert np.all(gap[28511:] > 1.0) and gap[28510] <= 1.0
 
 
+@pytest.mark.pinned_seed
 def test_a_bubble_that_bursts_on_its_own_is_kept():
     """S&P-like settings, seed 1038: the price reaches 7x its value for a few days
     and then returns. That is the paper's mechanism, not a runaway."""
@@ -305,6 +341,102 @@ def test_a_bubble_that_bursts_on_its_own_is_kept():
     assert abs(gap[-1]) < 0.3
 
 
+def first_runaway_day_by_hand(o, max_gap, max_days, hard_gap):
+    """The runaway rule (SPEC.md "Runaways") applied by hand to a run made with the check
+    off: the first day the gap has been above max_gap for max_days days in a row, or
+    above hard_gap at all."""
+    gap, run = np.abs(o["lp"] - o["lf"]), 0
+    for day in range(1, len(gap)):
+        run = run + 1 if gap[day] > max_gap else 0
+        if run >= max_days or gap[day] > hard_gap:
+            return day
+    return None
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3])
+def test_runaway_day_matches_the_rule_applied_by_hand(seed):
+    # The run with the check off uses the same random numbers, so it is the same history
+    # up to the day the check stops it. (Added after the overnight mutation test, Nov 2026:
+    # changing the 250 days, the e^20 limit or the day counter went unnoticed before.)
+    with pytest.raises(model.RunawayError) as e:
+        model.simulate(RUNAWAY, RUNAWAY_DAYS, seed=seed)
+    o = model.simulate(RUNAWAY, e.value.day, seed=seed, max_gap=None)
+    assert e.value.day == first_runaway_day_by_hand(o, model.MAX_GAP, model.MAX_DAYS, model.HARD_GAP)
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3])
+def test_a_short_custom_runaway_rule_counts_days_in_a_row(seed):
+    # an ordinary market with a strict rule (5% away for 3 days in a row) stops early
+    with pytest.raises(model.RunawayError) as e:
+        model.simulate(BASE, 3000, seed=seed, max_gap=0.05, max_days=3)
+    o = model.simulate(BASE, e.value.day, seed=seed, max_gap=None)
+    assert e.value.day == first_runaway_day_by_hand(o, 0.05, 3, model.HARD_GAP)
+    gap = np.abs(o["lp"] - o["lf"])
+    assert np.all(gap[e.value.day - 2:] > 0.05) and gap[e.value.day - 3] <= 0.05
+
+
+@pytest.mark.parametrize("max_gap", [None, model.MAX_GAP])
+def test_an_absurd_number_of_ticks_stops_the_run_even_with_the_check_off(max_gap):
+    # The value jumps 1e20-fold at the start of day 3: the fundamentalists' push would ask
+    # for about 1e22 ticks in one step, beyond MAX_TICKS, so the run stops that day and is
+    # reported as a crash (price far below value), even with the runaway check off. No
+    # test reached this stop before the overnight mutation test (Nov 2026).
+    import re
+    with pytest.raises(model.RunawayError, match="runaway crash") as e:
+        model.simulate(BASE, 10, seed=0, shocks={3: 1e20}, max_gap=max_gap)
+    assert e.value.day == 4
+    m = re.search(r"is ([0-9.e+]+)x away from its value with (\d+)% chartists", str(e.value))
+    assert 1e19 < float(m[1]) < 1e21                     # the price barely moved: about 1e20
+    assert 0 <= int(m[2]) <= 100
+
+
+def test_the_runaway_limits_are_the_documented_ones():
+    # SPEC.md "Runaways": e (2.7x) for 250 trading days in a row, or ever e^20
+    assert (model.MAX_GAP, model.MAX_DAYS, model.HARD_GAP) == (1.0, 250, 20.0)
+    assert model.U_CAP == 30.0 and model.STEP_LIMIT == 2.0 and model.MAX_TICKS == 1e15
+
+
+def test_numba_is_used_when_it_is_installed():
+    import importlib.util
+    if importlib.util.find_spec("numba") is None:
+        pytest.skip("numba not installed")
+    assert model.USE_NUMBA == (os.environ.get("MODEL_NO_NUMBA") != "1")
+
+
+def test_settings_exactly_at_the_limits_are_accepted():
+    model.check(settings(N=16, floor=4))                 # N = 4 * floor
+    model.check(settings(dt=model.MIN_DT))
+    model.check(settings(N=model.MAX_N))
+    model.check(settings(tick=model.MIN_TICK))
+    o = model.simulate(BASE, 1, seed=0, max_days=1)      # the smallest run
+    assert len(o["r"]) == 1
+    model.simulate(BASE, 5, seed=0, breakers=dict(levels=(0.1, 0.2, 0.3), halt_minutes=1))
+
+
+def test_the_starting_chartists_split_evenly_with_an_odd_count():
+    # N = 530: 10% is 53 chartists, which cannot split evenly: 26 optimists and 26 pessimists
+    o = model.simulate(settings(N=530), 1, seed=0)
+    assert o["z"][0] == 52 / 530 and o["x"][0] == 0
+
+
+def test_without_chartists_the_opinion_is_zero():
+    o = model.simulate(BASE, 50, seed=0, chartists=False)
+    assert np.all(o["z"] == 0) and np.all(o["x"] == 0)
+
+
+def test_a_runaway_error_survives_being_sent_between_processes():
+    import pickle
+    e = pickle.loads(pickle.dumps(model.RunawayError("ran away", 12)))
+    assert isinstance(e, model.RunawayError) and e.day == 12 and str(e) == "ran away"
+
+
+def test_a_runaway_inside_a_process_pool_is_raised_not_hung():
+    from multiprocessing import Pool
+    with Pool(1) as pool:
+        with pytest.raises(model.RunawayError):
+            pool.apply_async(model.simulate, (RUNAWAY, RUNAWAY_DAYS), dict(seed=1)).get(timeout=120)
+
+
 @pytest.mark.parametrize("bad", [0, -5, 2.5, True])
 def test_max_days_must_be_a_positive_whole_number(bad):
     with pytest.raises(ValueError, match="max_days"):
@@ -312,12 +444,13 @@ def test_max_days_must_be_a_positive_whole_number(bad):
 
 
 def test_runaway_check_can_be_switched_off():
-    o = model.simulate(BASE, 30000, seed=1, max_gap=None)
+    o = model.simulate(RUNAWAY, RUNAWAY_DAYS, seed=1, max_gap=None)
     assert np.abs(o["lp"] - o["lf"]).max() > 1.0
 
 
 # ------------------------------------------------------------------ regression guard
 
+@pytest.mark.pinned_seed
 def test_matches_golden_output():
     """The exact output of a short run, saved when the rebuilt model was finished
     (November 2026). If this fails, the model's behaviour changed: check whether
@@ -332,13 +465,18 @@ def test_matches_golden_output():
 # ------------------------------------------------------------------ policy options (extension)
 
 TIGHT = dict(levels=(0.003, 0.006, 0.009), halt_minutes=15)   # fires on many days
+# The breaker tests check how trading stops, so they use a market that never runs away: no
+# herding pull (a1 = a2 = 0) and weak chartists. Set I with these breakers ran away within
+# 2,000 days on 26 of 300 seeds, which stopped the tests on other seeds; this market ran away
+# on none of 300 and every level still fired in all 300 (overnight stress test, Nov 2026).
+CALM = dict(model.SET_I, a1=0.0, a2=0.0, tc=0.002)
 
 
 def test_breakers_off_and_breakers_that_never_fire_change_nothing():
     # Same seed: with breakers that cannot fire (a 97% fall), every random number is
     # used in the same way, so the history must be identical to no breakers at all.
-    a = model.simulate(model.SET_I, 300, seed=3)
-    b = model.simulate(model.SET_I, 300, seed=3,
+    a = model.simulate(CALM, 300, seed=3)
+    b = model.simulate(CALM, 300, seed=3,
                        breakers=dict(levels=(0.97, 0.98, 0.99), halt_minutes=15))
     for k in ("lp", "lf", "z", "x"):
         assert np.array_equal(a[k], b[k])
@@ -346,7 +484,7 @@ def test_breakers_off_and_breakers_that_never_fire_change_nothing():
 
 
 def test_a_day_without_a_halt_never_fell_to_the_first_level():
-    o = model.simulate(model.SET_I, 2000, seed=4, breakers=TIGHT)
+    o = model.simulate(CALM, 2000, seed=4, breakers=TIGHT)
     h, r = o["halts"], o["r"]
     assert set(np.unique(h)) == {0, 1, 2, 3}           # every level fires at some point
     assert np.all(r[h == 0] > np.log(1 - 0.003))
@@ -355,6 +493,8 @@ def test_a_day_without_a_halt_never_fell_to_the_first_level():
 def test_closing_freezes_the_price_at_the_fall_that_closed_it():
     # A slow price (beta 0.05: about 2.5 ticks per step at most in set I), so one
     # step cannot jump far past the level; after closing, the price must stay there.
+    # (Set I, not CALM: CALM is too quiet to close often. With beta this low set I did
+    # not run away on any of 39 other seeds.)
     o = model.simulate(dict(model.SET_I, beta=0.05), 2000, seed=4, breakers=TIGHT)
     r, h = o["r"][o["halts"] == 3], o["halts"]
     one_step = 40 * np.log(1 + 0.001)                  # far more ticks than one step makes
@@ -366,7 +506,7 @@ def test_closing_freezes_the_price_at_the_fall_that_closed_it():
 def test_a_pause_of_a_whole_day_freezes_the_close_between_the_levels():
     # halt_minutes=390: after the first-level fall the price is frozen for the rest
     # of the day, so the close sits between level 1 and level 2.
-    o = model.simulate(model.SET_I, 2000, seed=5, breakers=dict(TIGHT, halt_minutes=390))
+    o = model.simulate(CALM, 2000, seed=5, breakers=dict(TIGHT, halt_minutes=390))
     r = o["r"][o["halts"] == 1]
     assert len(r) > 10
     assert np.all((r <= np.log(1 - 0.003)) & (r > np.log(1 - 0.006)))
@@ -389,6 +529,7 @@ def test_a_policy_surprise_moves_the_value_once_by_exactly_its_size():
 
 @pytest.mark.parametrize("bad", [
     (0.07, 0.13), (0.13, 0.07, 0.2), (0.0, 0.1, 0.2), (0.1, 0.2, 1.0), (0.1, True, 0.3),
+    (0.1, 0.1, 0.2), (0.1, 0.2, 0.2),
     (0.1, float("nan"), 0.3)])
 def test_breaker_levels_must_be_three_increasing_falls(bad):
     with pytest.raises(ValueError, match="levels"):
@@ -427,8 +568,8 @@ def test_the_us_rules_include_the_3_25_pm_cutoff():
 
 
 def test_a_cutoff_at_the_end_of_the_day_changes_nothing():
-    a = model.simulate(model.SET_I, 500, seed=6, breakers=TIGHT)
-    b = model.simulate(model.SET_I, 500, seed=6, breakers=dict(TIGHT, last_pause_minute=390))
+    a = model.simulate(CALM, 500, seed=6, breakers=TIGHT)
+    b = model.simulate(CALM, 500, seed=6, breakers=dict(TIGHT, last_pause_minute=390))
     for k in ("lp", "lf", "z", "x", "halts"):
         assert np.array_equal(a[k], b[k])
 
@@ -436,7 +577,7 @@ def test_a_cutoff_at_the_end_of_the_day_changes_nothing():
 def test_after_the_cutoff_only_the_last_level_stops_trading():
     # Cutoff at minute 0: levels 1 and 2 can never pause, so a day is either open
     # all day (0) or closed at level 3; days can fall past level 1 without a halt.
-    o = model.simulate(model.SET_I, 2000, seed=4, breakers=dict(TIGHT, last_pause_minute=0))
+    o = model.simulate(CALM, 2000, seed=4, breakers=dict(TIGHT, last_pause_minute=0))
     assert set(np.unique(o["halts"])) <= {0, 3} and (o["halts"] == 3).any()
     assert np.any(o["r"][o["halts"] == 0] <= np.log(1 - 0.003))
 
@@ -445,8 +586,8 @@ def test_a_cutoff_only_removes_pauses_that_would_start_late():
     # Same random numbers: the two runs are identical until the first day on which
     # the full rules paused trading (halts records only each day's highest level,
     # so compare the prices, not halts). That day must have a halt in the full run.
-    full = model.simulate(model.SET_I, 300, seed=8, breakers=TIGHT)
-    cut = model.simulate(model.SET_I, 300, seed=8, breakers=dict(TIGHT, last_pause_minute=195))
+    full = model.simulate(CALM, 300, seed=8, breakers=TIGHT)
+    cut = model.simulate(CALM, 300, seed=8, breakers=dict(TIGHT, last_pause_minute=195))
     differ = np.flatnonzero(full["lp"] != cut["lp"])
     assert differ.size                                  # the cutoff mattered somewhere
     day = differ[0] - 1                                 # lp[i] is the close of day i - 1
@@ -470,6 +611,7 @@ def spx_settings():
     return calibrate.load("spx")
 
 
+@pytest.mark.pinned_seed
 def test_a_runaway_on_the_last_day_is_reported():
     # seed 2013 leaves its value on day 6,810 (gap above e^20 that day). Before the fix,
     # a run of exactly 6,810 days returned normally because the runaway was on the last day.

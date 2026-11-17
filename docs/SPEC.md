@@ -75,6 +75,13 @@ ln p_f(t) - ln p_f(t-1) = eps_t, eps ~ Normal(0, sigma_eps). Gaussian, with no m
   the S&P-calibrated results barely change at dt = 0.002, but the paper-matched ones do
   (most of their fat tails and clustering go; `scripts/analysis/time_step_check.py`, RESULTS.md
   Limitations). The exact switching form does not remove that dependence.)
+  Each trader moves at most once per step (all moves are drawn from the same state).
+  A chartist can also use that move to change mood, so per step the chartists keep less of
+  their first-order outflow than the fundamentalists do: with equal profits (a3 = 0) the
+  chartist share drifts up by about (v1 z + v2 (1 - z) - v2 z) / 2 * dt * v2 z (1 - z) a day,
+  0.0017 a day at set I's start, in proportion to dt (measured 0.00161, 0.00085, 0.00020 at
+  dt = 0.01, 0.005, 0.0025; overnight stress test, Nov 2026). In continuous time the
+  recruitment is a fair game; this drift is part of the dt = 0.01 model as fitted.
 - Price ticks within dt: Poisson(rate*dt) of them. This is the exact Poisson process
   [S] approximates, so there is no cap of one tick per step.
 - Step limit (this project's check): the rate is held fixed for a whole step, so the

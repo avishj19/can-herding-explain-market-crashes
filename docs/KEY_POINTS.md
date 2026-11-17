@@ -80,9 +80,14 @@ are in a paper we could not get, so they are fitted):
   - a Pareto law with known α;
   - white noise has H = 0.5.
 
-  All 887 tests pass; run them with `python3 -m pytest tests/ -q` (about 3-4 minutes).
+  All 926 tests pass; run them with `python3 -m pytest tests/ -q` (about 3-5 minutes).
   Exact answers must match to 12 digits; noisy ones within their bias + 5 standard deviations,
   measured over 200 other seeds ([`docs/TEST_ACCURACY.md`](TEST_ACCURACY.md)).
+- **The tests were themselves tested** overnight (Nov 16–17): the whole suite rerun with 39
+  other sets of random seeds (a correct test must pass with any seed), and 2,638 small
+  deliberate bugs planted in the code one at a time (a good test suite fails on them).
+  That found 25 tests that only passed with their own seeds, now fixed, and parts of the
+  code no test checked, now tested ([`docs/TEST_ACCURACY.md`](TEST_ACCURACY.md), section 4).
 - **Every result is judged over many histories** on held-out seeds: one history can
   be calm and another wild with identical settings.
 - **The real market counts as typical** if it falls inside the middle 90% of the
@@ -279,8 +284,9 @@ statements about government or regulation. Measured with
 4. **No bounce-back after big days:** after a 3-sd day the S&P tends to reverse
    (−0.19); the model doesn't (+0.02).
 5. **Rare runaways:** the S&P-calibrated settings run away in 2 of 40 histories of
-   100,000 days (about 400 years each). A refit that never ran away lost the fat
-   tails instead, so it was not used.
+   100,000 days (about 400 years each), and in 11 of 400 on other seeds (2.75%, measured
+   overnight on Nov 17). A refit that never ran away lost the fat tails instead, so it was
+   not used.
 6. **Tails at long horizons:** the S&P keeps fat tails at 25 days (kurtosis 3.3);
    the models return to a bell curve faster (S&P-calibrated median 1.6; paper-matched
    1.8 in the run Fig 2 shows, 0.4 as the median of 8 runs). Part of the S&P's long-horizon
@@ -295,6 +301,11 @@ statements about government or regulation. Measured with
    barely change, so the main answer stands (RESULTS.md, Limitations 9).
 9. **No skew:** the S&P falls harder than it rises (skewness −0.95); the model's buyers and
    sellers are mirror images, so its skewness is about 0 (S&P at the 2nd percentile, Fig 18).
+10. **A small built-in pull towards chartists.** Traders move at most once per time step, and
+   chartists also spend moves on changing mood, so with equal profits the chartist share
+   creeps up by about 0.0016 a day (0.1 → 0.1016) instead of staying put. It shrinks with
+   the time step (half at dt = 0.005), so it is part of the dt = 0.01 model as fitted, like
+   limitation 8 (SPEC.md sec. 5; found by the overnight stress test).
 
 ## 8. How to read any figure in this project
 
@@ -356,7 +367,7 @@ python3 scripts/make_figures.py        # figures 1-12 (about 2 min on 8 cores)
 python3 scripts/party_figures.py       # figures 13-15 (a few seconds)
 python3 scripts/outside_news_figures.py   # figures 16-18 (about 15 s)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests (about 1 min)
-python3 -m pytest tests/ -q            # all 887 tests (about 3-4 min)
+python3 -m pytest tests/ -q            # all 926 tests (about 3-5 min)
 python3 -m herding.calibrate paper     # refit to the paper (about 20 min), then --refine
 python3 -m herding.calibrate spx       # refit to the S&P 500 (1.5-2.5 h; resumes if stopped)
 ```

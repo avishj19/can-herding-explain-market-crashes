@@ -99,7 +99,9 @@ def test_spx_tolerance_is_positive_and_independent_of_the_model():
     from herding import market_data
     tol = calibrate.spx_tolerance(market_data.spx_returns().values)
     assert set(tol) == set(calibrate.SPX_TARGETS) and all(v > 0 for v in tol.values())
-    assert tol["alpha_reg"] == pytest.approx(0.09, abs=0.02)
+    # over 39 other bootstrap seeds (overnight stress test): average 0.099, sd 0.0043;
+    # the old 0.09 +- 0.02 was the value of one seed and failed on 1 of 39
+    assert tol["alpha_reg"] == pytest.approx(0.099, abs=0.022)
 
 
 def test_held_out_seeds_are_never_used_for_fitting():
@@ -117,10 +119,16 @@ def test_spx_fit_targets_the_whole_fingerprint_of_the_real_data():
     assert fit.days == 19329 and fit.target["kurtosis"] > 20
 
 
+# Strong trend-following runs away on every seed within 2,505 days (300 of 300 tried;
+# tests/test_model.py). Set I runs away too, but only on some seeds: on 26 of 39 other
+# seeds it lasted 30,000 days (overnight stress test, Nov 2026).
+RUNAWAY = dict(model.SET_I, a2=6.0)
+
+
 def test_runaway_settings_score_as_runaways():
     fit = calibrate.Fit("paper")
-    fit.days, fit.seeds = 30000 - calibrate.BURN, (1,)     # set I, seed 1 runs away
-    assert fit.loss(dict(model.SET_I)) == calibrate.RUNAWAY_LOSS
+    fit.days, fit.seeds = 6000 - calibrate.BURN, (1,)
+    assert fit.loss(RUNAWAY) == calibrate.RUNAWAY_LOSS
 
 
 def test_load_reports_a_missing_file(tmp_path, monkeypatch):
@@ -206,17 +214,16 @@ def test_checkpointed_round_trips_settings_exactly(tmp_path):
 
 
 def test_runaways_counts_the_histories_that_run_away():
-    # Parameter set I runs away on seed 1 before day 30,000 (tests/test_model.py);
-    # with no herding pull at all (a1 = a2 = 0, few chartists) nothing runs away.
-    assert calibrate.runaways(SerialPool(), model.SET_I, seeds=(1,), days=30_000) == 1
+    # with no herding pull at all (a1 = a2 = 0, few chartists) nothing runs away
+    assert calibrate.runaways(SerialPool(), RUNAWAY, seeds=(1, 2), days=6000) == 2
     calm = dict(model.SET_I, a1=0.0, a2=0.0, tc=0.002)
     assert calibrate.runaways(SerialPool(), calm, seeds=(1, 2), days=3000) == 0
 
 
 def test_screen_puts_a_stable_worse_fit_before_an_unstable_better_one():
     calm = dict(model.SET_I, a1=0.0, a2=0.0, tc=0.002)
-    out = calibrate.screen(SerialPool(), [(0.1, model.SET_I), (5.0, calm), (3.0, calm)],
-                           seeds=(1,), days=30_000)
+    out = calibrate.screen(SerialPool(), [(0.1, RUNAWAY), (5.0, calm), (3.0, calm)],
+                           seeds=(1,), days=6000)
     assert [(bad, loss) for bad, loss, _ in out] == [(0, 3.0), (0, 5.0), (1, 0.1)]
 
 
@@ -298,6 +305,7 @@ def test_key_points_does_not_claim_the_whole_paper_is_reproduced():
 
 
 @pytest.mark.slow
+@pytest.mark.pinned_seed
 def test_held_out_paper_score_matches_what_the_documents_say():
     """8 held-out seeds x 100,000 days, the runs behind Figs 2-3 (about 2 minutes)."""
     fp = calibrate.ensemble(calibrate.load("paper"), calibrate.HELD_OUT_SEEDS[:8], 100_000)
@@ -345,3 +353,39 @@ def test_cli_rejects_bad_arguments(argv):
                                         (["spx", "--refine"], ("spx", True, 1200))])
 def test_cli_reads_good_arguments(argv, want):
     assert calibrate.parse_args(argv) == want
+
+
+# ------------------------------------------------------------------ found by the overnight mutation test (Nov 2026)
+
+def test_the_fit_targets_and_seeds_are_the_documented_ones():
+    # SPEC.md and figures/RESULTS.md: the paper's numbers with the project's tolerances,
+    # 1,000 warm-up days, training seeds 100-107, held-out seeds 1000-1039
+    assert calibrate.PAPER_TARGETS == {"alpha_reg": (2.64, 0.15), "H": (0.48, 0.03), "H_abs": (0.85, 0.03)}
+    assert calibrate.PAPER_KURT_25_MAX == 1.0 and calibrate.PAPER_DAYS == 50_000
+    assert calibrate.BURN == 1000 and calibrate.RUNAWAY_LOSS == 1e4
+    assert calibrate.TRAIN_SEEDS == tuple(range(100, 108))
+    assert calibrate.HELD_OUT_SEEDS == tuple(range(1000, 1040))
+    assert (calibrate.BOOTSTRAP_BLOCK, calibrate.BOOTSTRAP_DRAWS) == (250, 200)
+
+
+def test_paper_loss_by_hand():
+    fp = dict(alpha_reg=np.array([2.64 + 0.3, 2.64 + 0.3]), H=np.array([0.48, 0.48]),
+              H_abs=np.array([0.85 - 0.03, 0.85 - 0.03]), kurt_25=np.array([3.0, 3.0]))
+    # (0.3 / 0.15)^2 + 0 + (0.03 / 0.03)^2 = 5, plus (3 - 1)^2 = 4 for kurtosis left at 25 days
+    assert calibrate.paper_loss(fp) == pytest.approx(9.0)
+    fp["kurt_25"] = np.array([0.5, 0.5])                    # below the limit: no extra
+    assert calibrate.paper_loss(fp) == pytest.approx(5.0)
+
+
+def test_screen_counts_runaways_per_candidate_over_several_seeds():
+    calm = dict(model.SET_I, a1=0.0, a2=0.0, tc=0.002)
+    out = calibrate.screen(SerialPool(), [(0.1, RUNAWAY), (5.0, calm)], seeds=(1, 2, 3), days=6000)
+    assert [(bad, loss) for bad, loss, _ in out] == [(0, 5.0), (3, 0.1)]
+
+
+def test_histories_drop_exactly_the_warm_up_days():
+    # each history is run for days + BURN days and the first BURN are dropped
+    calm = dict(model.SET_I, a1=0.0, a2=0.0, tc=0.002)
+    runs = calibrate.histories(calm, (3,), 500)
+    whole = model.simulate(calm, 500 + calibrate.BURN, seed=3)["r"]
+    assert len(runs[0]) == 500 and np.array_equal(runs[0], whole[calibrate.BURN:])

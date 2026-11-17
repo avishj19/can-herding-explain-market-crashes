@@ -772,9 +772,13 @@ def test_fast_formula_agrees_with_the_module(synthetic, sp):
 #              mean    vol     kurtosis  crashes
 #   garch      11.0%   12.2%   10.8%     10.5%
 #   slow-vol    8.8%    9.0%   11.5%     10.0%
-# All within 1.5 standard errors (1.5 points each) of 10%: the shifted-calendar yardstick
-# is neither too narrow nor too wide on these markets.
-FALSE_POSITIVE_BAND = (0.05, 0.16)
+# Rerun with 24 other seed sets (overnight stress test, Nov 2026): every one of the 8
+# averages is 11.2-12.0% (sd 1.5-2.1 points each, as 400 markets give by chance), 11.7%
+# overall, which is 1.17 times the fair 10% and too consistent to be luck. So the
+# shifted-calendar yardstick is slightly generous with "unusual": about 1 market in 8.5
+# instead of 1 in 10. The band is that 11.7% +- 5 chance sds (2 points each); the old band
+# (5-16%) failed on 1 of 24 seed sets.
+FALSE_POSITIVE_BAND = (0.035, 0.20)
 
 
 @pytest.mark.slow
@@ -916,10 +920,17 @@ def test_model_yardstick_false_positives_and_power(model_runs, synthetic, sp):
     #              mean    vol     kurtosis  crashes
     #   garch      29.0%   31.0%   49.5%     33.2%
     #   slow-vol   29.2%   36.5%   40.5%     33.8%
+    # Averaged over 24 other seed sets (overnight stress test, Nov 2026):
+    #   garch      36%     30%     48%       25%      (each with sd 3-4 points)
+    #   slow-vol   37%     33%     34%       26%      (sd 3-5)
     # The model's gaps spread less than these markets' (mean 1.86 vs 3.1 daily sds a year,
     # vol ratio 0.09 vs 0.2, kurtosis 8 vs 62). So "outside the model's range" does not by
     # itself mean "not luck" unless the real market behaves like the model. If the model is
     # ever changed so that it becomes a fair ruler for such markets, this assert will fail:
     # good news, update it.
-    for key in [(name, k) for name in synthetic for k in politics.MEASURES]:
-        assert 0.22 <= rates[key] <= 0.60, (key, rates[key])
+    # One measure alone can dip to 15% by chance (crashes did, on 2 of 24 seed sets), so the
+    # bound is on the average of the 4 measures: 35% and 32% over 24 seed sets, sd 2.4 and
+    # 2.8, so above 18% (5 sd below, still nearly twice the fair 10%) and below 50%.
+    for name in synthetic:
+        avg = np.mean([rates[name, k] for k in politics.MEASURES])
+        assert 0.18 <= avg <= 0.50, (name, avg)

@@ -173,3 +173,24 @@ def exact_stationary(N, eps, delta):
 def test_stationary_matches_exact_fractions_to_13_digits(N, eps, delta):
     exact = np.array([float(p) for p in exact_stationary(N, eps, delta)])
     assert kirman.stationary(N, eps, delta) == pytest.approx(exact, rel=1e-13)
+
+
+# ------------------------------------------------------------------ found by the overnight mutation test (Nov 2026)
+
+def test_simulate_returns_steps_plus_one_counts_from_half_the_ants():
+    k = kirman.simulate(11, 0.01, 0.1, 50, seed=0)
+    assert len(k) == 51 and k[0] == 5                          # N // 2
+    assert len(kirman.simulate(11, 0.01, 0.1, 0, seed=0)) == 1  # 0 steps is allowed
+    assert kirman.simulate(10, 0.01, 0.1, 5, seed=0, k0=0)[0] == 0
+    assert kirman.simulate(10, 0.01, 0.1, 5, seed=0, k0=10)[0] == 10
+
+
+def test_the_two_move_chances_may_add_to_exactly_one_but_not_more():
+    # largest sum, at k = N // 2: eps + (1 - delta) * 2 k (N - k) / (N (N - 1))
+    N, delta = 10, 0.5
+    top = (1 - delta) * 2 * 5 * 5 / (10 * 9)                   # 0.2778
+    kirman.check(N, 1 - top, delta)                            # sum exactly 1: allowed
+    with pytest.raises(ValueError, match="too large"):
+        kirman.check(N, 1 - top + 0.01, delta)
+    kirman.check(N, 1.0, 1.0)                                  # eps = 1 with no herding
+    kirman.check(11, 1 - (1 - delta) * 2 * 5 * 6 / (11 * 10), delta)   # odd N: k = 5

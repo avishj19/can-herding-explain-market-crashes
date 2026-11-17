@@ -17,8 +17,10 @@ nr = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(nr)
 
 RNG = np.random.default_rng(7)
-NEWS = RNG.normal(0, 0.01, 50_000)
-NOISE = RNG.normal(0, 0.01, 50_000)          # independent of NEWS, same variance
+# 200,000 days (was 50,000): the overnight stress test (Nov 2026) reran these tests with 39
+# other seeds, and three checks had less than 4 sd of room; 4 times the days halves the sd
+NEWS = RNG.normal(0, 0.01, 200_000)
+NOISE = RNG.normal(0, 0.01, 200_000)         # independent of NEWS, same variance
 
 
 @pytest.fixture(scope="module")
@@ -302,7 +304,9 @@ def test_group_z_by_hand():
     assert nr.group_z([40, 60]) == 0
     assert nr.group_z([100.0] * 12) == pytest.approx(50 / (100 / 12))    # se = 28.87 / sqrt(12)
     assert nr.group_z([0.0] * 3) == pytest.approx(-3.0)                  # -50 / (28.87 / 1.732)
-    u = np.random.default_rng(1).uniform(0, 100, (4000, 33))             # ordinary days: z ~ N(0, 1)
+    # ordinary days: z ~ N(0, 1). 16,000 rows (was 4,000, which left 3.9 sd of room for the
+    # sd check over 39 other seeds): the sd of z.std() is now 0.0064, of z.mean() 0.008
+    u = np.random.default_rng(1).uniform(0, 100, (16000, 33))
     z = np.array([nr.group_z(row) for row in u])
     assert abs(z.mean()) < 0.06 and z.std() == pytest.approx(1.0, abs=0.05)
     with pytest.raises(ValueError):

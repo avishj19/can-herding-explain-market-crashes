@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from herding import model, policy
+from herding import experiments, model, policy
 from helpers import SerialPool
 
 TIGHT = dict(levels=(0.003, 0.006, 0.009), halt_minutes=15)   # fires often in set I
@@ -45,9 +45,11 @@ def test_breakers_that_never_fire_leave_the_pair_identical():
 
 
 def test_the_first_halt_event_is_measured_from_identical_histories():
-    out = policy._breaker_pair((model.SET_I, 2, 2000, TIGHT))
-    off = model.simulate(model.SET_I, 2000 + policy.BURN, seed=2)
-    on = model.simulate(model.SET_I, 2000 + policy.BURN, seed=2, breakers=TIGHT)
+    # CALM, not set I: set I ran away within these 3,000 days on 11 of 39 other seeds
+    # (overnight stress test, Nov 2026); this test is about halts, not runaways
+    out = policy._breaker_pair((CALM, 2, 2000, TIGHT))
+    off = model.simulate(CALM, 2000 + policy.BURN, seed=2)
+    on = model.simulate(CALM, 2000 + policy.BURN, seed=2, breakers=TIGHT)
     d = int(np.flatnonzero(on["halts"])[0])
     assert np.array_equal(off["lp"][:d + 1], on["lp"][:d + 1])   # same until the halt
     for k in policy.EVENT_DAYS:
@@ -59,20 +61,25 @@ def test_the_first_halt_event_is_measured_from_identical_histories():
 
 
 def test_breaker_experiment_collects_every_seed():
-    whole, events, bad = policy.breaker_experiment(SerialPool(), model.SET_I, (1, 2, 3), 1500, TIGHT)
+    whole, events, bad = policy.breaker_experiment(SerialPool(), CALM, (1, 2, 3), 1500, TIGHT)
     assert bad == 0
     assert all(len(v) == 3 for side in whole.values() for v in side.values())
     assert set(events["on"]) == set(policy.EVENT_DAYS) and len(events["on"][1]) == 3
 
 
 def test_a_surprise_in_a_calm_market_moves_the_price_by_its_size():
-    # Fundamentalists alone pull the price to the new value within days: the fall
-    # is 1 surprise (to within one 0.1% tick per 10%), no overshoot, and without the
-    # surprise nothing moves (placebo 0).
-    out, bad = policy.surprise_experiment(SerialPool(), QUIET, range(1, 9), size=-0.1)
+    # Fundamentalists alone pull the price to the new value: the fall is 1 surprise and
+    # without the surprise nothing moves (placebo 0). One 0.1% tick is 0.0095 surprises.
+    # The price can only rest on whole ticks, so before and after it sits up to about a
+    # tick from its value: after 30 days the fall is within 2 ticks of 1 (over 4,000
+    # seeds: at most 1.73 ticks). The largest overshoot on the way was 2.7 ticks; 4 are
+    # allowed. (The old test looked after 10 days and allowed 2 ticks: the price had not
+    # always settled, and it failed on 15 of 39 other seeds; overnight stress test.)
+    tick = np.log(1.001) / -np.log(0.9)
+    out, bad = policy.surprise_experiment(SerialPool(), QUIET, range(1, 9), size=-0.1, horizon=30)
     assert bad == 0
-    assert np.all(np.abs(out["end"] - 1) < 0.02)
-    assert np.all(out["peak"] < 1.02)
+    assert np.all(np.abs(out["end"] - 1) < 2 * tick)
+    assert np.all(out["peak"] < 1 + 4 * tick)
     assert np.all(out["placebo_peak"] == 0)
     assert np.all((out["chartists"] > 0) & (out["chartists"] < 1))
 
@@ -183,3 +190,37 @@ def test_scaled_breakers_keeps_the_3_25_pm_cutoff():
 def test_bootstrap_helpers_reject_nan_and_unequal_lengths(f, a, b):
     with pytest.raises(ValueError):
         f(a, b)
+
+
+# ------------------------------------------------------------------ found by the overnight mutation test (Nov 2026)
+
+def test_crash_measures_by_hand():
+    r = np.array([0.01, -0.03, -0.02, 0.005, -0.25, 0.02] * 5)
+    m = policy.crash_measures(r, 0.02)
+    # a crash day falls 2% or more: log return <= ln(0.98) = -0.0202. So -0.03 and -0.25 count
+    # and -0.02 (a 1.98% fall) does not: 2 a block, 5 blocks
+    assert m["crash_days"] == 10
+    assert m["worst_1d"] == experiments.worst_fall(r, 1) == pytest.approx(0.25)   # cumulative sums: round-off
+    assert m["worst_5d"] == experiments.worst_fall(r, 5)
+    assert m["worst_20d"] == experiments.worst_fall(r, 20)
+    assert policy.EVENT_DAYS == (1, 5, 20)
+
+
+def test_the_bootstrap_intervals_resample_every_history():
+    d = np.arange(1.0, 11.0)
+    mean, lo, hi = policy.paired_difference(np.zeros(10), d, draws=500, seed=3)
+    g = np.random.default_rng(3)
+    means = d[g.integers(0, 10, (500, 10))].mean(axis=1)
+    assert (mean, lo, hi) == (5.5, np.quantile(means, 0.025), np.quantile(means, 0.975))
+    med, lo, hi = policy.median_overshoot(d + 1, np.zeros(10), draws=500, seed=3)
+    g = np.random.default_rng(3)
+    meds = np.median(d[g.integers(0, 10, (500, 10))], axis=1)
+    assert (med, lo, hi) == (5.5, np.quantile(meds, 0.025), np.quantile(meds, 0.975))
+    policy.paired_difference([0.0, 0.0], [1.0, 2.0])          # 2 pairs: the smallest allowed
+
+
+def test_closed_days_count_only_level_3():
+    out = policy._breaker_pair((CALM, 2, 2000, TIGHT))
+    on = model.simulate(CALM, 2000 + policy.BURN, seed=2, breakers=TIGHT)
+    assert out["on"]["closed_days"] == int(np.sum(on["halts"][policy.BURN:] == 3))
+    assert out["on"]["closed_days"] < out["on"]["halt_days"]

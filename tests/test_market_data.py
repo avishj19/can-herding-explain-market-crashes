@@ -271,3 +271,16 @@ def test_dow_1914_closure_is_one_long_gap():
     days = data.returns("dow").index
     gap = days[1:] - days[:-1]
     assert str(days[1:][gap.argmax()].date()) == "1914-12-12" and gap.max().days == 135
+
+
+# ------------------------------------------------------------------ found by the overnight mutation test (Nov 2026)
+
+@pytest.mark.parametrize("body, words", [
+    ("Date,Close\n2020-01-02,100\n2020-01-03,0\n", "positive"),       # a price of exactly 0
+    ("Date,Close\n2020-01-02,100\n2020-01-02,101\n", "unique|sorted|duplicate"),  # sorted, repeated
+])
+def test_load_prices_rejects_zero_prices_and_repeated_dates(tmp_path, body, words):
+    f = tmp_path / "x.csv"
+    f.write_text(body)
+    with pytest.raises(ValueError, match=words):
+        data.load_prices(f)

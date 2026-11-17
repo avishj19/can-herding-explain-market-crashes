@@ -57,7 +57,10 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
 - `tests/`: one test file per module; `python3 -m pytest tests/ -q` (quick: add `-m "not slow"`).
   Exact answers must match to 12 digits (`conftest.py`); noisy checks use measured tolerances
   (`helpers.py`: RECIPES, TOLERANCE from `scripts/analysis/test_accuracy_audit.py`); how accurate each test is:
-  `docs/TEST_ACCURACY.md`; `tolerance_recorder.py` records every comparison
+  `docs/TEST_ACCURACY.md`; `tolerance_recorder.py` records every comparison.
+  Overnight stress test: `tests/stress/overnight.py` (the suite rerun with other seeds, and
+  deliberate small bugs it must catch; resumable, results in `scratch/overnight/`). Tests
+  marked `pinned_seed` describe one documented history and are skipped with other seeds
 - `scripts/analysis/`: scripts behind individual findings (see its README; older versions are in git history)
 - `docs/proposal.pdf`: my project proposal; `docs/course_project_guide.pdf`: the course's project handout (local only, git-ignored)
 - `data/`: made by `data/download_market_data.py` (all series end 2026-10-30): S&P 500 1950- and 1928- (Yahoo ^GSPC),

@@ -110,7 +110,8 @@ def test_bootstrap_matches_the_textbook_interval_for_independent_days():
     r = rng.normal(0, 0.01, n) + np.where(dem, 0.001, 0.0)
     se = 0.01 * np.sqrt(1 / 2000 + 1 / 2000) * YEAR
     b = ps.bootstrap_interval(r, dem, block=1, draws=4000, seed=5)
-    assert b["high"] - b["low"] == pytest.approx(2 * 1.96 * se, rel=0.08)
+    # over 39 other seeds the width is 0.45% low on average with sd 1.9%: 5 sd is 10%
+    assert b["high"] - b["low"] == pytest.approx(2 * 1.96 * se, rel=0.1)
     assert (b["low"] + b["high"]) / 2 == pytest.approx(ps.return_gap(r, dem), abs=0.3 * se)
 
 

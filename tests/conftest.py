@@ -21,3 +21,8 @@ ApproxScalar.DEFAULT_RELATIVE_TOLERANCE = 1e-12
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: long simulations (skip with -m 'not slow')")
+    # The overnight stress test (tests/stress/overnight.py) reruns the suite with every seed
+    # changed; a correct test must pass for any seed. These few are the exception on purpose:
+    # each describes one particular documented history (a golden output, the day a known
+    # seed runs away, a number quoted in the documents), so it is skipped in those reruns.
+    config.addinivalue_line("markers", "pinned_seed: describes one particular random history")

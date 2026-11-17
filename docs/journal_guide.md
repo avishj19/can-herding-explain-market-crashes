@@ -12,6 +12,9 @@ moments that matter. Line numbers are in `journal/readable/<session>.md`.
 | `3715dd0d` | Side question: the VS Code run button |
 | `50651951`, `2457780e`, `d1f0e881`, `be5bed11` | Overnight Nov 5–6, sessions I set up to run while I slept: independent check, figures (stages A and B), final review |
 | `43cd33d8` | Morning of Nov 6: my decisions on the overnight questions |
+| `6e56466b` | Nov 6–9: tidying the folders so VS Code shows the work clearly |
+| `562e93e7` | Nov 9–14: "100,000 tests" debugging run with a PDF report; the parties extension |
+| `bdb43497` | Nov 16–17: outside news (commodities, rates, Fed days), test precision, the overnight stress test |
 
 ## Key moments in `1769bda2`
 
@@ -45,6 +48,20 @@ figures in the paper's style. Summary: `figures/RESULTS.md`, "Overnight recalibr
 - changed Fig 6 to δ = 0.1, so Kirman's ant story holds literally;
 - refused a speed-up that was not bit-identical (reproducibility first);
 - corrected H of |returns| to 0.81 ± 0.03.
+
+## Outside news, test precision and the overnight stress test (`bdb43497`, Nov 16–17)
+- 3: my request: missing data, news every trader acts on, commodities' beta and correlation.
+- 229–268: findings: outside news explains 16% of the S&P's daily moves, and the fat tails and
+  memory survive once it is removed (Figs 16–18, `docs/MISSING_DATA.md`).
+- 287: "error accuracy of each test": exact tests now demand 12 digits, and noisy ones use
+  |bias| + 5 sd from 200 seeds (`docs/TEST_ACCURACY.md`).
+- After 583: the overnight stress test (`tests/stress/overnight.py`). The whole suite was
+  rerun with 39 other seed sets and 2,638 small deliberate bugs were planted one at a time.
+  Found: 25 tests that passed only with their own seeds (now fixed or marked as describing one
+  documented history), a model property (chartists gain about 0.0016 of the market a day
+  when profits are equal, a time-step effect), a process-pool hang on runaways (fixed), and
+  the S&P settings' runaway rate measured on 400 histories (2.75%). Details:
+  `docs/TEST_ACCURACY.md`, section 4.
 
 ## Git history
 Commit messages are in my own words: `git log --oneline`.

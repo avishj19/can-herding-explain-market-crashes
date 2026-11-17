@@ -173,9 +173,14 @@ def test_luck_test_matches_gaps_rolled_by_hand():
 
 def test_luck_test_puts_a_planted_gap_at_the_top():
     r = market(9)
+    before = pf.luck_test(r)["real"]
     r[dem_by_hand(r.index)] += 0.003                   # Democrats get +0.3% a day
     test = pf.luck_test(r)
-    assert test["percentile"] == 100 and test["real"] > 60
+    assert test["percentile"] == 100
+    # the gap is a difference of means, so the planted 0.3% a day adds exactly
+    # 100 * 252 * 0.003 = 75.6% a year. (The old check, real > 60, ignored the luck in the
+    # gap itself, about 9% a year: it failed on 1 of 39 other seeds, overnight stress test.)
+    assert test["real"] - before == pytest.approx(75.6)
 
 
 def test_rolling_gaps_match_windows_cut_by_hand():

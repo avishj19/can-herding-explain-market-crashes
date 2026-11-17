@@ -476,13 +476,16 @@ the Dow traded about 295 days a year before 1952, so its gap per calendar year i
 ### Is the luck test itself sound? (`tests/test_politics_heavy.py`)
 A test can be wrong too, so the method was tried on 1,100 made-up markets that have realistic
 calm and wild spells but **no** party effect at all (two generators, described in the test file).
-- **The shifted calendar is fair.** It called a no-effect market "unusual" 9–12% of the time on
-  every measure; a fair test gives 10%.
+- **The shifted calendar is nearly fair, slightly generous.** It called a no-effect market
+  "unusual" 9–12% of the time on every measure; a fair test gives 10%. Rerun with 24 other sets
+  of random numbers (overnight stress test, Nov 2026), it averaged 11.7% (every measure
+  11.2–12.0%): about 1 market in 8.5 instead of 1 in 10. So a percentile just outside 5–95
+  against shifted calendars is a little weaker evidence than it looks.
 - **It cannot see small gaps.** With only 12–15 changes of party, a true gap of 5% a year is
   missed about 60% of the time, and a true 7% gap about 35% of the time. So "not unusual" does
   not prove there is no gap; it means the data cannot tell.
 - **The model is too narrow a yardstick on every measure, not only returns.** It called the
-  no-effect markets "unusual" 29–50% of the time. Its calm and wild spells are shorter than the
+  no-effect markets "unusual" 29–50% of the time (25–48% averaged over 24 other seed sets). Its calm and wild spells are shorter than the
   made-up markets' (and the real market's, Fig 12b), so its gaps wobble too little.
 - The same tests found and fixed four input-handling bugs in `politics.py` (empty or missing
   dates, unsorted dates, `min_days=0`); none affected a result.

@@ -17,6 +17,7 @@ def test_histories_drop_the_burn_in_and_match_a_direct_run():
     assert len(out[1]["r"]) == 200
 
 
+@pytest.mark.pinned_seed          # needs a seed that runs away and one that does not
 def test_a_runaway_history_is_reported_not_lost():
     p = dict(model.SET_I)            # seed 1 runs away on day 28,511
     with Pool(2) as pool:            # one real pool for both calls
@@ -81,3 +82,24 @@ def test_window_sums_by_hand():
     assert list(experiments.window_sums([1, 2, 4, 8], 4)) == [15]
     with pytest.raises(ValueError, match="n must"):
         experiments.window_sums([1, 2], 3)
+
+
+# ------------------------------------------------------------------ found by the overnight mutation test (Nov 2026)
+
+def test_typical_picks_the_median_mismatch_by_hand():
+    fps = [dict(a=0.0, b=10.0), dict(a=1.0, b=10.0), dict(a=2.0, b=14.0),
+           dict(a=3.0, b=10.0), dict(a=9.0, b=30.0)]
+    target = dict(a=1.0, b=12.0)
+    v = np.array([[f["a"], f["b"]] for f in fps])
+    sd = v.std(axis=0)
+    miss = (((v - [1.0, 12.0]) / sd) ** 2).mean(axis=1)
+    assert experiments.typical(fps, target) == int(np.argsort(miss)[2])
+    # a measure that never varies counts in its own units (spread 1), not divided by 0
+    flat = [dict(a=x, c=5.0) for x in (0.0, 1.0, 2.0)]
+    assert experiments.typical(flat, dict(a=0.0, c=7.0)) == 1
+
+
+@pytest.mark.parametrize("k", [0, 4, True, 1.5])
+def test_worst_fall_rejects_impossible_windows(k):
+    with pytest.raises(ValueError, match="k must"):
+        experiments.worst_fall([0.1, -0.2, 0.3], k)

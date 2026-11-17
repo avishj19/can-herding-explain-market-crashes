@@ -80,6 +80,12 @@ class RunawayError(RuntimeError):
         super().__init__(message)
         self.day = day
 
+    def __reduce__(self):
+        # so a worker process can send it back: without this, unpickling called
+        # RunawayError(message) without `day`, and a process pool hung for good
+        # (found by the overnight stress test, Nov 2026)
+        return RunawayError, (self.args[0], self.day)
+
 
 def check(p):
     """Raise ValueError unless p has exactly the known settings with sensible values."""

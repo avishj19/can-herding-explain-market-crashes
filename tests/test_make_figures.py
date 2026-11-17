@@ -76,6 +76,7 @@ def test_fig6_kirman(tmp_path):
 
 
 @pytest.mark.slow
+@pytest.mark.pinned_seed     # Fig 8 uses the project's held-out seeds, which do not run away
 def test_fig8_fig9_fig10_with_the_fitted_settings(tmp_path):
     if not calibrate.settings_path("spx").exists():
         pytest.skip("not fitted yet")

@@ -3,10 +3,11 @@ actual, error, allowed error), to see how much of its tolerance each test uses.
 
 Run from the project folder:
     PYTHONPATH=tests python3 -m pytest tests/ -q -p tolerance_recorder
-Writes scratch/tolerances.csv. It only records; it never changes a result.
+Writes scratch/tolerances.csv (or the file named by TOLERANCE_CSV). It only records; it never changes a result.
 """
 import csv
 import math
+import os
 from pathlib import Path
 
 from _pytest import python_api
@@ -35,7 +36,8 @@ def pytest_runtest_call(item):
 
 
 def pytest_sessionfinish(session):
-    out = Path(__file__).resolve().parents[1] / "scratch" / "tolerances.csv"
+    out = Path(os.environ.get("TOLERANCE_CSV")
+               or Path(__file__).resolve().parents[1] / "scratch" / "tolerances.csv")
     out.parent.mkdir(exist_ok=True)
     with out.open("w", newline="") as f:
         w = csv.writer(f)

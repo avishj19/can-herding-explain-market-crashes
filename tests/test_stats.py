@@ -247,7 +247,9 @@ def test_fingerprint_volatility_memory_50_on_known_process():
     g = np.random.default_rng(5)
     x = regime_vol(16_000, g)
     assert stats.fingerprint(x)["H_abs"] > 0.6
-    assert stats.fingerprint(g.permutation(x))["H_abs"] == pytest.approx(0.5, abs=0.03)
+    # sd 0.011 over 39 other seeds (fingerprint's H hardly shrinks with length, see
+    # docs/TEST_ACCURACY.md), so 5 sd is 0.06; it was 0.03 (2.6 sd)
+    assert stats.fingerprint(g.permutation(x))["H_abs"] == pytest.approx(0.5, abs=0.06)
 
 
 def test_fingerprint_of_the_sp500_has_the_published_shape():
@@ -455,3 +457,60 @@ def test_moments_interval_has_the_textbook_width_for_white_noise():
 def test_moments_rejects_bad_draws():
     with pytest.raises(ValueError, match="draws"):
         stats.moments(np.arange(10.0), draws=1)
+
+
+# ------------------------------------------------------------------ found by the overnight mutation test (Nov 2026)
+# Small deliberate bugs that no test noticed: a wrong lag, horizon or percentile inside
+# fingerprint() and moments(), and limits that were never tried at their exact edge.
+
+def test_fingerprint_entries_are_the_functions_they_name():
+    r = np.random.default_rng(11).standard_t(4, 3000) * 0.01
+    f, a = stats.fingerprint(r), np.abs(r)
+    assert f["ac_r_1"] == stats.acf(r, 1)[0]
+    assert f["ac_abs_1"] == stats.acf(a, 1)[0]
+    assert f["ac_abs_50"] == stats.acf(a, 50)[0]
+    assert f["kurt_5"] == stats.kurtosis(stats.aggregate(r, 5))
+    assert f["kurt_25"] == stats.kurtosis(stats.aggregate(r, 25))
+    assert f["alpha_hill"] == stats.hill_alpha(r, 0.05)
+    assert f["H"] == stats.hurst(r, stats.dfa_scales(len(r)))
+    assert f["H_abs"] == stats.hurst(a, stats.dfa_scales(len(r)))
+    assert f["sd"] == r.std() and f["kurtosis"] == stats.kurtosis(r)
+    stats.fingerprint(r[:500])                                  # exactly the minimum
+
+
+def test_moments_intervals_are_the_2_5_and_97_5_percentiles_of_the_same_draws():
+    r = np.random.default_rng(12).standard_normal(1000)
+    out = stats.moments(r, block=50, draws=300, seed=4)
+    g = np.random.default_rng(4)
+    four = lambda x: (x.mean(), x.std(), stats.skewness(x), stats.kurtosis(x))
+    boot = np.array([four(r[stats.block_indices(1000, 50, g)]) for _ in range(300)])
+    for j, k in enumerate(stats.MOMENTS):
+        assert out[k] == (four(r)[j], np.percentile(boot[:, j], 2.5), np.percentile(boot[:, j], 97.5))
+    stats.moments(r, draws=2)                                   # the smallest allowed
+
+
+def test_block_indices_by_hand():
+    g1, g2 = np.random.default_rng(5), np.random.default_rng(5)
+    i = stats.block_indices(10, 3, g1)
+    starts = g2.integers(0, 10, 4)                             # ceil(10 / 3) = 4 runs
+    assert list(i) == [(s + j) % 10 for s in starts for j in range(3)][:10]
+    # every start, including day 0, must be possible
+    g = np.random.default_rng(0)
+    firsts = {stats.block_indices(10, 10, g)[0] for _ in range(400)}
+    assert firsts == set(range(10))
+    assert len(stats.block_indices(7, 7, g)) == 7               # block = n is allowed
+
+
+def test_hill_uses_at_least_10_tail_values():
+    a = np.abs(np.random.default_rng(13).standard_normal(400))
+    s = np.sort(a)[::-1]                                       # 400 * 0.01 = 4 < 10, so k = 10
+    assert stats.hill_alpha(a, 0.01) == pytest.approx(1 / np.mean(np.log(s[:10] / s[10])))
+
+
+def test_limits_at_their_exact_edge():
+    r = np.random.default_rng(14).standard_normal(100)
+    assert len(stats.aggregate(r, 100)) == 1                   # tau = all the days
+    assert len(stats.acf(r, 98)) == 1                          # the longest lag allowed
+    with pytest.raises(ValueError):
+        stats.acf(r, 99)
+    assert stats.dfa_scales(64)[-1] == 16                       # n // 4 = the smallest scale
