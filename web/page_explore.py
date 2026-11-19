@@ -22,6 +22,20 @@ YAHOO = {"S&P 500": "^GSPC", "Nasdaq-100": "^NDX", "Dow Jones": "^DJI", "Brent o
 FRAMES = ["1D", "7D", "YTD", "1Y", "5Y", "20Y", "All"]
 DAYS = {"1Y": 252, "5Y": 1260, "20Y": 5040}
 VIEWS = ["Price", "Tail", "Histogram", "Bursts", "Memory"]
+# one sentence under each chart for first-time visitors: what it shows and what to look for
+HINTS = {
+    "Price": "The price over the range you picked. Triangles mark days that moved more than 4 standard "
+             "deviations; a bell curve says those should almost never happen. The lower panel shows how far "
+             "the price sits below its last high.",
+    "Tail": "How often big days happen. Read left to right: the further a line stays up, the more often "
+            "big moves happen. The dotted bell curve drops off fast; look for the line that follows this market best.",
+    "Histogram": "How common each size of daily move is. Compared with the dotted bell curve, real markets have "
+                 "more quiet days in the middle and more extreme days at the edges.",
+    "Bursts": "Each day's move, measured in standard deviations. Notice that wild days come in clusters, both in "
+              "the real market (top) and in the herding model (bottom).",
+    "Memory": "Does a big move today mean big moves later? Above 0 means yes. Real markets stay above 0 for "
+              "months; the bell-curve model drops to 0 at once.",
+}
 PRESETS = {"S&P 500 fit": None, "Strong herding": 1.6, "Weak herding": 0.6, "No herding": 0.0}
 
 
@@ -146,7 +160,7 @@ def _price_chart(name, cl, r, daily_range, show_big, show_dd, log, intraday, fut
             b = big[(big["move"] > 0) == up]
             fig.add_scatter(x=b.index, y=daily_range[b.index].values, mode="markers",
                             name=f"Big {'rise' if up else 'fall'} (> 4 sd)",
-                            marker=dict(symbol=sym, size=10, color=col, line=dict(color="#0B0E13", width=1)),
+                            marker=dict(symbol=sym, size=10, color=col, line=dict(color=c.BG, width=1)),
                             customdata=np.c_[b["move"], b["sd"]],
                             hovertemplate="%{x|%b %d, %Y}<br>%{customdata[0]:+.1%} (%{customdata[1]:+.1f} sd)<extra></extra>",
                             row=1, col=1)
@@ -154,7 +168,7 @@ def _price_chart(name, cl, r, daily_range, show_big, show_dd, log, intraday, fut
         dd = cl / cl.cummax() - 1
         x, y = c.thin(dd.index, dd.values)
         fig.add_scatter(x=x, y=y, mode="lines", name="Drawdown", fill="tozeroy",
-                        line=dict(color=c.DOWN, width=1), fillcolor="rgba(255,122,107,0.15)",
+                        line=dict(color=c.DOWN, width=1), fillcolor=c.DOWN_FILL,
                         hovertemplate=f"%{{x|{fmt}}}<br>%{{y:.1%}} below the high<extra></extra>", row=2, col=1)
     c.style(fig, height=470)
     fig.update_yaxes(type="log" if log else "-", title="Price", row=1, col=1)
@@ -254,9 +268,11 @@ def chart_panel(name, symbol, close, r, mixes):
             log = t3.toggle("Log scale", value=True, key="t_log")
             c.show(_price_chart(name, cl, r, daily_range, show_big, show_dd, log, intraday,
                                 futures=symbol.endswith("=F")), key="price_chart")
+            c.hint(HINTS["Price"])
         else:
             rr = r[r.index >= daily_range.index[0]] if len(daily_range) > 1 else r
             c.show(_bursts_chart(name, rr if len(rr) > 1 else r, r, mixes["herding"][0]), key="bursts_chart")
+            c.hint(HINTS["Bursts"])
         if note or bursts_note:
             st.caption(note or bursts_note)
     else:
@@ -270,6 +286,7 @@ def chart_panel(name, symbol, close, r, mixes):
                     if rr is not None:
                         earlier.append((prm["a1"], prm["seed"], rr))
         c.show(_model_chart(view, name, r, mixes, earlier), key=f"model_chart_{view}")
+        c.hint(HINTS[view])
 
 
 def page():
@@ -277,6 +294,7 @@ def page():
     _sidebar()
     ss = st.session_state
     source, name = ss.asset
+    st.page_link("web/page_guide.py", label="New here? How to use this page", icon=":material/help:")
 
     head_l, head_r = st.columns([3, 2], vertical_alignment="bottom")
     live = head_r.toggle("Live prices", value=False,

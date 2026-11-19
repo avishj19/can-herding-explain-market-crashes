@@ -1,12 +1,16 @@
 """Shared look and cached data for every page of the web app (app.py).
 
-Colors mean one thing each, on every page (Okabe-Ito colors, readable with color blindness):
-    white          the real market
-    blue           fundamentalists only (the bell-curve base case)
-    orange         chartists without herding
-    pink           chartists who herd (the full model)
-    gray, dotted   the bell curve
-    green / coral  only gains / losses, always with an arrow
+Light and dark mode. Streamlit itself recolors the page, tables and controls from the two color
+sets in .streamlit/config.toml. The button at the top right (mode_button) saves the choice where
+Streamlit keeps it and reloads. Everything drawn here (charts, the small text styles) takes its
+colors from PALETTES for the current visitor's mode: pages write c.REAL, c.MIX, ... and the module
+__getattr__ below answers for that visitor, so two visitors in different modes never mix.
+
+Colors mean one thing each, in both modes (Okabe-Ito colors, readable with color blindness):
+    REAL           the real market (white in dark mode, ink in light mode)
+    MIX            fundamentalists blue, chartists orange, herding pink
+    BELL           the bell curve, gray and dotted
+    UP / DOWN      only gains / losses, always with an arrow
 Buttons, sliders and switches are gray, so color on a page always means data.
 
 Smoothness: no line is drawn with more than about 1,500 points (explore.thin_indices keeps every
@@ -19,15 +23,28 @@ import streamlit as st
 
 from herding import explore as ex
 
-REAL, BELL, UP, DOWN = "#F2F4F8", "#7D8594", "#34D399", "#FF7A6B"
-GRID, CARD, MUTED = "#1F2632", "#11151C", "#8B93A3"
 MONO = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
-MIX = {  # key: (name, one-line meaning, color, line style)
-    "fundamentalists": ("Fundamentalists only", "trade on the true value", "#56B4E9", "dot"),
-    "chartists": ("Chartists, no herding", "follow the trend alone", "#E69F00", "dash"),
-    "herding": ("Chartists who herd", "follow the trend and copy the crowd", "#D98BBE", "solid"),
+_NAMES = {"fundamentalists": ("Fundamentalists only", "trade on the true value", "dot"),
+          "chartists": ("Chartists, no herding", "follow the trend alone", "dash"),
+          "herding": ("Chartists who herd", "follow the trend and copy the crowd", "solid")}
+PALETTES = {
+    "dark": dict(REAL="#F2F4F8", BELL="#7D8594", UP="#34D399", DOWN="#FF7A6B", GRID="#1F2632",
+                 CARD="#11151C", MUTED="#8B93A3", BG="#0B0E13", TEXT2="#C3C8D3", GUIDE="#5C5E6B",
+                 SHADE_MID="#9AA3B5", SHADE_LOW="#5C6577", FAINT="rgba(255,255,255,0.04)",
+                 OK_FILL="rgba(52,211,153,0.08)", DOWN_FILL="rgba(255,122,107,0.15)",
+                 UP_FILL="rgba(52,211,153,0.10)", HERD_FILL="rgba(217,139,190,0.15)",
+                 TEMPLATE="plotly_dark", BUTTON="#E6E8EE", BUTTON_TEXT="#0B0E13",
+                 MIXC=dict(fundamentalists="#56B4E9", chartists="#E69F00", herding="#D98BBE"),
+                 PICK=["#F2F2F5", "#F0E442", "#4FD1C5", "#FF9F7F", "#A3E635", "#93C5FD"]),
+    "light": dict(REAL="#111827", BELL="#6B7280", UP="#059669", DOWN="#D9412F", GRID="#E5E7EB",
+                  CARD="#FFFFFF", MUTED="#5F6673", BG="#FFFFFF", TEXT2="#374151", GUIDE="#9CA3AF",
+                  SHADE_MID="#6B7280", SHADE_LOW="#C4C9D2", FAINT="rgba(17,24,39,0.04)",
+                  OK_FILL="rgba(5,150,105,0.08)", DOWN_FILL="rgba(217,65,47,0.12)",
+                  UP_FILL="rgba(5,150,105,0.10)", HERD_FILL="rgba(185,71,143,0.12)",
+                  TEMPLATE="plotly_white", BUTTON="#111827", BUTTON_TEXT="#FFFFFF",
+                  MIXC=dict(fundamentalists="#0072B2", chartists="#C77700", herding="#B9478F"),
+                  PICK=["#111827", "#B58900", "#0F8B8D", "#D55E00", "#4D7C0F", "#2563EB"]),
 }
-PICK = ["#F2F2F5", "#F0E442", "#4FD1C5", "#FF9F7F", "#A3E635", "#93C5FD"]   # labels for markets you pick
 MAX_POINTS = 1500
 PLOT_CONFIG = {"displaylogo": False, "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
                "toImageButtonOptions": {"format": "png", "scale": 2}}
@@ -44,9 +61,96 @@ HELP = {
 }
 
 
+# ------------------------------------------------------------------ light / dark mode
+def mode():
+    """'light' or 'dark' for this visitor: what the browser reports, else the mode the button just
+    set (?mode= in the address), else the last mode seen in this session, else dark."""
+    ss = st.session_state
+    try:
+        t = st.context.theme.type
+    except Exception:                       # no browser (tests, scripts)
+        t = None
+    q = st.query_params.get("mode")
+    if t in ("light", "dark"):
+        ss["_mode"] = t
+    elif q in ("light", "dark"):
+        ss["_mode"] = q
+    return ss.get("_mode", "dark")
+
+
+def pal():
+    return PALETTES[mode()]
+
+
+def __getattr__(name):
+    """c.REAL, c.MIX, ... for the current visitor's mode (see the module docstring)."""
+    if name == "MIX":
+        p = pal()
+        return {k: (n, sub, p["MIXC"][k], dash) for k, (n, sub, dash) in _NAMES.items()}
+    if name in PALETTES["dark"]:
+        return pal()[name]
+    raise AttributeError(name)
+
+
+MODE_SCRIPT = """<script>
+(function () {
+  const doc = window.document;
+  function current() {               // read the real background, so the label is always right
+    const el = doc.querySelector('.stApp') || doc.body;
+    const m = (getComputedStyle(el).backgroundColor.match(/\\d+/g) || [0, 0, 0]).map(Number);
+    return (0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2]) > 128 ? 'light' : 'dark';
+  }
+  function switchTo(next) {          // Streamlit keeps the choice as "Light"/"Dark" per page address
+    const val = JSON.stringify(next === 'light' ? 'Light' : 'Dark');
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('stActiveTheme-')) localStorage.setItem(k, val);
+    }
+    localStorage.setItem('stActiveTheme-' + location.pathname + '-v2', val);
+    const u = new URL(location.href);
+    u.searchParams.set('mode', next);
+    location.href = u.toString();
+  }
+  function place() {
+    // top right: at the front of the group that holds Share/Deploy and the ⋮ menu
+    const menu = doc.querySelector('[data-testid="stMainMenu"]');
+    const group = menu ? menu.parentElement : doc.querySelector('[data-testid="stToolbar"]');
+    if (!group) return;
+    let b = doc.getElementById('mode-toggle');
+    if (!b) {
+      b = doc.createElement('button');
+      b.id = 'mode-toggle';
+      b.type = 'button';
+      b.onclick = () => switchTo(current() === 'dark' ? 'light' : 'dark');
+    }
+    if (b.parentElement !== group) group.insertBefore(b, group.firstChild);
+    const cur = current();
+    const label = cur === 'dark' ? '\\u2600\\uFE0E  Light mode' : '\\u263E  Dark mode';
+    if (b.textContent !== label) {
+      b.textContent = label;
+      b.title = 'Switch to ' + (cur === 'dark' ? 'light' : 'dark') +
+                ' colors. The page reloads, so the Workspace run log starts over.';
+      b.setAttribute('aria-label', b.title);
+    }
+  }
+  place();
+  if (!window.__modeObserver) {
+    let queued = false;
+    window.__modeObserver = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; place(); });
+    });
+    window.__modeObserver.observe(doc.body, {childList: true, subtree: true});
+  }
+})();
+</script>"""
+
+
 def setup():
-    """Page-wide type and spacing. st.html, not st.markdown: markdown read the [kind="primary"]
-    selectors as link syntax and silently dropped them."""
+    """Page-wide type, spacing and the light/dark button. st.html, not st.markdown: markdown read
+    the [kind="primary"] selectors as link syntax and silently dropped them."""
+    p = pal()
     st.html(f"""<style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
     .block-container {{padding-top: 3.2rem; padding-bottom: 4rem; max-width: 1240px}}
@@ -54,42 +158,48 @@ def setup():
     h2 {{font-size: 1.2rem !important; font-weight: 600 !important; margin-top: .8rem !important}}
     h3 {{font-size: 1.02rem !important; font-weight: 600 !important}}
     p, li {{line-height: 1.6}}
-    hr {{margin: 1.6rem 0 !important; border-color: {GRID} !important}}
-    [data-testid="stVerticalBlockBorderWrapper"] {{border-radius: 8px; border-color: {GRID} !important}}
+    hr {{margin: 1.6rem 0 !important; border-color: {p['GRID']} !important}}
+    [data-testid="stVerticalBlockBorderWrapper"] {{border-radius: 8px; border-color: {p['GRID']} !important}}
     div[data-testid="stMetric"] {{padding: 2px 0}}
-    div[data-testid="stMetricLabel"] p {{color: {MUTED}; font-size: .8rem}}
+    div[data-testid="stMetricLabel"] p {{color: {p['MUTED']}; font-size: .8rem}}
     div[data-testid="stMetricValue"] {{font-family: {MONO}; font-variant-numeric: tabular-nums;
         font-size: 1.3rem !important; font-weight: 500}}
     .num {{font-family: {MONO}; font-variant-numeric: tabular-nums}}
-    .muted {{color: {MUTED}; font-size: .86rem}}
-    .lead {{color: #C3C8D3; max-width: 720px; margin-bottom: .6rem}}
-    .key {{display: flex; flex-wrap: wrap; gap: 16px; margin: .2rem 0 .8rem; font-size: .82rem; color: #B9BFCB}}
+    .muted {{color: {p['MUTED']}; font-size: .86rem}}
+    .lead {{color: {p['TEXT2']}; max-width: 720px; margin-bottom: .6rem}}
+    .hint {{color: {p['MUTED']}; font-size: .86rem; margin: -.2rem 0 .6rem}}
+    .key {{display: flex; flex-wrap: wrap; gap: 16px; margin: .2rem 0 .8rem; font-size: .82rem; color: {p['TEXT2']}}}
     .key span {{display: inline-flex; align-items: center; gap: 6px}}
     .sw {{display: inline-block; width: 20px; height: 0; border-top: 2.5px solid}}
     .stats {{display: flex; flex-wrap: wrap; gap: 6px 26px; margin: .2rem 0 .6rem}}
     .stats div {{min-width: 88px}}
-    .stats .l {{color: {MUTED}; font-size: .74rem}}
+    .stats .l {{color: {p['MUTED']}; font-size: .74rem}}
     .stats .v {{font-family: {MONO}; font-variant-numeric: tabular-nums; font-size: .98rem}}
     .price {{font-family: {MONO}; font-variant-numeric: tabular-nums; font-size: 1.9rem; font-weight: 500}}
-    .ok {{color: {UP}; font-weight: 600}} .no {{color: {DOWN}; font-weight: 600}}
-    button[kind="primaryFormSubmit"], button[kind="primary"] {{background: #E6E8EE !important;
-        color: #0B0E13 !important; border: 1px solid #E6E8EE !important; font-weight: 600}}
-    button[kind="primaryFormSubmit"]:hover, button[kind="primary"]:hover {{background: #FFFFFF !important}}
+    .ok {{color: {p['UP']}; font-weight: 600}} .no {{color: {p['DOWN']}; font-weight: 600}}
+    button[kind="primaryFormSubmit"], button[kind="primary"] {{background: {p['BUTTON']} !important;
+        color: {p['BUTTON_TEXT']} !important; border: 1px solid {p['BUTTON']} !important; font-weight: 600}}
+    #mode-toggle {{background: transparent; color: inherit; border: 1px solid {p['GRID']}; border-radius: 999px;
+        padding: 3px 12px; margin-right: 10px; font-size: .82rem; cursor: pointer; white-space: nowrap;
+        align-self: center}}
+    #mode-toggle:hover {{border-color: {p['MUTED']}}}
     </style>""")
+    st.html(MODE_SCRIPT, unsafe_allow_javascript=True)
 
 
 def color_key(*items):
     """One line saying what each color means (items: 'real', 'bell', 'updown' or a mix key)."""
+    p, mix = pal(), __getattr__("MIX")
     parts = []
     for it in items:
         if it == "real":
-            parts.append(f"<span><i class='sw' style='border-color:{REAL};border-top-width:3.5px'></i>real market</span>")
+            parts.append(f"<span><i class='sw' style='border-color:{p['REAL']};border-top-width:3.5px'></i>real market</span>")
         elif it == "bell":
-            parts.append(f"<span><i class='sw' style='border-color:{BELL};border-top-style:dotted'></i>bell curve</span>")
+            parts.append(f"<span><i class='sw' style='border-color:{p['BELL']};border-top-style:dotted'></i>bell curve</span>")
         elif it == "updown":
-            parts.append(f"<span style='color:{UP}'>▲ up</span><span style='color:{DOWN}'>▼ down</span>")
+            parts.append(f"<span style='color:{p['UP']}'>▲ up</span><span style='color:{p['DOWN']}'>▼ down</span>")
         else:
-            name, _, color, dash = MIX[it]
+            name, _, color, dash = mix[it]
             style = {"dot": "dotted", "dash": "dashed", "solid": "solid"}[dash]
             parts.append(f"<span><i class='sw' style='border-color:{color};border-top-style:{style}'></i>{name}</span>")
     st.markdown(f"<div class='key'>{''.join(parts)}</div>", unsafe_allow_html=True)
@@ -97,6 +207,11 @@ def color_key(*items):
 
 def lead(text):
     st.markdown(f"<p class='lead'>{text}</p>", unsafe_allow_html=True)
+
+
+def hint(text):
+    """A one-line 'how to read this' note under a chart, for first-time visitors."""
+    st.markdown(f"<p class='hint'>{text}</p>", unsafe_allow_html=True)
 
 
 def stats_row(items):
@@ -114,7 +229,8 @@ def verdict(passed):
 
 
 def arrow(x, fmt="{:.2%}"):
-    color = UP if x >= 0 else DOWN
+    p = pal()
+    color = p["UP"] if x >= 0 else p["DOWN"]
     return f"<span class='num' style='color:{color}'>{'▲' if x >= 0 else '▼'} {fmt.format(abs(x))}</span>", color
 
 
@@ -188,16 +304,20 @@ def sweep_table():
 
 # ------------------------------------------------------------------ charts
 def style(fig, height=380, logx=False, logy=False, xtitle="", ytitle="", legend=True):
-    """Dark chart with the legend in its own strip above the plot, so it never covers a line."""
-    fig.update_layout(template="plotly_dark", height=height, margin=dict(l=8, r=8, t=44 if legend else 12, b=8),
-                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor=CARD, hovermode="closest",
+    """Chart in the visitor's mode, with the legend in its own strip above the plot so it never
+    covers a line."""
+    p = pal()
+    fig.update_layout(template=p["TEMPLATE"], height=height, margin=dict(l=8, r=8, t=44 if legend else 12, b=8),
+                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor=p["CARD"], hovermode="closest",
                       showlegend=legend, font=dict(size=12), dragmode="zoom", uirevision="keep",
                       hoverlabel=dict(font=dict(family=MONO, size=12)),
                       legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="left", x=0,
                                   font=dict(size=11), bgcolor="rgba(0,0,0,0)"))
     # "-" lets plotly choose (dates or numbers); forcing "linear" left the date axis empty
-    fig.update_xaxes(type="log" if logx else "-", gridcolor=GRID, zeroline=False, title=xtitle)
-    fig.update_yaxes(type="log" if logy else "-", gridcolor=GRID, zeroline=False, title=ytitle)
+    fig.update_xaxes(type="log" if logx else "-", gridcolor=p["GRID"], zeroline=False, title=xtitle,
+                     linecolor=p["GRID"])
+    fig.update_yaxes(type="log" if logy else "-", gridcolor=p["GRID"], zeroline=False, title=ytitle,
+                     linecolor=p["GRID"])
     return fig
 
 
@@ -207,7 +327,7 @@ def show(fig, key=None):
 
 
 def mix_line(m, width=2.2):
-    _, _, color, dash = MIX[m]
+    _, _, color, dash = __getattr__("MIX")[m]
     return dict(color=color, dash=dash, width=width)
 
 
@@ -230,6 +350,7 @@ def tail_axes(fig, ymin=-5):
 
 def tail_chart(series, height=380, bell=True, guide=True):
     """Share of days with a move at least this big, on log-log axes. series: [(label, returns, line)]."""
+    p = pal()
     fig = go.Figure()
     for label, r, line in series:
         x, y = ex.tail_curve(np.asarray(r))
@@ -238,12 +359,12 @@ def tail_chart(series, height=380, bell=True, guide=True):
     if bell:
         g = np.linspace(0.1, 6, 80)
         fig.add_scatter(x=g, y=[ex.bell_big_days(1, v) for v in g], name="Bell curve", mode="lines",
-                        line=dict(color=BELL, dash="dot", width=2), hoverinfo="skip")
+                        line=dict(color=p["BELL"], dash="dot", width=2), hoverinfo="skip")
     if guide and series:
         x, y = ex.tail_curve(np.asarray(series[0][1]))
         y0 = float(np.interp(3.0, x, y))
         fig.add_scatter(x=[2, 30], y=[y0 * (2 / 3) ** -3, y0 * (30 / 3) ** -3], name="Slope 3",
-                        mode="lines", line=dict(color="#5C5E6B", dash="longdash", width=1), hoverinfo="skip")
+                        mode="lines", line=dict(color=p["GUIDE"], dash="longdash", width=1), hoverinfo="skip")
     style(fig, height, logx=True, logy=True, xtitle="Move size (standard deviations)",
           ytitle="Share of days at least this big")
     return tail_axes(fig)
@@ -252,26 +373,27 @@ def tail_chart(series, height=380, bell=True, guide=True):
 def dial_chart(market_tail=None, runs=(), current=None, height=300):
     """Tail exponent against herding strength: median and middle half of the saved sweep, the
     market's own tail, and the runs made on this page (runs: [(a1, tail)], current: (a1, tail))."""
+    p = pal()
     t = sweep_table()
     g = t.dropna(subset=["tail"]).groupby("a1")["tail"]
     med, lo, hi = g.median(), g.quantile(0.25), g.quantile(0.75)
     fig = go.Figure()
     fig.add_scatter(x=list(hi.index) + list(lo.index[::-1]), y=list(hi.values) + list(lo.values[::-1]),
-                    fill="toself", fillcolor="rgba(217,139,190,0.15)", line=dict(width=0), hoverinfo="skip",
+                    fill="toself", fillcolor=p["HERD_FILL"], line=dict(width=0), hoverinfo="skip",
                     name="Middle half of 10 histories")
     fig.add_scatter(x=med.index, y=med.values, mode="lines+markers", name="Model (median)",
                     line=mix_line("herding"), marker=dict(size=5),
                     hovertemplate="a1 %{x:.2f}: tail %{y:.2f}<extra></extra>")
     if market_tail is not None:
-        fig.add_hline(y=market_tail, line=dict(color=REAL, width=1.5),
+        fig.add_hline(y=market_tail, line=dict(color=p["REAL"], width=1.5),
                       annotation_text="this market", annotation_position="top left",
-                      annotation_font=dict(size=11, color=REAL))
+                      annotation_font=dict(size=11, color=p["REAL"]))
     if runs:
         fig.add_scatter(x=[a for a, _ in runs], y=[v for _, v in runs], mode="markers", name="Your runs",
-                        marker=dict(size=8, color=CARD, line=dict(color=REAL, width=1.5)),
+                        marker=dict(size=8, color=p["CARD"], line=dict(color=p["REAL"], width=1.5)),
                         hovertemplate="your run, a1 %{x:.2f}: tail %{y:.2f}<extra></extra>")
     if current is not None and current[1] is not None:
         fig.add_scatter(x=[current[0]], y=[current[1]], mode="markers", name="Shown now",
-                        marker=dict(size=11, color=REAL),
+                        marker=dict(size=11, color=p["REAL"]),
                         hovertemplate="shown now, a1 %{x:.2f}: tail %{y:.2f}<extra></extra>")
     return style(fig, height, xtitle="Herding strength a1", ytitle="Tail exponent", legend=False)

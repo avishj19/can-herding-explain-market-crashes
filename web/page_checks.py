@@ -26,7 +26,7 @@ def _ants(eps, seed=1):
 
 def _dots(seeds, values, color, band, ref=None, ref_label="", ytitle=""):
     fig = go.Figure()
-    fig.add_hrect(y0=band[0], y1=band[1], fillcolor="rgba(52,211,153,0.08)", line_width=0, layer="below")
+    fig.add_hrect(y0=band[0], y1=band[1], fillcolor=c.OK_FILL, line_width=0, layer="below")
     fig.add_scatter(x=seeds, y=values, mode="markers", marker=dict(size=8, color=color), name="One history",
                     hovertemplate="seed %{x}: %{y:.3f}<extra></extra>")
     fig.add_hline(y=float(np.median(values)), line=dict(color=color, width=1.5))   # the median (stated beside the chart)

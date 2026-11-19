@@ -13,14 +13,14 @@ def market_map(t, nums):
     groups = st.pills("Show", list(SYMBOL), default=list(SYMBOL), selection_mode="multi",
                       label_visibility="collapsed") or []
     fig = go.Figure()
-    fig.add_vrect(x0=2.5, x1=3.5, fillcolor="rgba(255,255,255,0.04)", line_width=0, layer="below",
+    fig.add_vrect(x0=2.5, x1=3.5, fillcolor=c.FAINT, line_width=0, layer="below",
                   annotation_text="about 3 (inverse cubic law)", annotation_position="top left",
                   annotation_font=dict(size=11, color=c.MUTED))
     for g in groups:
         d = t[t["group"] == g]
         fig.add_scatter(x=d["tail"], y=d["memory"], mode="markers+text", name=g, text=d["name"],
                         textposition="top center", textfont=dict(size=10, color=c.MUTED),
-                        marker=dict(symbol=SYMBOL[g], size=10, color=c.REAL, line=dict(color="#0B0E13", width=1)),
+                        marker=dict(symbol=SYMBOL[g], size=10, color=c.REAL, line=dict(color=c.BG, width=1)),
                         customdata=np.c_[d["kurtosis"], d["times_bell"]],
                         hovertemplate="<b>%{text}</b><br>tail %{x:.2f}, memory %{y:.2f}<br>kurtosis "
                                       "%{customdata[0]:.1f}, %{customdata[1]:.0f}x the bell curve's big days"
@@ -30,7 +30,7 @@ def market_map(t, nums):
         tails = [x for x in v["tail"] if x is not None]
         mem = [x for x in v["memory"] if x is not None]
         fig.add_scatter(x=[np.median(tails)], y=[np.median(mem)], mode="markers", name=f"Model: {c.MIX[key][0].lower()}",
-                        marker=dict(symbol="star", size=18, color=c.MIX[key][2], line=dict(color="#0B0E13", width=1)),
+                        marker=dict(symbol="star", size=18, color=c.MIX[key][2], line=dict(color=c.BG, width=1)),
                         error_x=dict(type="data", symmetric=False, color=c.MIX[key][2], thickness=1,
                                      array=[np.percentile(tails, 95) - np.median(tails)],
                                      arrayminus=[np.median(tails) - np.percentile(tails, 5)]),
@@ -68,7 +68,7 @@ def page():
 
     st.header("How many more big days than a bell curve?", anchor=False)
     d = t.sort_values("times_bell")
-    shade = {"Index funds": c.REAL, "Stocks": "#9AA3B5", "Commodities": "#5C6577"}
+    shade = {"Index funds": c.REAL, "Stocks": c.SHADE_MID, "Commodities": c.SHADE_LOW}
     fig = go.Figure()
     for g, col in shade.items():
         dd = d[d["group"] == g]
