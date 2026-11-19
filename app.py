@@ -20,8 +20,9 @@ PAGES = [
     st.Page("web/page_checks.py", title="Checks", icon=":material/fact_check:"),
     st.Page("web/page_findings.py", title="Findings", icon=":material/photo_library:"),
 ]
-# every page's address, so the light/dark button can set the mode for pages not opened yet
-common.setup(["/" + pg.url_path for pg in PAGES])
-
 nav = st.navigation(PAGES, position="top")
+# every page's address, so the light/dark button can set the mode for pages not opened yet.
+# After st.navigation: a page only gets its url_path when navigation registers it (reading it
+# first crashed the live site on a fresh start, Nov 2026)
+common.setup(["/" + (pg.url_path or "") for pg in PAGES])
 nav.run()
