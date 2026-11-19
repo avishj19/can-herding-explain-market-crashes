@@ -11,7 +11,7 @@ import streamlit as st
 from web import common
 
 st.set_page_config(page_title="Herding and market crashes", page_icon="📉", layout="wide",
-                   initial_sidebar_state="expanded")
+                   initial_sidebar_state="auto")   # open on wide screens; "expanded" covered the page on phones
 common.setup()
 
 nav = st.navigation([

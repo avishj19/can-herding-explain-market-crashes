@@ -88,7 +88,8 @@ same 40 held-out histories as the figures, saved in `web/numbers.json` by
 `python3 scripts/web_numbers.py`. `python3 scripts/analysis/web_stress_test.py` checks the
 site on all the data, including that the numbers on each page match the code and the docs.
 
-Live link and video demo: coming (to be added here once the site is deployed).
+**Live site: https://herding-crashes.streamlit.app** (Streamlit Community Cloud; the first visit after a quiet
+spell takes a minute while the server wakes up). Video demo: coming.
 
 ## Main source
 
