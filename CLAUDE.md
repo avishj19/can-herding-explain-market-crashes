@@ -33,6 +33,7 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
 `data/`, `settings/`, `tests/`, `journal/`, `scratch/`. Run scripts from the project folder, e.g. `python3 scripts/main.py`.
 - `docs/KEY_POINTS.md`: self-contained guide to the project for someone new to it (ideas, figures, findings, limits)
 - `docs/SPEC.md`: the model's equations, each with its source (rebuild of November 2026). Code and spec must agree.
+- `app.py`: the web app (`streamlit run app.py`): six pages in `web/` (Start here, Story, Workspace, Compare, Checks, Findings); `web/common.py` holds the colors (one meaning each), chart style and cached data; theme in `.streamlit/config.toml`. Pages only draw: every number comes from `herding/explore.py`. Model results the pages show (40 held-out histories, the herding-strength sweep) are saved in `web/numbers.json` by `python3 scripts/web_numbers.py` (same recipe as Fig 4, so the site matches RESULTS.md; rerun it after refitting). Stress test, including site-vs-backend numbers: `python3 scripts/analysis/web_stress_test.py`
 - `scripts/main.py`: quick comparison (S&P 500 vs 20 held-out S&P-calibrated histories), saves `figures/fig00_quick_check_sp500_vs_model.png`
 - `scripts/party_figures.py`: makes `figures/fig13-fig15*.png` (parties over 130 years of the Dow)
 - `scripts/outside_news_figures.py`: makes `figures/fig16-fig18*.png` (commodities, interest rates, the dollar, Fed days; the four moments with error bars)
@@ -51,6 +52,9 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
   - `politics.py`: extension: the president's party (1893-2026) and its return gap against luck, used by Fig 12-15
   - `factors.py`: extension: outside news every trader sees (oil, gold, copper, dollar, 10-year rate, Fed decision days), used by Fig 16-18
   - `plots.py`: palette and drawing helpers (reusable by the future web app)
+  - `explore.py`: the science behind the web app: load any stock, index fund or commodity (or a live
+    ticker from Yahoo), run the three trader mixes (fundamentalists / chartists without herding / herding),
+    and the numbers shown (tail, kurtosis, volatility memory, closest mix)
   - `checks.py`: input checks shared by every module (a finite real number; a 1-D list without NaN)
 - `.vscode/`: VS Code setup (hides clutter, one-click tasks for tests and figures, suggested extensions)
 - `settings/`: the two fitted settings

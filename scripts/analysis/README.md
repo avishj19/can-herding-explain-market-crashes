@@ -15,6 +15,7 @@ in `settings/` and held-out seeds only. Run from the project folder, e.g.
 | `news_and_reactions.py` | Do traders react logically to news? The model's moves against its own news (with and without herding), the Dow's reaction to 33 presidential elections, and the documented causes of its 20 biggest days |
 | `time_step_check.py` | Do results change with the time step dt? (`spx` or `paper`; the paper-matched ones do) |
 | `test_accuracy_audit.py` | How accurate is each noisy test? Bias and sd of every checked number over 200 seeds, and the tolerance \|bias\| + 5 sd the tests use (`docs/TEST_ACCURACY.md`) |
+| `web_stress_test.py` | Is the web app precise, fast and correct on all the data? Every market's numbers recomputed independently (scipy, plain loops), a herding x seed grid, slider corners, live Yahoo vs saved files, every page run headless (report: `scratch/web_stress/report.md`) |
 | `long_run_stability.py` | How often do the fitted settings run away over 100,000 days? |
 
 Earlier exploration scripts (for the model before the November 2026 rebuild)

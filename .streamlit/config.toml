@@ -1,0 +1,17 @@
+# Dark slate/charcoal theme for the web app (app.py). Controls are neutral gray, so color on a
+# page always means data (web/common.py lists what each color means).
+[theme]
+base = "dark"
+primaryColor = "#C7CDD8"
+backgroundColor = "#0B0E13"
+secondaryBackgroundColor = "#11151C"
+textColor = "#E6E8EE"
+borderColor = "#1F2632"
+showWidgetBorder = true
+baseRadius = "6px"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false

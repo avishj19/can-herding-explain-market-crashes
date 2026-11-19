@@ -43,6 +43,8 @@ Each folder has one job:
 ```
 02-120 Project/
 ├── README.md        you are here
+├── app.py           the website (streamlit run app.py); its pages are in web/
+├── web/             the website's pages, shared style, and saved model results (numbers.json)
 ├── herding/         the simulation code (the model, statistics, fitting, plots)
 ├── scripts/         things you RUN
 │   ├── main.py          quick check: S&P 500 vs the model
@@ -61,8 +63,32 @@ Each folder has one job:
 └── scratch/         temporary files, not in the repository
 ```
 
-The web app (adjust herding strength and watch crashes) and the video demo are
-coming; links will be added here.
+## The website
+
+The project's website lets anyone pick a stock, index fund or commodity, turn the herding
+strength up and down, and watch how the simulated market's crashes change.
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py                 # then open http://localhost:8501
+```
+
+| Page | What it does |
+|---|---|
+| Start here | What the project is, how to use the site, how to read each chart |
+| Story | The argument in five steps, one chart each |
+| Workspace | Any market (saved, or any ticker live from Yahoo) next to the model; ranges 1D to All; run the model and see each run on the herding chart |
+| Compare | All 26 saved markets on one map, next to the model |
+| Checks | The proposal's checks, each with its rule and result |
+| Findings | Every figure from `figures/`, with captions |
+
+The site's code is `app.py` and `web/`; every number it shows comes from
+`herding/explore.py` (tested in `tests/test_explore.py`). The model results it shows are the
+same 40 held-out histories as the figures, saved in `web/numbers.json` by
+`python3 scripts/web_numbers.py`. `python3 scripts/analysis/web_stress_test.py` checks the
+site on all the data, including that the numbers on each page match the code and the docs.
+
+Live link and video demo: coming (to be added here once the site is deployed).
 
 ## Main source
 
