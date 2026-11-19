@@ -64,7 +64,7 @@ def page():
             fig.add_scatter(x=x, y=y, name=label, mode="lines", line=line, hoverinfo="skip")
         c.style(fig, 330, logx=True, logy=True, xtitle="Move size (standard deviations)",
                 ytitle="Share of days at least this big")
-        c.tail_axes(fig, ymin=-4)
+        c.tail_axes(fig)     # down to 0.001%: 20,000 days reach 1/20,000 = 0.005%, which ymin=-4 cut off
         c.show(fig, key="guide_example")
         st.caption("An example with made-up numbers: the two curves agree for small moves and split apart "
                    "for big ones.")

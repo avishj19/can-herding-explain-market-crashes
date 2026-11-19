@@ -12,14 +12,16 @@ from web import common
 
 st.set_page_config(page_title="Herding and market crashes", page_icon="📉", layout="wide",
                    initial_sidebar_state="auto")   # open on wide screens; "expanded" covered the page on phones
-common.setup()
-
-nav = st.navigation([
+PAGES = [
     st.Page("web/page_guide.py", title="Start here", icon=":material/home:", default=True),
     st.Page("web/page_story.py", title="Story", icon=":material/auto_stories:"),
     st.Page("web/page_explore.py", title="Workspace", icon=":material/candlestick_chart:"),
     st.Page("web/page_compare.py", title="Compare", icon=":material/scatter_plot:"),
     st.Page("web/page_checks.py", title="Checks", icon=":material/fact_check:"),
     st.Page("web/page_findings.py", title="Findings", icon=":material/photo_library:"),
-], position="top")
+]
+# every page's address, so the light/dark button can set the mode for pages not opened yet
+common.setup(["/" + pg.url_path for pg in PAGES])
+
+nav = st.navigation(PAGES, position="top")
 nav.run()

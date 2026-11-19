@@ -3,9 +3,10 @@ import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
+from herding import explore as ex
 from web import common as c
 
-SYMBOL = {"Stocks": "circle", "Index funds": "diamond", "Commodities": "square"}
+SYMBOL = {"Stocks": "circle", "Indexes": "diamond", "Commodities": "square"}
 
 
 @st.fragment
@@ -25,20 +26,23 @@ def market_map(t, nums):
                         hovertemplate="<b>%{text}</b><br>tail %{x:.2f}, memory %{y:.2f}<br>kurtosis "
                                       "%{customdata[0]:.1f}, %{customdata[1]:.0f}x the bell curve's big days"
                                       "<extra></extra>")
-    for key in ("fundamentalists", "herding"):
+    for key in ex.MIXES:
         v = nums["checks"][key]
-        tails = [x for x in v["tail"] if x is not None]
-        mem = [x for x in v["memory"] if x is not None]
-        fig.add_scatter(x=[np.median(tails)], y=[np.median(mem)], mode="markers", name=f"Model: {c.MIX[key][0].lower()}",
+        if all(x is None for x in v.get("tail", [])):
+            continue                    # every history of this mix ran away: no star (the caption says so)
+        sp, mem = ex.spread(v["tail"]), ex.spread(v["memory"])
+        fig.add_scatter(x=[sp["median"]], y=[mem["median"]], mode="markers", name=f"Model: {c.MIX[key][0].lower()}",
                         marker=dict(symbol="star", size=18, color=c.MIX[key][2], line=dict(color=c.BG, width=1)),
                         error_x=dict(type="data", symmetric=False, color=c.MIX[key][2], thickness=1,
-                                     array=[np.percentile(tails, 95) - np.median(tails)],
-                                     arrayminus=[np.median(tails) - np.percentile(tails, 5)]),
-                        hovertemplate=f"<b>{c.MIX[key][0]}</b> (median of {len(tails)} histories)<br>"
+                                     array=[sp["high"] - sp["median"]],
+                                     arrayminus=[sp["median"] - sp["low"]]),
+                        hovertemplate=f"<b>{c.MIX[key][0]}</b> (median of {sp['n']} histories)<br>"
                                       f"tail %{{x:.2f}}, memory %{{y:.2f}}<extra></extra>")
     c.style(fig, height=500, xtitle="Tail exponent (smaller means fatter tails)",
             ytitle="Volatility memory (move sizes 20 days apart)")
     c.show(fig, key="map")
+    if not groups:
+        st.caption("Pick a group above to show its markets.")
 
 
 @st.fragment
@@ -49,6 +53,8 @@ def tails_side_by_side(t):
     if series:
         c.show(c.tail_chart(series, height=420, guide=False), key="tails")
         st.caption("Here the colors only label the markets you picked.")
+    else:
+        st.caption("Pick up to 6 markets to compare.")
 
 
 def page():
@@ -60,15 +66,18 @@ def page():
     t = c.market_table()
     nums = c.numbers()
     market_map(t, nums)
-    gone = sum(d is not None for d in nums["checks"]["chartists"]["runaway_day"])
+    gone, total = ex.runaway_count(nums, "chartists")
+    chartists = ("Chartists without herding have no star: all {} of their histories ran away." if gone == total
+                 else "Chartists without herding: {} of {} histories ran away, so their star is the median "
+                      "of the rest.").format(*((gone,) if gone == total else (gone, total)))
     st.caption(f"Most markets sit near a tail of 3 with memory between 0.1 and 0.25. The herding model lands "
                f"among them; with no chartists it sits far to the right at memory 0, where a bell curve would be. "
-               f"Chartists without herding have no star: all {gone} of their histories ran away.")
+               f"{chartists}")
     st.divider()
 
     st.header("How many more big days than a bell curve?", anchor=False)
     d = t.sort_values("times_bell")
-    shade = {"Index funds": c.REAL, "Stocks": c.SHADE_MID, "Commodities": c.SHADE_LOW}
+    shade = {"Indexes": c.REAL, "Stocks": c.SHADE_MID, "Commodities": c.SHADE_LOW}
     fig = go.Figure()
     for g, col in shade.items():
         dd = d[d["group"] == g]

@@ -39,6 +39,16 @@ def check(N, eps, delta):
                          f"of a move up plus a move down would exceed 1")
 
 
+def herding_threshold(N, delta):
+    """Kirman's dividing line: the ants herd when eps < (1 - delta) / (N - 1), and split about
+    50/50 above it."""
+    if isinstance(N, (bool, np.bool_)) or not is_number(N) or int(N) != N or N < 2:
+        raise ValueError(f"N must be a whole number >= 2, got {N}")
+    if not is_number(delta) or not 0 <= delta <= 1:
+        raise ValueError(f"delta must be in [0, 1], got {delta}")
+    return (1 - delta) / (N - 1)
+
+
 def up_prob(k, N, eps, delta):
     """P(k -> k+1): a B ant is picked and joins A (alone or recruited by an A ant)."""
     return (N - k) / N * (eps + (1 - delta) * k / (N - 1))

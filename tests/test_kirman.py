@@ -194,3 +194,13 @@ def test_the_two_move_chances_may_add_to_exactly_one_but_not_more():
         kirman.check(N, 1 - top + 0.01, delta)
     kirman.check(N, 1.0, 1.0)                                  # eps = 1 with no herding
     kirman.check(11, 1 - (1 - delta) * 2 * 5 * 6 / (11 * 10), delta)   # odd N: k = 5
+
+
+def test_herding_threshold_hand_values():
+    # Kirman: the ants herd when eps < (1 - delta) / (N - 1); N=100, delta=0.1 -> 0.9/99
+    from herding import kirman as _k
+    assert _k.herding_threshold(100, 0.1) == pytest.approx(0.9 / 99)
+    assert _k.herding_threshold(2, 0.0) == 1.0
+    for N, delta in ((1, 0.1), (2.5, 0.1), (100, 1.5), (100, -0.1), (True, 0.1)):
+        with pytest.raises(ValueError):
+            _k.herding_threshold(N, delta)

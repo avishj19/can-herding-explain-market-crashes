@@ -31,6 +31,8 @@ def standardize(r):
     sd = r.std()
     if not np.isfinite(sd):
         raise ValueError("returns are too large to measure their spread (overflow)")
+    if sd <= 0:          # tiny returns (1e-300): the variance underflows to 0, every day "infinitely big"
+        raise ValueError("returns are too small to measure their spread (underflow)")
     return (r - r.mean()) / sd
 
 

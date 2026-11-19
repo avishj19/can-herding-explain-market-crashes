@@ -16,8 +16,7 @@ def _entries():
 @st.fragment
 def gallery(entries):
     sections = list(dict.fromkeys(e["section"] for e in entries))
-    pick = st.segmented_control("Section", sections, default=sections[0], label_visibility="collapsed") \
-        or sections[0]
+    pick = c.pick_one("Section", sections, sections[0], "findings_section", label_visibility="collapsed")
     for e in (e for e in entries if e["section"] == pick):
         st.image(str(FIG / e["file"]), width="stretch")
         st.markdown(e["caption"].replace(" ✅", ""))

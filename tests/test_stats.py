@@ -514,3 +514,11 @@ def test_limits_at_their_exact_edge():
     with pytest.raises(ValueError):
         stats.acf(r, 99)
     assert stats.dfa_scales(64)[-1] == 16                       # n // 4 = the smallest scale
+
+
+def test_standardize_rejects_spread_that_underflows_to_zero():
+    # 1e-300-sized returns: the variance (1e-600) underflows to 0, so every day would be "infinitely big"
+    from herding import stats as _st
+    tiny = np.random.default_rng(0).standard_normal(600) * 1e-300
+    with pytest.raises(ValueError, match="too small"):
+        _st.standardize(tiny)

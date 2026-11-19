@@ -66,3 +66,39 @@ def test_longest_run_agrees_with_a_plain_loop():
             m = g.random(n) < p
             assert longest_run(m) == by_hand(m)
     assert longest_run([True, True, False, True]) == 2
+
+
+def test_web_stress_test_reports_a_page_timeout_instead_of_hanging(monkeypatch):
+    # TEST-1: a page that timed out inside part D raised (after up to 600 s per run) and took the
+    # whole suite down; now each run is bounded and a timeout is one FAIL line, and part E is skipped
+    from streamlit.testing.v1 import AppTest
+    ws = load_script("web_stress_test.py")
+    assert ws.PAGE_TIMEOUT <= 180
+
+    def timed_out(self, *a, **k):
+        raise RuntimeError(f"AppTest script run timed out after {ws.PAGE_TIMEOUT}(s)")
+    monkeypatch.setattr(AppTest, "run", timed_out)
+    ws.failures.clear()
+    assert ws.part_d() is None
+    assert len(ws.failures) == 1 and "timed out" in ws.failures[0]
+
+
+def _square(x):
+    return x * x
+
+
+def test_web_stress_test_puts_the_real_main_module_back_so_pools_still_work():
+    # TEST-2: Streamlit's AppTest installs the page as sys.modules["__main__"]; on macOS every later
+    # multiprocessing Pool re-imported that page in its workers and the full suite hung forever
+    import sys
+    from multiprocessing import Pool
+    from streamlit.testing.v1 import AppTest
+    ws = load_script("web_stress_test.py")
+    main = sys.modules["__main__"]
+    at = AppTest.from_string("import streamlit as st\nst.write('hello')", default_timeout=60)
+    ws.failures.clear()
+    assert ws._run_page(at, "tiny page") and not ws.failures
+    assert at.markdown[0].value == "hello"             # the page really ran
+    assert sys.modules["__main__"] is main
+    with Pool(2) as pool:                               # bounded wait: a regression fails, not hangs
+        assert pool.map_async(_square, [1, 2, 3]).get(timeout=120) == [1, 4, 9]

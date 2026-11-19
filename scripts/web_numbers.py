@@ -13,7 +13,6 @@ import time
 from multiprocessing import Pool
 from pathlib import Path
 
-import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -38,7 +37,7 @@ def main():
         return [ex.summary(out[mix, s][0])[key] if out[mix, s][0] is not None else None for s in seeds]
 
     def gone(mix):
-        return [None if out[mix, s][1] is None else int(out[mix, s][1].day - burn) for s in seeds]
+        return [None if out[mix, s][1] is None else ex.runaway_day(out[mix, s][1], burn) for s in seeds]
 
     d = {
         "recipe": {"settings": "settings/sp500_calibrated.json", "seeds": seeds, "days": days, "burn": burn,
@@ -54,12 +53,12 @@ def main():
     }
     path = ex.WEB_NUMBERS
     path.write_text(json.dumps(d, indent=1) + "\n")
-    h = [v for v in d["checks"]["herding"]["tail"] if v is not None]
-    k = d["checks"]["fundamentalists"]["kurtosis"]
+    h = ex.spread(d["checks"]["herding"]["tail"])
+    k = ex.spread(d["checks"]["fundamentalists"]["kurtosis"])
     print(f"saved {path.relative_to(ROOT)} in {time.perf_counter() - t0:.0f} s")
-    print(f"herding tail median {np.median(h):.2f} over {len(h)} histories (RESULTS.md: 3.10)")
-    print(f"no-chartist kurtosis median {np.median(k):.2f} (RESULTS.md: 0.01)")
-    print(f"no-herding runaways: {sum(v is not None for v in d['checks']['chartists']['runaway_day'])} of {len(seeds)}")
+    print(f"herding tail median {h['median']:.2f} over {h['n']} histories (RESULTS.md: 3.10)")
+    print(f"no-chartist kurtosis median {k['median']:.2f} (RESULTS.md: 0.01)")
+    print("no-herding runaways: {} of {}".format(*ex.runaway_count(d, "chartists")))
 
 
 if __name__ == "__main__":

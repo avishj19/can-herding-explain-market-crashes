@@ -213,35 +213,59 @@ def part_c(offline):
 
 
 # ------------------------------------------------------------------ D. the web pages
+PAGE_TIMEOUT = 180     # seconds per page run: a hung page becomes a FAIL line instead of hanging the suite
+
+
+def _run_page(at, what, page=None):
+    """One AppTest run (of `page` if given), True if it finished. A run longer than PAGE_TIMEOUT
+    (AppTest raises RuntimeError "timed out") is reported as a failure, so the stress test, and the
+    test suite that calls it, always ends.
+    Streamlit's script runner installs the page as sys.modules["__main__"] and leaves it there; on
+    macOS every later multiprocessing Pool worker (spawn) then re-imports that, the whole app, and
+    the pool never returns (TEST-2: the full test suite hung). So the real __main__ is put back."""
+    main = sys.modules.get("__main__")
+    try:
+        (at.switch_page(page) if page else at).run()
+        return True
+    except RuntimeError as e:
+        check(False, f"{what}: {e}")
+        return False
+    finally:
+        sys.modules["__main__"] = main
+
+
 def part_d():
     from streamlit.testing.v1 import AppTest
     say("## D. Every page, headless\n")
     say("| Page | cold s | warm s | exception |")
     say("|---|---|---|---|")
     pages = ["page_guide", "page_story", "page_explore", "page_compare", "page_checks", "page_findings"]
-    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=600)
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=PAGE_TIMEOUT)
     t0 = time.perf_counter()
-    at.run()                                          # opens the default page (Start here) with empty caches
+    if not _run_page(at, "first visit"):              # opens the default page (Start here) with empty caches
+        return None
     say(f"| first visit (Start here, nothing cached) | {time.perf_counter() - t0:.2f} | - | "
         f"{'; '.join(e.value for e in at.exception)[:80] or 'none'} |")
     for pg in pages:
         times = []
         for _ in range(2):
             t0 = time.perf_counter()
-            at.switch_page(f"web/{pg}.py").run()
+            if not _run_page(at, pg, f"web/{pg}.py"):
+                return None                             # a timed-out page leaves the app half-run
             times.append(time.perf_counter() - t0)
         exc = "; ".join(e.value for e in at.exception) if at.exception else ""
         check(not at.exception, f"{pg}: {exc[:300]}")
         say(f"| {pg} | {times[0]:.2f} | {times[1]:.2f} | {exc[:80] or 'none'} |")
 
     # the workspace flow: preset -> Run model -> one log line with the preset's a1
-    at.switch_page("web/page_explore.py").run()
-    at.radio(key="preset").set_value("No herding").run()
+    if not _run_page(at, "workspace", "web/page_explore.py"):
+        return None
+    if not _run_page(at.radio(key="preset").set_value("No herding"), "workspace preset"):
+        return None
     a1 = at.slider(key="in_a1").value
     btn = [b for b in at.button if b.label == "Run model"]
     check(len(btn) == 1, "workspace: one Run model button")
-    if btn:
-        btn[0].click().run()
+    if btn and _run_page(btn[0].click(), "workspace Run model"):
         log = at.session_state["log"]
         check(len(log) == 1 and log[0][1]["a1"] == 0.0 == a1, f"workspace: run log after preset {log[:1]}")
         check(not at.exception, "workspace: exception after Run model")
@@ -332,8 +356,15 @@ def main(days=10000, n=20, offline=True):
     part_a()
     part_b(days, n)
     part_c(offline)
-    at = part_d()
-    part_e(at)
+    main_module = sys.modules.get("__main__")
+    try:
+        at = part_d()
+        if at is not None:
+            part_e(at)
+        else:
+            say("## E. skipped: a page in part D did not finish\n")
+    finally:                      # part E's page runs also install app.py as __main__ (see _run_page)
+        sys.modules["__main__"] = main_module
     say(f"## Result\n\n{len(failures)} failures in {time.perf_counter() - t0:.0f} s.")
     for f in failures:
         say(f"- {f}")

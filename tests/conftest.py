@@ -2,6 +2,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))     # main.py and make_figures.py
@@ -26,3 +28,14 @@ def pytest_configure(config):
     # each describes one particular documented history (a golden output, the day a known
     # seed runs away, a number quoted in the documents), so it is skipped in those reruns.
     config.addinivalue_line("markers", "pinned_seed: describes one particular random history")
+
+
+@pytest.fixture(autouse=True)
+def _keep_the_real_main_module():
+    """Streamlit's AppTest installs the page it runs as sys.modules["__main__"] and never puts the
+    real one back. On macOS a multiprocessing Pool starts its workers by re-importing __main__, so
+    every Pool after an AppTest test re-ran app.py in its workers and hung the suite (TEST-2).
+    Putting __main__ back after each test keeps one test's AppTest from breaking the next."""
+    main = sys.modules.get("__main__")
+    yield
+    sys.modules["__main__"] = main

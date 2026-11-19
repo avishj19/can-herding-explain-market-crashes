@@ -16,8 +16,9 @@ Buttons, sliders and switches are gray, so color on a page always means data.
 Smoothness: no line is drawn with more than about 1,500 points (explore.thin_indices keeps every
 crash and spike), and controls that only change a chart rerun just that chart (st.fragment).
 """
+import json
+
 import numpy as np
-import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -56,7 +57,7 @@ HELP = {
     "memory": "Correlation of move sizes a month (20 trading days) apart. 0 means no memory; above 0 "
               "means wild days bunch together.",
     "big": "Days that moved more than 4 standard deviations, up or down.",
-    "vol": "Annualized volatility: the standard deviation of daily returns in the range, times √252.",
+    "vol": "Annualized volatility: the standard deviation of daily returns in the range, times √252 (√365 for a market open every day, like crypto).",
     "dd": "The largest fall from a high point to a later low within the range.",
 }
 
@@ -106,7 +107,11 @@ MODE_SCRIPT = """<script>
       const k = localStorage.key(i);
       if (k && k.startsWith('stActiveTheme-')) localStorage.setItem(k, val);
     }
-    localStorage.setItem('stActiveTheme-' + location.pathname + '-v2', val);
+    // also every page of the site, even ones this browser has not opened yet: without a saved key
+    // a page opened in the system mode, so the site flipped mode on a first visit
+    for (const p of PAGE_PATHS.concat([location.pathname])) {
+      localStorage.setItem('stActiveTheme-' + p + '-v2', val);
+    }
     const u = new URL(location.href);
     u.searchParams.set('mode', next);
     location.href = u.toString();
@@ -147,9 +152,17 @@ MODE_SCRIPT = """<script>
 </script>"""
 
 
-def setup():
+def mode_script(paths=()):
+    """The light/dark button's script, told every page address of the site (paths, like
+    '/page_story'; '/' is the start page)."""
+    return MODE_SCRIPT.replace("(function () {", "(function () {\n  const PAGE_PATHS = "
+                               + json.dumps(list(paths)) + ";", 1)
+
+
+def setup(paths=()):
     """Page-wide type, spacing and the light/dark button. st.html, not st.markdown: markdown read
-    the [kind="primary"] selectors as link syntax and silently dropped them."""
+    the [kind="primary"] selectors as link syntax and silently dropped them. paths: every page's
+    address (app.py passes them, built from its st.Page list, so the list can't drift)."""
     p = pal()
     st.html(f"""<style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
@@ -159,11 +172,6 @@ def setup():
     h3 {{font-size: 1.02rem !important; font-weight: 600 !important}}
     p, li {{line-height: 1.6}}
     hr {{margin: 1.6rem 0 !important; border-color: {p['GRID']} !important}}
-    [data-testid="stVerticalBlockBorderWrapper"] {{border-radius: 8px; border-color: {p['GRID']} !important}}
-    div[data-testid="stMetric"] {{padding: 2px 0}}
-    div[data-testid="stMetricLabel"] p {{color: {p['MUTED']}; font-size: .8rem}}
-    div[data-testid="stMetricValue"] {{font-family: {MONO}; font-variant-numeric: tabular-nums;
-        font-size: 1.3rem !important; font-weight: 500}}
     .num {{font-family: {MONO}; font-variant-numeric: tabular-nums}}
     .muted {{color: {p['MUTED']}; font-size: .86rem}}
     .lead {{color: {p['TEXT2']}; max-width: 720px; margin-bottom: .6rem}}
@@ -184,7 +192,7 @@ def setup():
         align-self: center}}
     #mode-toggle:hover {{border-color: {p['MUTED']}}}
     </style>""")
-    st.html(MODE_SCRIPT, unsafe_allow_javascript=True)
+    st.html(mode_script(paths), unsafe_allow_javascript=True)
 
 
 def color_key(*items):
@@ -203,6 +211,22 @@ def color_key(*items):
             style = {"dot": "dotted", "dash": "dashed", "solid": "solid"}[dash]
             parts.append(f"<span><i class='sw' style='border-color:{color};border-top-style:{style}'></i>{name}</span>")
     st.markdown(f"<div class='key'>{''.join(parts)}</div>", unsafe_allow_html=True)
+
+
+def pick_one(label, options, default, key, **kw):
+    """A segmented control that always has one option picked. Clicking the picked segment again
+    unselects it in Streamlit; the callback puts the last pick back, so the control and the content
+    under it always agree (falling back to `default` showed one thing under an empty control)."""
+    options = list(options)
+    last = f"_last_{key}"
+
+    def keep():
+        if st.session_state.get(key) not in options:
+            st.session_state[key] = st.session_state.get(last, default)
+    value = st.segmented_control(label, options, default=default, key=key, on_change=keep, **kw)
+    value = value if value in options else st.session_state.get(last, default)
+    st.session_state[last] = value
+    return value
 
 
 def lead(text):
@@ -244,9 +268,7 @@ def saved_asset(name):
 
 @st.cache_data(ttl=24 * 3600, show_spinner=False)
 def live_asset(ticker):
-    close = ex.live_prices(ticker)
-    r = ex.log_returns(close)
-    return close, r, ex.summary(r.values)
+    return ex.live_market(ticker)
 
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -281,25 +303,26 @@ def default_run():
 
 @st.cache_data(show_spinner=False, max_entries=60)
 def run_mixes(a1, a2, v1, days, seed):
-    """{mix: (returns or None, runaway day after burn-in or None)} for the three trader mixes."""
+    """{mix: (returns or None, runaway day after burn-in or None)} for the three trader mixes.
+    The runaway day is negative when a history ran away during the burn-in (see gone_text)."""
     p, burn = fitted()
-    p = dict(p, a2=a2, v1=v1)
-    out = {}
-    for m in ex.MIXES:
-        r, err = ex.run_mix(p, m, a1, days, seed, burn)
-        out[m] = (r, None if err is None else int(err.day - burn))
-    return out
+    return ex.run_mixes(p, burn, a1, a2, v1, days, seed)
 
 
 @st.cache_data(show_spinner=False)
-def runaway_path(seed, day):
+def runaway_story(seed, day):
+    """The Story page's numbers for the chartists-only history that ran away on `day`."""
     p, burn = fitted()
-    return ex.runaway_path(p, "chartists", 0.0, seed, int(day) + burn)
+    return ex.runaway_story(p, seed, int(day), burn)
 
 
-@st.cache_data(show_spinner=False)
-def sweep_table():
-    return pd.DataFrame(numbers()["sweep"]["rows"])
+def gone_text(day):
+    """How a ran-away history is described. run_mixes counts days after the burn-in (the warm-up
+    days the site never shows), so a history that ran away during the warm-up has a day below 1:
+    "ran away on day -745" meant nothing to a reader."""
+    if day < 1:
+        return "ran away during the warm-up, before day 1"
+    return f"ran away on day {int(day):,}"
 
 
 # ------------------------------------------------------------------ charts
@@ -358,12 +381,11 @@ def tail_chart(series, height=380, bell=True, guide=True):
                         hovertemplate=f"{label}<br>%{{x:.1f}} sd or more on %{{y:.2%}} of days<extra></extra>")
     if bell:
         g = np.linspace(0.1, 6, 80)
-        fig.add_scatter(x=g, y=[ex.bell_big_days(1, v) for v in g], name="Bell curve", mode="lines",
+        fig.add_scatter(x=g, y=ex.bell_tail(g), name="Bell curve", mode="lines",
                         line=dict(color=p["BELL"], dash="dot", width=2), hoverinfo="skip")
     if guide and series:
-        x, y = ex.tail_curve(np.asarray(series[0][1]))
-        y0 = float(np.interp(3.0, x, y))
-        fig.add_scatter(x=[2, 30], y=[y0 * (2 / 3) ** -3, y0 * (30 / 3) ** -3], name="Slope 3",
+        gx, gy = ex.slope_guide(np.asarray(series[0][1]))
+        fig.add_scatter(x=gx, y=gy, name="Slope 3",
                         mode="lines", line=dict(color=p["GUIDE"], dash="longdash", width=1), hoverinfo="skip")
     style(fig, height, logx=True, logy=True, xtitle="Move size (standard deviations)",
           ytitle="Share of days at least this big")
@@ -372,18 +394,26 @@ def tail_chart(series, height=380, bell=True, guide=True):
 
 def dial_chart(market_tail=None, runs=(), current=None, height=300):
     """Tail exponent against herding strength: median and middle half of the saved sweep, the
-    market's own tail, and the runs made on this page (runs: [(a1, tail)], current: (a1, tail))."""
+    market's own tail, and the runs made on this page (runs: [(a1, tail)], current: (a1, tail)).
+    Herding strengths where most saved histories ran away are left out (explore.sweep_band): the
+    few that survive are the calm ones, so their median would be mostly luck."""
     p = pal()
-    t = sweep_table()
-    g = t.dropna(subset=["tail"]).groupby("a1")["tail"]
-    med, lo, hi = g.median(), g.quantile(0.25), g.quantile(0.75)
+    sw = numbers()["sweep"]
+    b = ex.sweep_band(sw["rows"])
+    b = b[b["shown"]]
+    total = len(sw["seeds"])
     fig = go.Figure()
-    fig.add_scatter(x=list(hi.index) + list(lo.index[::-1]), y=list(hi.values) + list(lo.values[::-1]),
-                    fill="toself", fillcolor=p["HERD_FILL"], line=dict(width=0), hoverinfo="skip",
-                    name="Middle half of 10 histories")
-    fig.add_scatter(x=med.index, y=med.values, mode="lines+markers", name="Model (median)",
-                    line=mix_line("herding"), marker=dict(size=5),
-                    hovertemplate="a1 %{x:.2f}: tail %{y:.2f}<extra></extra>")
+    if len(b):
+        fig.add_scatter(x=list(b["a1"]) + list(b["a1"][::-1]), y=list(b["q3"]) + list(b["q1"][::-1]),
+                        fill="toself", fillcolor=p["HERD_FILL"], line=dict(width=0), hoverinfo="skip",
+                        name=f"Middle half of the histories that did not run away (of {total})")
+        fig.add_scatter(x=b["a1"], y=b["median"], mode="lines+markers", name="Model (median)",
+                        line=mix_line("herding"), marker=dict(size=5), customdata=np.c_[b["n"]],
+                        hovertemplate=f"a1 %{{x:.2f}}: tail %{{y:.2f}}<br>median of %{{customdata[0]}} of "
+                                      f"{total} histories<extra></extra>")
+    else:
+        fig.add_annotation(text="Every saved history ran away", showarrow=False, x=0.5, y=0.5,
+                           xref="paper", yref="paper", font=dict(color=p["MUTED"], size=12))
     if market_tail is not None:
         fig.add_hline(y=market_tail, line=dict(color=p["REAL"], width=1.5),
                       annotation_text="this market", annotation_position="top left",

@@ -65,7 +65,7 @@ Each folder has one job:
 
 ## The website
 
-The project's website lets anyone pick a stock, index fund or commodity, turn the herding
+The project's website lets anyone pick a stock, stock index or commodity, turn the herding
 strength up and down, and watch how the simulated market's crashes change.
 
 ```bash
