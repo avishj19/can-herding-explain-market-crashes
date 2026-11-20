@@ -101,8 +101,8 @@ def page():
     th = kirman.herding_threshold(KIRMAN["N"], KIRMAN["delta"])
     left, right = st.columns([1, 2], gap="large")
     with left:
-        st.markdown(f"The herding rule inside the model comes from Kirman's ant colony. 100 ants choose "
-                    f"between two food sources; each step one ant either switches on its own (chance ε) or "
+        st.markdown(f"The herding rule inside the model comes from Kirman's ant colony. {KIRMAN['N']} ants "
+                    f"choose between two food sources; each step one ant either switches on its own (chance ε) or "
                     f"copies another ant. Kirman worked out the exact long-run answer.")
         eps = st.select_slider("Chance an ant switches on its own (ε)",
                                [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1], value=0.002)

@@ -1069,8 +1069,9 @@ def test_runaway_story_matches_the_path():
     day = e.runaway_day(err, burn)
     st = e.runaway_story(p, seed, day, burn)
     path = model.simulate(dict(p, a1=0.0), day + burn, seed=seed, chartists=True, max_gap=None)
-    assert np.array_equal(st["z"], path["z"])
-    assert st["gap"] == pytest.approx(np.expm1(np.clip(path["lp"] - path["lf"], -0.5, 0.5)))
+    # burn-in left out: day 0 .. day, so the last point is the runaway day itself
+    assert len(st["z"]) == day + 1 and np.array_equal(st["z"], path["z"][burn:])
+    assert st["gap"] == pytest.approx(np.expm1(np.clip(path["lp"] - path["lf"], -0.5, 0.5))[burn:])
     assert st["share_before"] == path["z"][-6] and st["calm_days"] == day - 3
     assert st["gap_cap"] == pytest.approx(math.expm1(0.5))
 
@@ -1313,3 +1314,16 @@ def test_bell_density_matches_scipy_and_integrates_to_one():
     assert np.trapezoid(e.bell_density(x), x) == pytest.approx(1.0, abs=1e-9)
     with pytest.raises(ValueError):
         e.bell_density([0.0, np.nan])
+
+
+# ------------------------------------------------------------------ example_returns
+# Spec: the same numbers as drawing from numpy directly with that seed; t(3) has the fatter tail.
+
+def test_example_returns_same_as_direct_draws():
+    bell, fat = e.example_returns(1000, seed=5)
+    g = np.random.default_rng(5)
+    assert np.array_equal(bell, g.standard_normal(1000)) and np.array_equal(fat, g.standard_t(3, 1000))
+    b2, f2 = e.example_returns(20000)
+    assert e.summary(f2)["tail"] < e.summary(b2)["tail"]          # fat tails: smaller exponent
+    with pytest.raises(ValueError):
+        e.example_returns(1)

@@ -605,16 +605,28 @@ GAP_CAP = 0.5            # the Story chart shows mispricing up to e^0.5 - 1 = +6
 
 def runaway_story(p, seed, day, burn, mix="chartists", a1=0.0):
     """What the Story page tells about a history that ran away on `day` (counted after burn-in):
-    z, the share of chartists each day (burn-in included); gap, how far the price sits above (+) or
-    below (-) its value, as a fraction, capped at +-(e^GAP_CAP - 1); gap_cap, that cap;
+    z, the share of chartists each day; gap, how far the price sits above (+) or below (-) its
+    value, as a fraction, capped at +-(e^GAP_CAP - 1); both from day 0 to `day` with the burn-in
+    (warm-up) days left out, so day 0 here is day 0 in the text and the Workspace; gap_cap, that cap;
     share_before, the share of chartists 5 days before the end; calm_days, about how long the
     price stayed near its value (all but the last 3 days)."""
     day = _whole(day, "day", 1)
-    path = runaway_path(p, mix, a1, seed, day + _whole(burn, "burn", 0))
-    z = path["z"]
-    return {"z": z, "gap": np.expm1(np.clip(path["lp"] - path["lf"], -GAP_CAP, GAP_CAP)),
-            "gap_cap": float(np.expm1(GAP_CAP)), "share_before": float(z[max(len(z) - 6, 0)]),
+    burn = _whole(burn, "burn", 0)
+    path = runaway_path(p, mix, a1, seed, day + burn)
+    z = path["z"][burn:]
+    gap = np.expm1(np.clip(path["lp"] - path["lf"], -GAP_CAP, GAP_CAP))[burn:]
+    return {"z": z, "gap": gap, "gap_cap": float(np.expm1(GAP_CAP)),
+            "share_before": float(z[max(len(z) - 6, 0)]),
             "calm_days": max(day - 3, 0)}       # a runaway on day 1-3 had no calm stretch (not -2 days)
+
+
+def example_returns(n=20000, seed=3):
+    """Made-up daily moves for the Start here page's 'how to read the tail chart' picture:
+    (bell, fat), n draws from a bell curve and from Student's t with 3 degrees of freedom, whose
+    tail exponent is 3 like real markets. The same seed always gives the same picture."""
+    n = _whole(n, "n", 2)
+    g = np.random.default_rng(seed)
+    return g.standard_normal(n), g.standard_t(3, n)
 
 
 # ------------------------------------------------------------------ workspace numbers

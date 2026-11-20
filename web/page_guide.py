@@ -1,5 +1,4 @@
 """Start here: what the site is and how to use it."""
-import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -54,9 +53,7 @@ def page():
             "**Memory** measures those clusters: how much a big move today predicts big moves "
             "1 to 200 days later.")
     with right:
-        g = np.random.default_rng(3)
-        bell = g.standard_normal(20000)
-        fat = g.standard_t(3, 20000)
+        bell, fat = ex.example_returns()
         fig = go.Figure()
         for label, r, line in (("Bell curve", bell, dict(color=c.BELL, dash="dot", width=2.5)),
                                ("Fat tails (a real market)", fat, dict(color=c.REAL, width=2.5))):

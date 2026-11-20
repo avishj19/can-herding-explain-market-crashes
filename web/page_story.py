@@ -56,7 +56,6 @@ def page():
     left, right = st.columns([1, 2], gap="large")
     day = mixes["chartists"][1]
     day = day if day is not None and day >= 1 else None     # (a run-away during the warm-up has no story)
-    _, burn = c.fitted()
     story = c.runaway_story(run["seed"], day) if day is not None else None
     with left:
         st.markdown("Now add chartists, who buy after a rise and sell after a fall, but don't copy each "
@@ -73,9 +72,7 @@ def page():
                         f"nearly everyone becomes a chartist and the price explodes.")
     with right:
         if story is not None:
-            # the path starts with the burn-in (warm-up) days, which the text and the Workspace don't
-            # count: drop them so day 0 here is day 0 there and the runaway is drawn on `day`
-            z, gap = story["z"][burn:], story["gap"][burn:]
+            z, gap = story["z"], story["gap"]        # day 0 .. the runaway day (warm-up left out)
             days_ = np.arange(len(z))
             fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08)
             x, y = c.thin(days_, z)
