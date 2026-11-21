@@ -734,3 +734,52 @@ def test_guide_says_when_intraday_prices_show(open_page):
     assert "1D and 7D load prices within the day from Yahoo Finance." not in text
     assert re.search(r"1D and 7D show prices within the day[^.]*always for a ticker you type[^.]*"
                      r"market from the list once \*\*Live prices\*\*", text), text
+
+
+def test_app_reloads_site_modules_after_a_push():
+    # The live server kept old copies of herding/explore.py and web/common.py after a push and crashed
+    # until rebooted by hand. app.py now reloads them when a file is newer than the loaded copy.
+    # (importlib.reload reruns the file in the same module object, so new names such as KIRMAN_PASS
+    # appear and every function is a new object; that is what is checked.)
+    import os
+    import sys
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=300)
+    at.run()
+    assert not at.exception
+    path = sys.modules["herding.explore"].__file__
+    before = os.stat(path)
+    try:
+        old_summary = sys.modules["herding.explore"].summary
+        old_setup = sys.modules["web.common"].setup
+        os.utime(path, (before.st_atime, before.st_mtime + 60))   # what a git pull does to the file
+        at.run()
+        assert not at.exception, [e.value for e in at.exception]
+        assert sys.modules["herding.explore"].summary is not old_summary      # explore was rerun
+        assert sys.modules["web.common"].setup is not old_setup               # and so was common, after it
+        now = sys.modules["herding.explore"].summary
+        at.run()                                   # nothing changed since: no reload this time
+        assert sys.modules["herding.explore"].summary is now
+    finally:
+        os.utime(path, (before.st_atime, before.st_mtime))
+
+
+def test_app_reloads_a_module_loaded_before_the_check_existed():
+    # The live server's modules were imported before app.py had this check, so they carry no
+    # _site_mtime: a source file newer than its .pyc must still count as changed.
+    import os
+    import sys
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=300)
+    at.run()
+    m = sys.modules["herding.explore"]
+    path, before = m.__file__, os.stat(m.__file__)
+    try:
+        del m._site_mtime                                   # as if loaded by an older app.py
+        os.utime(path, (before.st_atime, os.path.getmtime(m.__cached__) + 60))   # source newer than .pyc
+        old_summary = m.summary
+        at.run()
+        assert not at.exception, [e.value for e in at.exception]
+        assert sys.modules["herding.explore"].summary is not old_summary
+    finally:
+        os.utime(path, (before.st_atime, before.st_mtime))
