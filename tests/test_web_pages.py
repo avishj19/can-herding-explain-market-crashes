@@ -691,3 +691,46 @@ def test_workspace_dial_warns_about_an_earlier_run_off_the_fit(app):
     assert len(log) == 2 and log[0][1]["a2"] == FIT["settings"]["a2"] and log[1][1]["a2"] == 0.2
     caps = _captions(at)
     assert warn_now not in caps and warn_earlier in caps
+
+
+# ================================================================== breaker round 3 (BR3-1, BR3-2, BR3-6)
+
+def test_workspace_52_week_high_is_at_least_the_intraday_high(app):
+    # BR3-1: "High 104.00" next to "52-week high 100.00" when the day rose above every close of the year
+    daily = pd.Series(np.linspace(50, 100, 1500), index=pd.bdate_range(end="2026-11-18", periods=1500))
+    at = app(daily=daily, intraday=lambda t, p, i: _bars(values=(99.0, 101.0, 104.0, 102.0, 100.0)),
+             ticker="NVDA", frame="1D")
+    assert not at.exception, [e.value for e in at.exception]
+    assert _stat(at, "High") == "104.00" and _stat(at, "52-week high") == "104.00"
+    low = float(daily[daily.index > daily.index[-1] - pd.Timedelta(days=364)].min())   # by hand
+    assert _stat(at, "52-week low") == f"{low:,.2f}"
+
+
+@pytest.mark.parametrize("cleared", ["", "   "])
+def test_workspace_clearing_the_search_box_is_not_an_error(app, cleared):
+    # BR3-2: emptying the box showed "Type a ticker first, like NVDA" under AAPL
+    at = app()
+    at.text_input(key="ticker_box").set_value("AAPL").run()
+    assert at.session_state["asset"] == ("saved", "AAPL")
+    at.text_input(key="ticker_box").set_value(cleared).run()
+    assert not at.exception and not at.error, [e.value for e in at.error]
+    assert at.session_state["asset"] == ("saved", "AAPL")
+
+
+def test_workspace_clearing_the_search_box_clears_an_old_ticker_error(app):
+    at = app()
+    at.text_input(key="ticker_box").set_value("!!!").run()
+    assert at.error
+    at.text_input(key="ticker_box").set_value("").run()
+    assert not at.error
+
+
+def test_guide_says_when_intraday_prices_show(open_page):
+    # BR3-6: the guide promised prices within the day, but Live prices is off by default.
+    # BR4-2: a typed ticker is always live, so it shows them with the switch off; only a market from
+    # the list needs Live prices on. The guide must say both.
+    at = open_page("web/page_guide.py")
+    text = " ".join(m.value for m in at.markdown)
+    assert "1D and 7D load prices within the day from Yahoo Finance." not in text
+    assert re.search(r"1D and 7D show prices within the day[^.]*always for a ticker you type[^.]*"
+                     r"market from the list once \*\*Live prices\*\*", text), text

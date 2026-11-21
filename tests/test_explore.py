@@ -1327,3 +1327,121 @@ def test_example_returns_same_as_direct_draws():
     assert e.summary(f2)["tail"] < e.summary(b2)["tail"]          # fat tails: smaller exponent
     with pytest.raises(ValueError):
         e.example_returns(1)
+
+
+# ================================================================== breaker round 3 (BR3-1, BR3-3..5)
+
+def _rising_daily():
+    """1500 weekdays rising steadily from 50 to 100: the last close (100) is the highest close."""
+    return pd.Series(np.linspace(50, 100, 1500), index=pd.bdate_range(end="2026-11-18", periods=1500))
+
+
+def test_range_stats_52_week_high_covers_the_intraday_high():
+    # BR3-1: the stats row read "High 104.00" next to "52-week high 100.00"
+    daily = _rising_daily()
+    t0 = pd.Timestamp("2026-11-18 09:30")
+    bars = pd.Series([99.0, 101.0, 104.0, 102.0, 100.0],
+                     index=pd.DatetimeIndex([t0 + pd.Timedelta(minutes=5 * i) for i in range(5)]))
+    s = e.range_stats(bars, daily=daily)
+    cut = daily.index[-1] - pd.Timedelta(days=364)       # by hand: closes after the same weekday 52 weeks ago
+    year = [x for t, x in daily.items() if t > cut]
+    assert s["high"] == 104.0 and s["high_52w"] == max(max(year), 104.0) == 104.0
+    assert s["low_52w"] == min(year) and s["high_52w"] >= s["high"] and s["low_52w"] <= s["low"]
+    # an intraday low below every close of the year counts too
+    dip = pd.Series([99.0, 20.0, 100.0], index=bars.index[:3])
+    s = e.range_stats(dip, daily=daily)
+    assert s["low_52w"] == 20.0 and s["high_52w"] == max(year) == 100.0
+
+
+def test_range_stats_52_week_numbers_ignore_range_prices_older_than_52_weeks():
+    # BR3-1: a 5Y range's older prices must not leak into the 52-week high
+    daily = _rising_daily()[::-1].copy()
+    daily.index = _rising_daily().index                  # now falling from 100 to 50
+    cl, _ = e.price_range(daily, "5Y")
+    s = e.range_stats(cl, daily=daily)
+    year = daily[daily.index > daily.index[-1] - pd.Timedelta(days=364)]
+    assert s["high"] > float(year.max())                 # the range reaches back further than 52 weeks
+    assert (s["high_52w"], s["low_52w"]) == (float(year.max()), float(year.min()))
+
+
+def test_range_stats_year_days_ignores_the_range():
+    # year_days given: the 52-week numbers stay the last year_days closes (as before)
+    idx = pd.bdate_range("2026-01-01", periods=5)
+    c = pd.Series([100.0, 120.0, 90.0, 110.0, 99.0], index=idx)
+    s = e.range_stats(c, daily=c, year_days=3)
+    assert (s["high_52w"], s["low_52w"]) == (110.0, 90.0)
+
+
+def _utc_prices():
+    return pd.Series(np.linspace(10, 20, 600), index=pd.bdate_range("2024-01-01", periods=600, tz="UTC"))
+
+
+@pytest.mark.parametrize("frame", ["YTD", "1Y", "5Y", "20Y"])
+def test_price_range_rejects_time_zoned_dates(frame):
+    # BR3-3: YTD raised a raw pandas TypeError while 1Y/5Y/20Y accepted the same input
+    with pytest.raises(ValueError, match="time zone"):
+        e.price_range(_utc_prices(), frame)
+
+
+def test_daily_within_and_moves_in_range_reject_time_zoned_dates():
+    # BR3-3: a raw TypeError from comparing UTC dates with plain dates
+    c = _utc_prices()
+    naive = c.tz_localize(None)
+    with pytest.raises(ValueError, match="time zone"):
+        e.daily_within(c, naive.iloc[-5:])
+    with pytest.raises(ValueError, match="time zone"):
+        e.daily_within(naive, c.iloc[-5:])
+    r = e.log_returns(naive)
+    with pytest.raises(ValueError, match="time zone"):
+        e.moves_in_range(r, c.iloc[-5:])
+    with pytest.raises(ValueError, match="time zone"):
+        e.moves_in_range(e.log_returns(c), naive.iloc[-5:])
+    with pytest.raises(ValueError, match="time zone"):
+        e.range_stats(naive.iloc[-5:], daily=c)
+
+
+@pytest.mark.parametrize("seed", [1.5, "1", True, np.bool_(False), -1])
+def test_seeded_helpers_reject_bad_seeds(seed):
+    # BR3-4: numpy TypeErrors, or True silently used as seed 1
+    p, _ = e.fitted_settings()
+    with pytest.raises(ValueError, match="seed"):
+        e.runaway_path(p, "chartists", 0.0, seed, 3)
+    with pytest.raises(ValueError, match="seed"):
+        e.runaway_story(p, seed, 3, 2)
+    with pytest.raises(ValueError, match="seed"):
+        e.example_returns(10, seed)
+
+
+def test_seeded_helpers_accept_numpy_ints():
+    bell, fat = e.example_returns(10, np.int64(5))
+    g = np.random.default_rng(5)
+    assert np.array_equal(bell, g.standard_normal(10)) and np.array_equal(fat, g.standard_t(3, 10))
+
+
+@pytest.mark.parametrize("values", [[np.inf, 1.0, 2.0], [-np.inf, np.inf], [1.0, -np.inf]])
+def test_spread_rejects_infinity(values):
+    # BR3-5: infinity gave NaN percentiles that would reach Compare's error bars
+    with pytest.raises(ValueError, match="finite"):
+        e.spread(values)
+
+
+# ------------------------------------------------------------------ kirman_passes
+# Spec: pass strictly below the limit (0.05 by default); bad distances and limits rejected.
+
+def test_kirman_passes_boundary_and_inputs():
+    assert e.kirman_passes(0.0) and e.kirman_passes(0.0499) and not e.kirman_passes(0.05)
+    assert not e.kirman_passes(0.3) and e.kirman_passes(0.3, limit=0.5)
+    assert e.KIRMAN_PASS == 0.05
+    for bad in (-0.1, 1.5, np.nan, "0.01", True):
+        with pytest.raises(ValueError):
+            e.kirman_passes(bad)
+    with pytest.raises(ValueError):
+        e.kirman_passes(0.01, limit=0)
+
+
+def test_kirman_passes_on_a_real_long_run():
+    # the page's own case (N=100, delta=0.1, eps=0.002, seed 1): measured distance 0.0187 at 20M steps;
+    # 2M steps here to keep the test quick, still far below the limit
+    from herding import kirman
+    k = kirman.simulate(20, 0.05, 0.1, 2_000_000, seed=1)
+    assert e.kirman_passes(e.kirman_match(k, 20, 0.05, 0.1)[2])

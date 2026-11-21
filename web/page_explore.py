@@ -69,6 +69,9 @@ def _pick_row(key, group):
 
 
 def _fetch():
+    if not st.session_state.ticker_box.strip():     # emptying the box is not an error: keep the market
+        st.session_state.ticker_error = ""
+        return
     try:
         t = ex.clean_ticker(st.session_state.ticker_box)
         if t in ex.market_data.stock_tickers():
@@ -295,7 +298,7 @@ def chart_panel(name, symbol, close, r, mixes, source):
         if intraday:            # close is Yahoo's daily prices here (source is live): one source on screen
             note = (f"Prices within the day from Yahoo Finance, New York time, up to "
                     f"{cl.index[-1]:%d %b %H:%M}. The 52-week numbers use Yahoo's daily prices to "
-                    f"{close.index[-1]:%d %b %Y}.")
+                    f"{close.index[-1]:%d %b %Y} plus these prices within the day.")
         daily_range = ex.daily_within(close, cl) if intraday else cl
         st_ = ex.range_stats(cl, daily=close)
         chg, col = c.arrow(st_["change"])

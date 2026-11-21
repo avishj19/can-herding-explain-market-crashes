@@ -61,11 +61,21 @@ def _prices(close, name="prices"):
     return c
 
 
+def _no_tz(c, name):
+    """Checks that dates (if c is indexed by dates) carry no time zone. Every date here is plain
+    (live_prices and the downloads strip Yahoo's time zones); comparing UTC dates with plain ones
+    would end in a raw pandas TypeError, and only on some ranges (BR3-3)."""
+    if isinstance(c.index, pd.DatetimeIndex) and c.index.tz is not None:
+        raise ValueError(f"{name}: dates must not carry a time zone, got {c.index.tz}")
+    return c
+
+
 def _dated(c, name):
-    """Checks that a price Series is indexed by dates (needed to line two series up in time)."""
+    """Checks that a price Series is indexed by dates without a time zone (needed to line two
+    series up in time)."""
     if not isinstance(c.index, pd.DatetimeIndex):
         raise ValueError(f"{name} must be a Series indexed by dates")
-    return c
+    return _no_tz(c, name)
 
 
 # ------------------------------------------------------------------ assets
@@ -490,6 +500,22 @@ def tail_check(tails, lo=2.5, hi=3.5):
             "n": int(t.size), "left_out": int(vals.size - t.size), "passed": lo <= m <= hi}
 
 
+# The Checks page's rule for Kirman's ants: with 20 million steps the simulated and exact long-run
+# shares differ by a total variation distance of 0.0024-0.0234 (measured Nov 2026, every slider value
+# of eps, seeds 0-3), so 0.05 is about twice the worst seen and a real bug would still be caught.
+KIRMAN_PASS = 0.05
+
+
+def kirman_passes(tv, limit=KIRMAN_PASS):
+    """Kirman check: True when the simulation's total variation distance from the exact answer
+    (kirman_match's third value) is below `limit`."""
+    if not is_number(tv) or not 0 <= tv <= 1:
+        raise ValueError(f"tv must be a distance between 0 and 1, got {tv!r}")
+    if not is_number(limit) or not 0 < limit <= 1:
+        raise ValueError(f"limit must be between 0 and 1, got {limit!r}")
+    return bool(tv < limit)
+
+
 def kirman_match(k, N, eps, delta):
     """Kirman's ants: (share of steps with each count 0..N in the simulation k, the exact
     long-run share from kirman.stationary, their total variation distance
@@ -526,6 +552,8 @@ def spread(values, lo=5, hi=95):
     v = v[~np.isnan(v)] if v.ndim == 1 else v
     if v.ndim != 1 or v.size == 0:
         raise ValueError("need at least one number")
+    if not np.all(np.isfinite(v)):            # infinity would give NaN percentiles (BR3-5)
+        raise ValueError("values must be finite (no infinity)")
     if not 0 <= lo <= hi <= 100:
         raise ValueError(f"need 0 <= lo <= hi <= 100, got {lo}, {hi}")
     a, b = np.percentile(v, [lo, hi])
@@ -595,6 +623,7 @@ def runaway_path(p, mix, a1, seed, day):
     guard only stops a run, it never changes its random draws, so the path is the same."""
     if isinstance(day, bool) or not isinstance(day, (int, np.integer)) or day < 1:
         raise ValueError(f"day must be a whole number >= 1, got {day!r}")
+    seed = _whole(seed, "seed", 0)        # numpy would turn -1, 1.5 or "1" into a confusing error
     q, chartists = mix_settings(p, mix, a1)
     out = model.simulate(q, int(day), seed=seed, chartists=chartists, max_gap=None)
     return {k: out[k] for k in ("lp", "lf", "z")}
@@ -624,7 +653,7 @@ def example_returns(n=20000, seed=3):
     """Made-up daily moves for the Start here page's 'how to read the tail chart' picture:
     (bell, fat), n draws from a bell curve and from Student's t with 3 degrees of freedom, whose
     tail exponent is 3 like real markets. The same seed always gives the same picture."""
-    n = _whole(n, "n", 2)
+    n, seed = _whole(n, "n", 2), _whole(seed, "seed", 0)
     g = np.random.default_rng(seed)
     return g.standard_normal(n), g.standard_t(3, n)
 
@@ -802,7 +831,7 @@ def price_range(close, frame, intraday=None):
     range has at least 2 prices."""
     if frame not in FRAMES:
         raise ValueError(f"frame must be one of {list(FRAMES)}, got {frame!r}")
-    c = _prices(close, "daily closes")
+    c = _no_tz(_prices(close, "daily closes"), "daily closes")
     if frame in DAILY_FALLBACK:
         if intraday is not None:
             try:
@@ -858,8 +887,8 @@ def moves_in_range(r, prices):
     """The daily moves a price range shows: those into its 2nd..last price (n prices have n - 1
     moves). r is indexed by the later day of each move, so the move into the range's first price
     happened before the range (YTD's would be 31 December of last year) and is left out."""
-    r = pd.Series(r, dtype=float)
-    p = _prices(prices)
+    r = _no_tz(pd.Series(r, dtype=float), "moves")
+    p = _no_tz(_prices(prices), "prices")
     return r[(r.index > p.index[0]) & (r.index <= p.index[-1])]
 
 
@@ -875,7 +904,8 @@ def range_stats(close, daily=None, year_days=None):
     """The usual numbers for a price chart's range: last, first, change, high, low, max drawdown
     within the range, and (from `daily`, the full daily closes, when given) the 52-week high and
     low and the annualized volatility of the range's daily returns. The 52 weeks are counted by
-    date (a market open every day has 364 closes in them, a stock about 251) and the volatility is
+    date (a market open every day has 364 closes in them, a stock about 251), and the range's own
+    prices inside them count too (an intraday high above every close), and the volatility is
     annualized with days_per_year(daily). Given year_days instead, both use the last year_days
     closes and sqrt(year_days). Both series must be in date order with no repeated dates; with
     daily, both must be indexed by dates."""
@@ -890,7 +920,10 @@ def range_stats(close, daily=None, year_days=None):
         d = _dated(_prices(daily, "daily closes"), "daily closes")
         _dated(c, "prices")
         if year_days is None:
-            year, per_year = d[d.index > d.index[-1] - pd.Timedelta(weeks=52)], days_per_year(d)
+            start = d.index[-1] - pd.Timedelta(weeks=52)
+            # the range's own prices inside those 52 weeks count too: an intraday high above every
+            # daily close must not read "High 104" next to "52-week high 100" (BR3-1)
+            year, per_year = pd.concat([d[d.index > start], c[c.index > start]]), days_per_year(d)
         else:
             year, per_year = d.iloc[-year_days:], year_days
         out["high_52w"], out["low_52w"] = float(year.max()), float(year.min())

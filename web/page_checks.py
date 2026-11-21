@@ -14,8 +14,6 @@ from web import common as c
 
 KIRMAN = dict(N=100, delta=0.1)
 STEPS = 20_000_000
-KIRMAN_PASS = 0.05     # measured Nov 2026, 20M steps, every slider value, seeds 0-3: distance 0.0024-0.0234
-                       # (largest: eps = 0.01, seed 0; this page uses seed 1: at most 0.0187)
 
 
 @st.cache_data(show_spinner=False)
@@ -110,8 +108,8 @@ def page():
         st.markdown(f"Below ε = {th:.4f} the ants herd: most sit at one source and switch together. "
                     f"Now ε = {eps}, so they {_ant_words(eps, th)}.")
         st.markdown(f"**Rule:** over {STEPS / 1e6:.0f} million steps, the simulated share of time at each count "
-                    f"differs from the exact answer by less than {KIRMAN_PASS} (total variation distance; 0 means "
-                    f"identical). Distance **{tv:.4f}**: the check {c.verdict(tv < KIRMAN_PASS)}.",
+                    f"differs from the exact answer by less than {ex.KIRMAN_PASS} (total variation distance; 0 means "
+                    f"identical). Distance **{tv:.4f}**: the check {c.verdict(ex.kirman_passes(tv))}.",
                     unsafe_allow_html=True)
     with right:
         fig = make_subplots(rows=2, cols=1, vertical_spacing=0.18)
