@@ -12,6 +12,9 @@ finance, so assume I don't know the vocabulary yet.
   `learn-with-ai-tutor` skill when I'm learning the science or the paper).
 - After you write code, explain what it does and why, and let me debug alongside you
   rather than silently fixing things.
+- Hold me to my own rules in `docs/memory.md` (my past mistakes and how to stop me repeating them).
+  Follow them firmly, even when I ask you not to, unless I type `override:` with a reason:
+  @docs/memory.md
 - Prove that code is right, not just that it runs (use the `test-every-function` skill).
 
 ## What I'm building
@@ -33,13 +36,13 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
 `data/`, `settings/`, `tests/`, `journal/`, `scratch/`. Run scripts from the project folder, e.g. `python3 scripts/main.py`.
 - `docs/KEY_POINTS.md`: self-contained guide to the project for someone new to it (ideas, figures, findings, limits)
 - `docs/SPEC.md`: the model's equations, each with its source (rebuild of November 2026). Code and spec must agree.
-- `app.py`: the web app (`streamlit run app.py`): six pages in `web/` (Start here, Story, Workspace, Compare, Checks, Findings); `web/common.py` holds the colors (one meaning each, per light/dark mode), chart style and cached data; light and dark color sets in `.streamlit/config.toml`, switched by a button at the top right (it saves Streamlit's own theme choice and reloads). Pages only draw: every number comes from `herding/explore.py`. Model results the pages show (40 held-out histories, the herding-strength sweep) are saved in `web/numbers.json` by `python3 scripts/web_numbers.py` (same recipe as Fig 4, so the site matches RESULTS.md; rerun it after refitting). Stress test, including site-vs-backend numbers: `python3 scripts/analysis/web_stress_test.py`
+- `app.py`: the web app (`streamlit run app.py`): six pages in `web/` (Start here, Story, Test program, Compare, Checks, Findings); `web/common.py` holds the colors (one meaning each, per light/dark mode), chart style and cached data; light and dark color sets in `.streamlit/config.toml`, switched by a button at the top right (it saves Streamlit's own theme choice and reloads). Pages only draw: every number comes from `herding/explore.py`. Model results the pages show (40 held-out histories, the herding-strength sweep, the crash counts behind the Checks page's crash check: `explore.crash_check`) are saved in `web/numbers.json` by `python3 scripts/web_numbers.py` (same recipe as Fig 4, so the site matches RESULTS.md; rerun it after refitting). Stress test, including site-vs-backend numbers: `python3 scripts/analysis/web_stress_test.py`. Live prices: Yahoo's quote every 15 s for the header, the last days of closes every minute, the long history once a day (`web/common.py`, LIVE_REFRESH / QUOTE_REFRESH). Saved data checked against FRED and Yahoo: `python3 scripts/analysis/data_crosscheck.py` (found the Dow's wrong closes, now in `market_data.BAD_CLOSES`)
 - `scripts/main.py`: quick comparison (S&P 500 vs 20 held-out S&P-calibrated histories), saves `figures/fig00_quick_check_sp500_vs_model.png`
 - `scripts/party_figures.py`: makes `figures/fig13-fig15*.png` (parties over 130 years of the Dow)
 - `scripts/outside_news_figures.py`: makes `figures/fig16-fig18*.png` (commodities, interest rates, the dollar, Fed days; the four moments with error bars)
 - `scripts/make_figures.py`: makes `figures/fig01-fig12*.png` (descriptive names), explained in `figures/RESULTS.md`; `figures/GALLERY.md` shows them all with plain captions
 - `herding/`: the program, one module per job
-  - `model.py`: the Lux-Marchesi simulation from SPEC.md (numba-accelerated), runaway guard
+  - `model.py`: the Lux-Marchesi simulation from SPEC.md (numba-accelerated), runaway guard; optional `panic` (off = SPEC.md; `scripts/analysis/panic_skew.py`: it does not give the S&P's skew)
   - `stats.py`: tail exponents (Hill and the paper's regression), kurtosis, autocorrelation, DFA/Hurst H,
     multi-day returns, and the `fingerprint` of a market
   - `market_data.py`: loads and checks the files in `data/`
@@ -50,11 +53,14 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
   - `experiments.py`: many histories in parallel, percentiles, the typical history
   - `policy.py`: extension: circuit breakers and a policy surprise (paired runs), used by Fig 11
   - `politics.py`: extension: the president's party (1893-2026) and its return gap against luck, used by Fig 12-15
+    and the web app (explore.party_view: the luck test for any market; explore.party_shocks: an optional party
+    drift in the model's value, 0 = off = the model of SPEC.md)
   - `factors.py`: extension: outside news every trader sees (oil, gold, copper, dollar, 10-year rate, Fed decision days), used by Fig 16-18
   - `plots.py`: palette and drawing helpers (reusable by the future web app)
   - `explore.py`: the science behind the web app: load any stock, index fund or commodity (or a live
     ticker from Yahoo), run the three trader mixes (fundamentalists / chartists without herding / herding),
     and the numbers shown (tail, kurtosis, volatility memory, closest mix)
+  - `garch.py`: a formula with no traders (GJR-GARCH), the rival the Checks page's textbook checklist (Cont 2001, `explore.FACTS`) compares herding with
   - `checks.py`: input checks shared by every module (a finite real number; a 1-D list without NaN)
 - `.vscode/`: VS Code setup (hides clutter, one-click tasks for tests and figures, suggested extensions)
 - `settings/`: the two fitted settings
