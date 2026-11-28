@@ -83,8 +83,8 @@ runs. It looks typical on 9 of the 11 measures.
 ![Markets the model never saw](fig08_markets_model_never_saw.png)
 
 **fig08 — Markets the model never saw.** The same test, applied to the Nasdaq-100, the
-S&P since 1928 and 20 individual stocks. These are markets the model was never fitted
-to. It mostly holds up. Single stocks have bigger jumps (company news), and the 1930s
+S&P since 1928 and 5 individual stocks (Microsoft, Disney, Home Depot, Nike, Honeywell). These are
+markets the model was never fitted to. It mostly holds up. Single stocks have bigger jumps (company news), and the 1930s
 were wilder than anything since.
 
 ---
@@ -123,50 +123,3 @@ S&P 500, so its curve differs from the paper-matched one here.
   the day of the pause or in the weeks after.
 - **A surprise 10% drop in true value** (like an unexpected rate hike) makes the price
   overshoot more when many traders are chartists.
-
-![Political parties](fig12_political_parties.png)
-
-**fig12 — Political parties** (an extension beyond the paper).
-- Since 1928 the S&P returned about 6.8% a year more under Democratic presidents. That is
-  more than 97% of "fake" party calendars give, so it's borderline: only 12 changes of party.
-- Crashes, volatility and fat tails show **no** party difference, so herding works the
-  same whoever is president.
-
-![130 years of parties](fig13_parties_130_years.png)
-
-**fig13 — 130 years of the market and the president's party.** $1 in the Dow since 1896, invested
-only under Democratic presidents, became $106; only under Republican presidents, $15. But take out
-one presidency on each side (Clinton, Hoover) and the picture reverses.
-
-![Every presidency](fig14_every_presidency.png)
-
-**fig14 — Every presidency since 1896.** Booms, busts and crashes do not sort by party: the best
-and the worst yearly returns both came under Republicans (Coolidge, Hoover).
-
-![Is the gap luck?](fig15_is_the_gap_luck.png)
-
-**fig15 — Is the gap more than luck?** With 130 years of data the gap (+3.5% a year) is inside
-what luck gives (bigger than 91% of fake calendars), and for 40-year stretches ending
-1975–1995 stocks did better under Republicans.
-
-![Commodities, rates and the dollar](fig16_sp500_with_commodities_and_rates.png)
-
-**fig16 — How the S&P 500 moves with commodities, interest rates and the dollar** (an extension).
-Copper and oil tend to rise with stocks, the dollar falls when stocks rise, and gold hardly moves
-with them, even in crashes. The links to oil and to interest rates flipped sign over the years.
-Outside markets explain about twice as much of the S&P's moves in wild markets as in calm ones.
-
-![Without outside news](fig17_without_outside_news.png)
-
-**fig17 — Take out the outside news: the fat tails and the memory survive.** Remove every S&P
-move that oil, gold, copper and interest rates explain (16% of how much it moves): the tail stays fat
-and the memory stays long, so outside news is not what makes them. What's left looks like a typical
-history of the herding model on all 8 measures. Surprise Fed moves are huge days, but there have
-been only 9 since 1994; scheduled Fed decisions are ordinary days.
-
-![Trading moments](fig18_trading_moments_with_error_bars.png)
-
-**fig18 — The four trading moments, with error bars.** The S&P falls harder than it rises
-(negative skew); the model can't do that, because its buyers and sellers are mirror images.
-The S&P's kurtosis is very uncertain (5.5 to 53), because Black Monday dominates it.
-

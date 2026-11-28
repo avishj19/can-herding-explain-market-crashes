@@ -225,16 +225,16 @@ chartist group in Lux–Marchesi.
 
 ## Fig 8 — Markets the model never saw
 [`fig08_markets_model_never_saw.png`](fig08_markets_model_never_saw.png). Percentile of each real market among 20 model
-histories of the same length: the two indexes against seeds 1000–1019, the 20
-stocks against their own seeds 1020–1039 (until November 2026 a length check was
-off by one day and the stocks reused the index seeds; fixing it changed 49 unusual
-cells to 43). **43 of 220 cells are unusual**: 6 of 20 for the indexes, 37 of 200 for
-the stocks.
-- **Stocks:** kurtosis is high (percentiles 70–100, median 95; 7 of 20 unusual), as
+histories of the same length: the two indexes against seeds 1000–1019, the 5
+stocks (MSFT, DIS, HD, NKE, HON; the rule is in `data/stocks/README.md`) against their own
+seeds 1020–1039. **11 of 70 cells are unusual**: 6 of 20 for the indexes, 5 of 50 for the
+stocks (rerun 28 Nov 2026, after the stock list went from 20 to 5).
+- **Stocks:** kurtosis is high (percentiles 90–100, median 95; 1 of 5 unusual, HD), as
   expected: companies have their own jumps (earnings, lawsuits) on top of the
-  market's. But their Hill tail exponent is typical (5–50, none unusual). The
-  clearest miss is H of returns: 11 of 20 stocks sit at 100%, because the model's
-  returns reverse from day to day and stocks' do not.
+  market's. But their Hill tail exponent is typical (10–40, none unusual), and the paper-style
+  α sits at the 5% edge for all five. The clearest miss is H of returns (75–100; DIS and HD at
+  100%), because the model's returns reverse from day to day and stocks' do not; MSFT's next-day
+  correlation is at 0%.
 - **S&P since 1928:** unusual on memory (H and H|r| both 100%) and the paper-style α
   (0%), with clustering and 25-day kurtosis at the 95% edge: the 1930s were far
   wilder and longer-lasting than anything since.
@@ -325,172 +325,7 @@ value), next to a placebo (the same history without the surprise: ordinary wobbl
   market.** Only one size (a 10% drop) was tested, so this does not say how timing
   compares with the size of the surprise.
 
-## Fig 12 — Political parties (an extension, not in the paper)
-[`fig12_political_parties.png`](fig12_political_parties.png). Code in `herding/politics.py`; the
-numbers below come from `python3 scripts/analysis/president_party_gap.py`. The president's party is taken from inauguration
-dates (12 changes of party from 1928 to 2026). The "presidential puzzle" (Santa-Clara &
-Valkanov 2003; Pástor & Veronesi 2020) says US stocks return more under Democratic presidents,
-with no matching difference in risk.
-
-The 1928 file has 11 wrong closes (a 3–10% "move" undone the next day while the Dow barely
-moved, e.g. 1935-04-16: S&P −10.0%, Dow +0.4%). They were found by checking every day from 1928
-to 1952 against the Dow Jones average (MeasuringWorth) and are left out when the data is loaded
-(`market_data.BAD_CLOSES`, November 2026). The numbers below are from after that fix.
-
-The model has no politics in it, so it can serve as a yardstick for luck. Every gap is
-measured in units of the series' own daily sd, so that markets of different volatility can be
-compared. Two yardsticks:
-- **the model:** 40 S&P-calibrated histories, cut at the real inauguration dates;
-- **the real returns with the party calendar slid along:** whole quarters, at least a year away
-  from the real calendar (386 fake calendars for 1928–, 299 for 1950–). This keeps the market's own
-  calm and wild spells.
-
-| S&P 500 | 1928–2026 | 1950–2026 |
-|---|---|---|
-| Return gap, Democrats − Republicans | **+6.8% a year** | +5.3% a year |
-| ... percentile among shifted calendars / model | **97% / 100%** | 95% / 100% |
-| Volatility D ÷ R | 0.87 (26% / 10%) | 0.86 (13% / 10%) |
-| Fat tails (kurtosis) D − R | −11.2 (20% / 10%) | −28 (13% / 0%) |
-| Crash days (below −4 sd) per 1,000, D − R | −2.2 (30% / 15%) | −1.6 (27% / 22%) |
-
-- **The return gap is real but borderline.** Against the fair yardstick (shifted calendars) it
-  sits at the 95th–97th percentile. With only 12 changes of party, a few eras carry much of it:
-  leaving out the years 1929–1932 (the crash, under Hoover) shrinks it to 3.7% a year (leaving out
-  exactly Hoover's term, March 1929 to March 1933: 3.1%), and leaving out 2008 (Bush) as well
-  shrinks it to 2.4%.
-- **The model is the wrong yardstick for average returns.** Its returns reverse from day to day
-  (H 0.39, the miss in Fig 7), so its long-run averages wobble too little, and every real gap
-  looks extreme against it. For volatility, tails and crashes the two yardsticks agree on the
-  S&P, but the model's yardstick is too narrow for those as well (see "Is the luck test itself
-  sound?" below), so the shifted calendar is the one to trust.
-- **No party difference in crashes, volatility or fat tails.** Every one sits inside both
-  yardsticks. The −28 kurtosis gap since 1950 is mostly one day: without Black Monday 1987 (under a
-  Republican president) it is −8.3.
-- **What this means for the project question:** the crash-making mechanism (herding) shows no
-  sign of depending on the party in power. Parties may shift average returns, as Pástor &
-  Veronesi argue, through investors' fear, which this model does not have. Party is correlation,
-  not cause: this test cannot say what drives the gap.
-
-## Fig 12b — Term by term: which presidencies can the model explain? (extension)
-
-Code: `python3 scripts/analysis/president_terms.py` (no figure; merged from three agents' analyses). Fig 12 pooled the
-days of each party. Here each of the 18 terms since 1928 is checked on its own: the S&P 500 and
-40 politics-free model histories (rescaled to the S&P's daily sd and mean) are cut at the same
-days. For seven measures we find the S&P's **percentile**, the share of histories below it
-(50 = typical; 0 or 100 = none of the 40 did that). A measure outside 5–95 is a **flag**: the
-model does not explain it.
-
-**Luck check.** Letting each model history play the S&P against the other 39 gives 0.63 flags
-per term, a median of 10 over 18 terms (95th percentile 20). The S&P gets **31**, reached by
-only 2% of luck runs. So some misses are real.
-
-**By party.** Democrats: 10 flags in 8 terms (1.25 per term). Republicans: 21 in 10 (2.10). If we
-shuffle the party labels over the 18 terms, a gap this big turns up 37% of the time (39%
-without the return measure), so it may well be luck. Hoover (5) and Bush 2001 (6) give 11 of
-the 21 Republican flags; without them Republicans have 1.25 per term.
-
-**By kind of event.** Three groups, each with both parties in it:
-- *Long crises, too wild:* Hoover, Roosevelt, Bush 2001. Hoover had 37 crash days; no model
-  history had more than 8 over the same days.
-- *Calm eras, too quiet:* Eisenhower, Kennedy, Johnson, Nixon (volatility percentile 0–2). All
-  6 "too calm" flags fall in 1946–1980; only 1 of the 19 "too wild" flags does.
-- *One shock day in a calm term:* 1962 (Kennedy), 1987 (Reagan, a 20.5% fall in a day), 2025
-  (Trump): kurtosis at the 95th–100th percentile. (Truman's 1946 "shock" was a wrong close: with
-  it left out his kurtosis falls from 12.9 to 7.0 and his term has no flags.)
-
-**What it means.** The misses follow the era and the kind of event, not the party. Herding
-makes calm and wild spells, but they don't last long enough: the real market stayed wild for
-years and calm for a decade. And real shocks can strike a calm market out of the blue, like
-outside news; the model's news is a mild bell curve, so its big days come from herding.
-
-**Limitations.** Only 40 histories, so percentiles move in steps of 2.5. The model's returns
-reverse a little from day to day (H 0.39, Fig 7), so its multi-year returns spread too little
-and return flags come too easily. Terms run from 291 to 3,015 days; long terms show misses more
-easily. Flags sit close to the 5/95 lines: leaving out the 11 wrong closes (Fig 12) moved Clinton's
-and Obama's returns from the 95th to the 98th percentile (two new flags), because every model
-history is rescaled to the whole series' spread, which the wrong closes had inflated.
-
-Table: S&P value (percentile among the 40). Falls are price falls over 1 or 20 trading days.
-Crash days: below mean − 4 sd. α: Hill tail exponent, terms of 1,000+ days only (smaller =
-fatter tails).
-
-| Term | Party | Years | Days | Return/yr | Volatility | Kurtosis | Worst day | Worst 20 days | Crash days | α | Flags |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| Coolidge | R | 1928–1929 | 291 | +32.9% (100) | 15.2% (45) | 1.7 (80) | 3.8% (68) | 10.3% (65) | 0 (39) | — | **1** |
-| Hoover | R | 1929–1933 | 1,001 | −37.4% (0) | 41.2% (100) | 3.2 (75) | 12.9% (100) | 42.2% (100) | 37 (100) | 3.10 (12) | **5** |
-| Roosevelt | D | 1933–1945 | 3,015 | +7.3% (60) | 24.3% (98) | 9.1 (98) | 9.1% (78) | 26.1% (98) | 31 (98) | 2.93 (15) | **4** |
-| Truman | D | 1945–1953 | 1,937 | +8.0% (80) | 14.2% (10) | 7.0 (90) | 7.1% (68) | 20.0% (75) | 4 (65) | 2.64 (8) | **0** |
-| Eisenhower | R | 1953–1961 | 2,016 | +10.4% (75) | 11.3% (2) | 6.5 (90) | 6.6% (57) | 9.3% (5) | 1 (30) | 3.26 (28) | **1** |
-| Kennedy | D | 1961–1963 | 715 | +6.4% (48) | 12.2% (0) | 13.5 (100) | 6.7% (90) | 15.5% (85) | 1 (72) | — | **2** |
-| Johnson | D | 1963–1969 | 1,271 | +7.0% (57) | 8.9% (0) | 4.4 (78) | 2.8% (2) | 9.5% (8) | 0 (18) | 3.61 (38) | **2** |
-| Nixon | R | 1969–1974 | 1,401 | −4.0% (0) | 13.0% (2) | 2.2 (48) | 3.1% (2) | 13.9% (57) | 0 (19) | 3.79 (45) | **3** |
-| Ford | R | 1974–1977 | 619 | +9.8% (68) | 16.3% (55) | 1.4 (65) | 3.7% (52) | 14.5% (82) | 0 (35) | — | **0** |
-| Carter | D | 1977–1981 | 1,009 | +6.4% (52) | 12.6% (5) | 1.5 (48) | 3.0% (5) | 13.0% (52) | 0 (25) | 4.47 (65) | **0** |
-| Reagan | R | 1981–1989 | 2,024 | +9.4% (82) | 18.0% (48) | 86.9 (100) | 20.5% (98) | 29.6% (95) | 5 (70) | 3.00 (18) | **2** |
-| Bush | R | 1989–1993 | 1,011 | +10.4% (72) | 13.4% (5) | 4.3 (78) | 6.1% (72) | 13.7% (60) | 1 (46) | 3.65 (45) | **0** |
-| Clinton | D | 1993–2001 | 2,021 | +14.0% (98) | 15.7% (20) | 5.3 (82) | 6.9% (57) | 13.9% (40) | 3 (46) | 3.77 (55) | **1** |
-| Bush | R | 2001–2009 | 2,009 | −5.7% (0) | 21.5% (98) | 9.9 (98) | 9.0% (90) | 28.2% (100) | 14 (99) | 2.49 (2) | **6** |
-| Obama | D | 2009–2017 | 2,015 | +12.2% (98) | 17.3% (57) | 4.7 (80) | 6.7% (70) | 22.1% (92) | 5 (75) | 3.34 (28) | **1** |
-| Trump | R | 2017–2021 | 1,006 | +13.0% (88) | 20.6% (78) | 20.8 (95) | 12.0% (95) | 30.9% (98) | 6 (88) | 2.14 (0) | **2** |
-| Biden | D | 2021–2025 | 1,005 | +11.4% (75) | 16.5% (45) | 1.9 (57) | 4.3% (40) | 12.1% (48) | 0 (20) | 4.00 (48) | **0** |
-| Trump | R | 2025–2026 | 448 | +13.2% (88) | 16.3% (42) | 16.8 (100) | 6.0% (78) | 12.1% (65) | 2 (74) | — | **1** |
-
-## Fig 13–15 — Parties at scale: 130 years, 24 markets (extension, November 2026)
-
-Code: `python3 scripts/party_figures.py` (the three figures), `python3 scripts/analysis/party_scale.py`
-(the numbers; about 3 minutes), tests in `tests/test_party_figures.py`, `tests/test_party_scale.py`
-and `tests/test_politics_heavy.py`. Fig 12 used the S&P since 1928 and 40 model histories. Here
-the test is run on the **Dow Jones average since 1896** (35,247 trading days, 15 changes of
-party; from MeasuringWorth), the S&P, the Nasdaq-100 and the 20 stocks, against **1,000** model
-histories (seeds 60000–60999; 20 ran away and were left out).
-
-- [`fig13_parties_130_years.png`](fig13_parties_130_years.png): $1 in the Dow in 1896 became
-  $1,639 by 2026 (price only: no dividends, no inflation). Invested only under Democratic
-  presidents it became $106; only under Republican presidents, $15. But without Clinton the
-  Democratic $1 ends at $33, and without Hoover the Republican $1 ends at $91.
-- [`fig14_every_presidency.png`](fig14_every_presidency.png): every presidency since 1896 side by
-  side. Best yearly return: Coolidge (R, +26%); worst: Hoover (R, −36%). Wildest: Hoover;
-  calmest: Johnson (D). Both parties have rows at both ends.
-- [`fig15_is_the_gap_luck.png`](fig15_is_the_gap_luck.png): the real gap against every shifted
-  party calendar, and the gap in every 40-year window of the Dow: from −4.2% to +13.9% a year,
-  and negative (better under Republicans) for windows ending about 1975–1995.
-
-| Market | Years | Party changes | Gap D − R a year | 95% range (bootstrap) | Beats % of shifted calendars |
-|---|---|---|---|---|---|
-| Dow Jones | 1896–2026 | 15 | +3.5% | −2.7% to +10.2% | 91% |
-| S&P 500 | 1928–2026 | 12 | +6.8% | −1.0% to +15.3% | 97% |
-| S&P 500 | 1950–2026 | 11 | +5.3% | −1.2% to +11.7% | 95% |
-| Nasdaq-100 | 1985–2026 | 6 | +11.7% | −1.3% to +26.2% | 91% |
-
-(The 95% range resamples the history in 250-day blocks, 2,000 times. "A year" is 252 trading days;
-the Dow traded about 295 days a year before 1952, so its gap per calendar year is nearer 3.8%.)
-
-- **The gap shrinks with more history and could be zero.** Every one of the 24 ranges includes
-  0. With 32 more years of data the gap halves (6.8% → 3.5%) and is no longer unusual (91%).
-- **Single presidencies carry it.** Without Hoover the Dow gap is 0.8%. Without Bush 2001 the
-  Nasdaq gap is 0.9%. For 9 of the 20 stocks, leaving out one presidency flips its sign.
-- **Across everything, about what luck gives.** Of 96 tests (24 markets × 4 measures), 8 are
-  outside 5–95% against shifted calendars; luck alone gives about 10. (The tests are not
-  independent: the stocks share one calendar and move together.)
-
-### Is the luck test itself sound? (`tests/test_politics_heavy.py`)
-A test can be wrong too, so the method was tried on 1,100 made-up markets that have realistic
-calm and wild spells but **no** party effect at all (two generators, described in the test file).
-- **The shifted calendar is nearly fair, slightly generous.** It called a no-effect market
-  "unusual" 9–12% of the time on every measure; a fair test gives 10%. Rerun with 24 other sets
-  of random numbers (overnight stress test, Nov 2026), it averaged 11.7% (every measure
-  11.2–12.0%): about 1 market in 8.5 instead of 1 in 10. So a percentile just outside 5–95
-  against shifted calendars is a little weaker evidence than it looks.
-- **It cannot see small gaps.** With only 12–15 changes of party, a true gap of 5% a year is
-  missed about 60% of the time, and a true 7% gap about 35% of the time. So "not unusual" does
-  not prove there is no gap; it means the data cannot tell.
-- **The model is too narrow a yardstick on every measure, not only returns.** It called the
-  no-effect markets "unusual" 29–50% of the time (25–48% averaged over 24 other seed sets). Its calm and wild spells are shorter than the
-  made-up markets' (and the real market's, Fig 12b), so its gaps wobble too little.
-- The same tests found and fixed four input-handling bugs in `politics.py` (empty or missing
-  dates, unsorted dates, `min_days=0`); none affected a result.
-
-## News, elections, and "logical" reactions (extension, November 2026)
+## News and "logical" reactions (extension, November 2026)
 
 Code: `python3 scripts/analysis/news_and_reactions.py`, tests in `tests/test_news_and_reactions.py`,
 events in `data/big_days_events.csv`. **A reaction is called logical when the price moves about
@@ -509,16 +344,6 @@ of the fundamental value), so this can be measured (40 histories of 20,000 days)
 - Without herding the price follows the news; the missing 31% is the model's random trading
   noise (with that noise switched off, news explains 88%).
 
-**Presidential elections as news (Dow, 33 elections, 1896–2024).** The move from the last close
-before election day to the first close after:
-- **Elections are bigger days than usual:** 13 of 33 are above the 90th percentile of nearby
-  days; luck gives about 3.
-- **Direction:** up after 13 of 18 Republican wins (average +1.1%), up after 5 of 15 Democratic
-  wins (average −0.4%). With 15–18 events per group, and many ways to slice them, this is
-  suggestive, not proven. It also runs opposite to the Democratic gap over whole terms above.
-- Whether the White House changed party made no measurable difference.
-- This cannot say whether the reactions were logical: nobody knows the true size of the news.
-
 **The Dow's 20 biggest days and their documented causes** (`data/big_days_events.csv`, each with
 its source): 10 had clear news or a policy decision that day (e.g. 15 Mar 1933, the first day
 after the bank holiday; 13 Oct 2008, bank rescues), 4 had no clear news (19 Oct 1987; 28 and
@@ -526,98 +351,6 @@ after the bank holiday; 13 Oct 2008, bank rescues), 4 had no clear news (19 Oct 
 news, between the model with herding (10%) and without (77%). 17 of the 20 fall in four crisis
 clusters (1929–33, 1987, 2008, 2020), the clustering that herding produces. The labels rest on
 one or two secondary sources per day and are judgement calls.
-
-## Fig 16–18 — Outside news: commodities, interest rates, the dollar and the Fed (extension, November 2026)
-
-Code: `python3 scripts/outside_news_figures.py` (module `herding/factors.py`), tests in
-`tests/test_factors.py`. **The question:** some news reaches every trader at the same moment,
-and a fully logical trader acts on it with no herding at all: an oil shock, a jump in interest
-rates, a Fed decision. If such news carried the S&P's fat tails and clustering, herding would
-not be needed to explain them. Lux & Marchesi assume the news is a calm bell curve; this checks
-the real outside news.
-
-**New data** (`data/factors/`, `data/fed_decisions.csv`; all end 2026-10-30, rebuilt byte for
-byte by `data/download_market_data.py`): Brent oil (FRED, 1987–; Brent because WTI closed
-below zero on 2020-04-20), gold and copper futures (Yahoo, 2000–), the broad dollar (FRED,
-2006–), the 10-year Treasury yield (FRED, 1962–), the Fed funds target (FRED), and every FOMC
-decision since February 1994 from the Federal Reserve's own calendars: 262 scheduled
-decisions and the 9 surprise moves between meetings. Check against a published number: on
-scheduled FOMC days 1994–2011 the S&P rose 33.1 basis points on average, against 1.4 on other
-days, which is what Lucca & Moench (2015) report (about 33 and 1).
-
-**Fig 16 — how the S&P moves with them** (2006–2026):
-
-| | correlation with the S&P | S&P beta | on the S&P's worst 5% of days |
-|---|---|---|---|
-| copper | +0.29 | +0.20 | +0.28 |
-| 10-year interest rate | +0.28 | +0.06 per point | +0.18 |
-| oil (Brent) | +0.20 | +0.09 | +0.21 |
-| gold | +0.05 | +0.05 | +0.05 |
-| US dollar | −0.29 | −1.03 | −0.28 |
-
-- **No fixed beta describes oil or interest rates.** The one-year stock–oil correlation was
-  positive in 68% of years and the stock–yield correlation in 42%; the stock–yield link was
-  negative 99% of the time in 1968–1998, positive 90% of the time in 1999–2021, and mixed since
-  2022 (positive 36% of the time).
-- **Gold barely moves with stocks, even in crashes** (a "safe haven", Baur & Lucey 2010).
-- **Outside markets explain more in wild markets:** 16% of the S&P's daily variance in calm
-  markets, 33% in wild ones (thirds by the volatility of the 20 days before). This is the
-  opposite of what herding alone would give (in the model, news explains less when chartists
-  crowd in), but it is what Longin & Solnik (2001) found across countries: correlations rise in
-  falling markets. It cannot say which way the cause runs: in a panic the stock market also
-  moves oil and interest rates.
-
-**Fig 17 — take out the outside news.** Each S&P day minus the part that oil, gold, copper
-and the 10-year rate explain (on the day before, the day itself and the day after, because
-futures settle before the 4 pm stock close; Dimson 1979). 2000–2026, 6,186 days; this removes
-too much rather than too little, because some of what moves with those markets is the stock
-market's own panic. Percentiles are among 40 held-out S&P-calibrated histories of the same length.
-
-| | S&P | outside news removed | S&P's percentile | after removal |
-|---|---|---|---|---|
-| share of daily variance explained | | 16% | | |
-| kurtosis | 10.8 | 8.8 | 98 | 95 |
-| tail α (Hill) | 2.82 | 2.93 | 5 | 18 |
-| tail α (paper's way) | 2.24 | 2.37 | 2 | 8 |
-| clustering, next day | 0.30 | 0.32 | 88 | 90 |
-| clustering, 50 days | 0.14 | 0.13 | 82 | 82 |
-| H of \|returns\| | 0.97 | 0.95 | 95 | 92 |
-| kurtosis, 25 days | 5.8 | 4.7 | 95 | 95 |
-
-- **The fat tails and the memory survive.** Removing every move the outside markets explain
-  changes the tail exponent by about 0.1 and the memory hardly at all. So outside news is not
-  what makes them; this is the strongest test so far of the project's answer.
-- **What outside news does add is the extreme end of the tail.** With it, the S&P's tails over
-  2000–2026 are at the edge of what the model gives (Fig 7 found the same for 1950–2026: the
-  paper-style α below every history). Without it, the S&P is typical of the herding model on all
-  8 scale-free measures (6 of 8 before). Herding explains the fat tails; outside news makes them
-  a little fatter.
-- With only oil and interest rates, back to 1987, they explain only 3% of the daily variance,
-  and the 25-day kurtosis barely moves (12.1 → 11.1). With all five factors (2006–2026,
-  24%) it falls from 7.6 to 1.7: the 2008 crisis moved stocks, commodities, the dollar and rates
-  together. This is part of Limitation 6.
-- **Fed decisions:** the 9 surprise moves between meetings were 5.3 times a normal day's size
-  (2001-09-17, 2008-01-22, 2020-03-16 ...), but scheduled decisions only 1.1 times. Leaving out
-  all 271 Fed days changes kurtosis from 10.6 to 9.6 and the Hill α from 2.87 to 2.91. They are
-  3% of days and 8% of the biggest 1% of days. News that every trader sees and expects is
-  priced calmly; only surprises are big, and there are too few of them to make the tails.
-
-**Fig 18 — the four trading moments, with error bars** (S&P 1950–2026; 95% intervals by block
-bootstrap with one-year blocks, so wild spells stay together):
-
-| | S&P (95% interval) | S&P's percentile among 40 model histories |
-|---|---|---|
-| mean | +3.2 basis points a day (1.7 to 4.5) | 100 (the model's value has no growth, by design) |
-| sd | 0.99% a day (0.88 to 1.14) | 90 |
-| skewness | −0.95 (−2.27 to −0.16) | 2: unusual |
-| kurtosis | 25 (5.5 to 53) | 95 |
-
-- **The S&P falls harder than it rises; the model does not.** Its skewness is clearly below 0
-  (the interval excludes 0), while the model's traders behave the same way in both directions.
-  This is a real miss of the model (Limitation 10).
-- **Kurtosis is a poor yardstick on its own:** its interval runs from 5.5 to 53, because one day
-  (Black Monday) dominates it. Tail exponents and the memory measures are much steadier, which
-  is why the project relies on them.
 
 ## Limitations (honest list)
 1. **Parameters are fitted, not the paper's.** The paper's parameter tables
@@ -637,9 +370,7 @@ bootstrap with one-year blocks, so wild spells stay together):
    the stability-screen seeds. The paper-matched settings: 0 of 40 and 0 of 20.
    (The rejected stability-first refit: 0 of 40, but it lost the fat tails.)
 6. **Long-horizon tails:** the real S&P keeps fat tails at 25 days (kurtosis 3.3);
-   both models return to the bell curve faster. Part of the S&P's long-horizon tail is outside
-   news moving every market together: over 2006–2026 the 25-day kurtosis falls from 7.6 to 1.7
-   once commodities, the dollar and interest rates are taken out (Fig 17).
+   both models return to the bell curve faster.
 7. **The S&P score can trade away fat tails** (see "Recalibration" above): a
    stability-first refit fitted better by its own score but lost the tails, so it
    was not used.
@@ -667,5 +398,6 @@ bootstrap with one-year blocks, so wild spells stay together):
    next-day correlation, −0.02 → −0.05). The paper fit was not redone at a smaller dt.
 10. **No skew:** the S&P falls harder than it rises (skewness −0.95, 95% interval −2.27 to
     −0.16), while the model's buyers and sellers are mirror images, so its skewness is about 0
-    (S&P at the 2nd percentile, Fig 18). A model that reproduces this would need traders who
+    (S&P at the 2nd percentile among 40 held-out histories; 95% interval by block bootstrap with
+    one-year blocks). A model that reproduces this would need traders who
     react differently to falls (for example, forced selling).

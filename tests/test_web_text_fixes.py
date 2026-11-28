@@ -275,7 +275,7 @@ def test_compare_map_zoom_symbols_and_labels(open_page):
 def test_compare_tails_have_distinct_dashes(open_page):
     at = open_page("web/page_checks.py")
     fig = _fig(at, "tails")
-    picked = [t for t in fig["data"] if t.get("name") in ("S&P 500", "Gold", "AAPL")]
+    picked = [t for t in fig["data"] if t.get("name") in ("S&P 500", "Gold", "MSFT")]
     assert len({t["line"]["dash"] for t in picked}) == 3
     assert "colors only label" not in _text(at)
 

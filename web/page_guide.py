@@ -28,16 +28,23 @@ def short_answer(nums, spx, spx_r):
     the median of the saved held-out histories (web/numbers.json); the S&P's is computed from its file."""
     tail = ex.spread(nums["checks"]["herding"]["tail"])
     cc = ex.crash_check(nums, spx_r)
+    lo, hi = ex.PROPOSAL_TAIL
+
+    def _where(x):
+        return "inside" if lo <= x <= hi else "above" if x > hi else "below"
+
     return (
         "**Short answer: partly.**\n\n"
         f"- **Yes:** with plain bell-curve news, herding alone gives the S&P 500's fat tails and bursts of "
-        f"wild days. The model's tail exponent is {tail['median']:.2f} (median of {tail['n']} simulated histories); "
-        f"the S&P 500's is {spx['tail']:.2f}.\n"
+        f"wild days. The model's tail exponent is {tail['median']:.2f} (median of {tail['n']} simulated histories), "
+        f"{_where(tail['median'])} the proposal's {lo} to {hi}; the S&P 500's is {spx['tail']:.2f}. The settings "
+        f"were fitted to the S&P 500, so this match is partly by design; the bell curve without trend chasers was "
+        f"never a target.\n"
         f"- **Crashes:** a bell curve puts 20-sd falls 10{_power(ex.bell_crash_years(20))} years apart, and Black "
         f"Monday ({cc['worst_sd']:.0f} sd) 10{_power(cc['bm_bell'])} years apart. "
         f"In the model, an {cc['size']}-sd fall comes about every {cc['row']['model']:.0f} years, and a fall the size "
-        f"of Black Monday about every {cc['bm_model']:,.0f} years. That is far closer, but still rarer than in the "
-        f"S&P 500.\n"
+        f"of Black Monday about every {cc['bm_model']:,.0f} years ({c.wait_range(cc)}). That is far closer, but "
+        f"still rarer than in the S&P 500.\n"
         "- **No skew:** it does not make falls bigger than rises, as the S&P 500 does.\n"
         "- **Daily reversal:** its prices reverse a little from one day to the next, which the S&P 500's "
         "do not (Hurst H 0.39 against 0.50 in the project's "
@@ -282,8 +289,9 @@ def page():
              help="Black Monday happened once in the S&P 500's daily record since 1950.", border=True)
     d.metric("The herding model", f"{cc['bm_model']:,.0f} years",
              help=f"Over {len(nums['crashes']['days'])} simulated histories fed only bell-curve news: "
-                  f"{cc['bm_count']} falls this big. Far closer than a bell curve, but still rarer than in the "
-                  f"S&P 500. Smaller crashes come sooner: an {cc['size']}-sd fall about every "
+                  f"{cc['bm_count']} falls this big, so the number is {c.wait_range(cc)}. Far closer than a "
+                  f"bell curve, but still rarer than in the S&P 500. Smaller crashes come sooner: an "
+                  f"{cc['size']}-sd fall about every "
                   f"{cc['row']['model']:.0f} years.",
              border=True)
 

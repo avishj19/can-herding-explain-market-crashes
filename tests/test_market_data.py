@@ -36,22 +36,6 @@ def test_spx_no_large_gaps(spx):
     assert gaps.max() <= 7, f"largest gap {gaps.max()} days at {gaps.idxmax().date()}"
 
 
-def test_vix_known_peak():
-    vix = pd.read_csv(ROOT / "data/vix_fear_index_daily.csv", parse_dates=["Date"], index_col="Date")
-    # Published record close: 82.69 on 2020-03-16
-    assert vix["Close"].idxmax().date().isoformat() == "2020-03-16"
-    assert vix["Close"].max() == pytest.approx(82.69, abs=0.01)
-
-
-def test_recessions_match_nber():
-    rec = pd.read_csv(ROOT / "data/us_recessions_monthly.csv", parse_dates=["observation_date"])
-    rec = rec.set_index("observation_date")["USREC"]
-    for month in ["2008-06-01", "2020-04-01", "1974-06-01"]:
-        assert rec[month] == 1
-    for month in ["2019-06-01", "1995-06-01"]:
-        assert rec[month] == 0
-
-
 def test_load_spx_missing_file_explains_fix(tmp_path):
     with pytest.raises(FileNotFoundError, match="data/download_market_data.py"):
         data.load_spx(tmp_path / "nope.csv")
@@ -131,14 +115,17 @@ def test_known_closures_are_the_only_long_gaps():
 
 
 def test_stocks_have_market_beta_near_one_recomputed_independently():
+    # the rule in data/stocks/README.md: beta 0.9-1.1 over the whole file (2000-2026), five sectors
     table = pd.read_csv(ROOT / "data/stocks/market_beta.csv")
-    assert len(table) >= 15 and table.market_beta.between(0.9, 1.1).all()
-    m = data.returns("spx").loc["2005-01-01":"2025-12-31"]
+    assert sorted(table.ticker) == ["DIS", "HD", "HON", "MSFT", "NKE"]
+    assert table.market_beta.between(0.9, 1.1).all()
+    m = data.returns("spx")
     for t, beta in table.itertuples(index=False):
         x = pd.concat([data.stock_returns(t), m], axis=1, join="inner").dropna()
-        x = x.loc["2005-01-01":"2025-12-31"]
+        assert x.index[0] == pd.Timestamp("2000-01-04") and x.index[-1] == pd.Timestamp("2026-10-30"), t
         slope = np.polyfit(x.iloc[:, 1], x.iloc[:, 0], 1)[0]   # regression slope = beta
-        assert slope == pytest.approx(beta, abs=0.02), t
+        assert slope == pytest.approx(beta, abs=0.001), t
+        assert 0.9 <= slope <= 1.1, t
 
 
 def test_stock_list_matches_files():
@@ -182,8 +169,6 @@ def test_every_file_ends_on_the_same_fixed_day():
     files += [data.STOCKS / f"{t}.csv" for t in data.stock_tickers()]
     for f in files:
         assert data.load_prices(f).index[-1] == end, f.name
-    months = data.pd.read_csv(data.DATA / "us_recessions_monthly.csv", parse_dates=[0])
-    assert months.iloc[-1, 0] == end.to_period("M").to_timestamp()
 
 
 # Audit of November 2026, issue 4: three broken files that used to slip through or give a

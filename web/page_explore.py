@@ -13,7 +13,7 @@ right column  the model: presets (Wilder / Best fit / Calmer / No herding), the 
 below         four tabs: Model and the market, Big days (with the reader), History log, Every history on
               one chart
 sidebar       Settings: other markets, live prices, chart switches, more model settings (a2, v1, days,
-              seed, party drift), run options, the share link and Reset everything
+              seed), run options, the share link and Reset everything
 """
 import hashlib
 import time
@@ -83,17 +83,6 @@ YAHOO_DOWN_NOTE = "Yahoo Finance is not answering, so this shows the saved daily
 FAIL_MEMORY = 300        # seconds a failed Yahoo fetch is remembered, so every rerun doesn't ask again
 
 
-@st.cache_data(show_spinner=False)
-def _dow_gap_of(stamp):
-    return ex.party_gap_year(ex.log_returns(ex.saved_prices("Dow Jones")))
-
-
-def _dow_gap():
-    """The Dow's real D-minus-R gap a year since 1896, for the party-effect slider's help (worked out,
-    so a fix to the Dow file changes it too)."""
-    return _dow_gap_of(c.file_stamp(ex.market_data.MARKETS["dow"]))
-
-
 def _init():
     ss = st.session_state
     ss.setdefault("asset", ("saved", "S&P 500"))
@@ -110,9 +99,10 @@ def _init():
     if ss.pop("_fallback_done", False):
         ss.ticker_box = ""
         ss.group = "Indexes"
-    if "party" not in ss.run:                   # a session from before the party drift existed
-        ss.run = dict(ss.run, party=0.0)
-    for k in ("a1", "a2", "v1", "days", "seed", "party"):
+    if "party" in ss.run:     # a session opened before the party drift was removed (Nov 2026)
+        ss.run = {k: v for k, v in ss.run.items() if k != "party"}
+        ss.log = [(t, {k: v for k, v in prm.items() if k != "party"}, tl) for t, prm, tl in ss.log]
+    for k in ("a1", "a2", "v1", "days", "seed"):
         ss.setdefault(f"in_{k}", ss.run[k])
     # the preset picked is the one the controls match now, or none: a radio that kept showing
     # "S&P 500 fit" after a slider moved could not be clicked again to restore the fit
@@ -161,8 +151,7 @@ def _matching_preset():
     ss = st.session_state
     p, _ = c.fitted()
     for name, a1 in PRESETS.items():
-        want = {"in_a1": float(p["a1"]) if a1 is None else a1, "in_a2": float(p["a2"]), "in_v1": float(p["v1"]),
-                "in_party": 0.0}
+        want = {"in_a1": float(p["a1"]) if a1 is None else a1, "in_a2": float(p["a2"]), "in_v1": float(p["v1"])}
         if all(abs(float(ss[k]) - v) < 1e-9 for k, v in want.items()):
             return name
     return None
@@ -267,13 +256,12 @@ def _preset():
     a1 = PRESETS[st.session_state.preset]
     st.session_state.in_a1 = float(p["a1"]) if a1 is None else a1
     st.session_state.in_a2, st.session_state.in_v1 = float(p["a2"]), float(p["v1"])
-    st.session_state.in_party = 0.0           # a preset is the fit itself: no party drift
 
 
 GROUPS = {"Indexes": "A whole market in one number: the S&P 500 is 500 large US companies "
                       "(an index fund buys all of them).",
-          "Stocks": "Single companies: 20 large US stocks that rise and fall about 1% when the market "
-                    "moves 1% (market beta 0.9 to 1.1).",
+          "Stocks": "Single companies: 5 large US stocks from five different industries that rise and fall "
+                    "about 1% when the market moves 1% (market beta 0.9 to 1.1).",
           "Commodities": "Raw materials traded worldwide: oil, gold and copper. (Brent oil's saved and live "
                          "prices come from two sources, spot and futures, and can differ: usually by 1 to 2%, "
                          "but by up to 25% in 2026.)"}
@@ -329,7 +317,7 @@ def _reset_all():
     safe reset invites trying the extremes). The history log and the tasks done stay."""
     ss = st.session_state
     run = c.default_run()
-    for k in ("a1", "a2", "v1", "days", "seed", "party"):
+    for k in ("a1", "a2", "v1", "days", "seed"):
         ss[f"in_{k}"] = run[k]
     ss.asset = ("saved", "S&P 500")
     ss.group = "Indexes"
@@ -375,22 +363,11 @@ def _settings_rest(name):
         # fixed key and default: a default that changed with the range made Streamlit rebuild
         # the switch (and the chart after it) on every new range
         st.toggle("Log price scale (equal heights = equal % changes)", value=True, key="t_log")
-        st.toggle("Shade by the president's party (extra study)", value=False, key="t_party",
-                  help="Shade the Democratic presidencies and show whether this market did better under "
-                       "one party, with a luck test (daily ranges only).")
         st.markdown("### More model settings")
         st.slider("Reaction to price trends (a2)", 0.0, 1.0, key="in_a2", step=0.01, format="%.2f",
                   help="How strongly trend chasers react to recent price moves.")
         st.slider("How often trend chasers change mood (v1)", 0.5, 5.0, key="in_v1", step=0.01, format="%.2f",
                   help="How often trend chasers reconsider their mood.")
-        st.slider("Party effect on true value (extra study; % a year, Democrats − Republicans)", -10.0, 10.0, key="in_party", step=0.5,
-                  format="%+.1f",
-                  help="Extra study. Optional, and 0 (off) by default: the paper's model has no politics. Above "
-                       "0, the true value grows that much faster a year under Democratic presidents than under "
-                       "Republican ones (below 0, the other way), on the real presidents' calendar: the model's "
-                       "days are laid on the last trading days of the Dow Jones. For comparison, the Dow's real "
-                       f"gap since 1896 is about {_dow_gap():+.1%} a year, which is about what luck alone gives (turn on "
-                       "Shade by the president's party above).")
         # full width with a short label: "19,329 (as long as the S&P 500 record)" was cut off
         st.selectbox("Simulated trading days", [5000, 10000, sp_days], key="in_days",
                      format_func=lambda d: f"{d:,}" + (" (S&P 500 length)" if d == sp_days else ""),
@@ -466,7 +443,7 @@ def _log_ticks(lo, hi):
     return vals, labels
 
 
-def _price_chart(name, cl, r, daily_range, show_big, show_dd, log, intraday, hours=None, party=False):
+def _price_chart(name, cl, r, daily_range, show_big, show_dd, log, intraday, hours=None):
     """The price (in the market's own color: up/down colors only go with an arrow), big days as
     triangles, and the drawdown below. A short range of daily closes (1D or 7D without prices
     within the day) is drawn with a dot at each close and one date per day, not hours."""
@@ -496,8 +473,6 @@ def _price_chart(name, cl, r, daily_range, show_big, show_dd, log, intraday, hou
         fig.add_scatter(x=x, y=y, mode="lines", name="▼ Drawdown", fill="tozeroy",   # loss color with its arrow
                         line=dict(color=c.DOWN, width=1), fillcolor=c.DOWN_FILL,
                         hovertemplate=f"%{{x|{fmt}}}<br>%{{y:.1%}} below the high<extra></extra>", row=2, col=1)
-    if party and not intraday:
-        _shade_parties(fig, cl.index)
     c.style(fig, height=470)
     fig.update_yaxes(type="log" if log else "-", title="Price", row=1, col=1)
     ticks = _log_ticks(cl.min(), cl.max()) if log else None
@@ -519,15 +494,11 @@ def _price_chart(name, cl, r, daily_range, show_big, show_dd, log, intraday, hou
 
 
 @st.cache_data(show_spinner=False, max_entries=40)
-def _price_fig(version, name, cl, r, daily_range, show_big, show_dd, log, intraday, hours, party):
+def _price_fig(version, name, cl, r, daily_range, show_big, show_dd, log, intraday, hours):
     """_price_chart, kept: the price chart doesn't change when the model runs, and building it took
     about 0.13 s on every slider move (most of it plotly checking every axis setting). version
     (PAGE_VERSION) is in the key, so an edit to this page starts afresh."""
-    return _price_chart(name, cl, r, daily_range, show_big, show_dd, log, intraday, hours=hours,
-                        party=party).to_dict()
-
-
-PARTY_FILL = "rgba(128,128,128,0.18)"      # neutral gray: blue and red already mean other things here
+    return _price_chart(name, cl, r, daily_range, show_big, show_dd, log, intraday, hours=hours).to_dict()
 
 
 def _day_reader(r, daily_range):
@@ -549,67 +520,6 @@ def _day_reader(r, daily_range):
     text, sources = ex.day_story(day, float(big.loc[day, "move"]), float(big.loc[day, "sd"]))
     links = " ".join(f"[source {i}]({u})" for i, u in enumerate(sources, 1) if u.startswith("https://"))
     st.info(text + (f" {links}" if links else ""), icon=":material/event:")
-
-
-def _shade_parties(fig, dates):
-    """Shade the Democratic presidencies in gray (Republican ones stay clear), with the president's
-    name above any term wide enough to label. Party colors are not used: on this site blue is the
-    value traders and red a loss."""
-    terms = ex.party_terms(dates)
-    if not terms:
-        return
-    span = (dates[-1] - dates[0]).days or 1
-    for t in terms:
-        wide = (t["end"] - t["start"]).days / span > 0.075
-        if t["party"] == "D":
-            fig.add_vrect(x0=t["start"], x1=t["end"], fillcolor=PARTY_FILL, line_width=0, layer="below",
-                          row="all", col=1)
-        if wide:
-            # at the bottom of the price panel: at the top they ran into the legend
-            fig.add_annotation(x=t["start"] + (t["end"] - t["start"]) / 2, y=0.01, yref="y domain", xref="x",
-                               text=f"{t['name']} ({t['party']})", showarrow=False, yanchor="bottom",
-                               textangle=-90 if (t["end"] - t["start"]).days / span < 0.12 else 0,
-                               font=dict(size=10, color=c.MUTED))
-
-
-def _party_panel(name, r, mixes, run):
-    """The president's-party numbers for the market on screen (explore.party_view), and the model's
-    own gap on the same calendar: luck alone when the party drift is 0."""
-    v, why = c.party_view(r)
-    st.markdown("**President's party**")
-    if v is None:
-        st.caption(f"{name}'s history cannot be split by party: it {why}.")
-        return
-    luck = v["luck"]
-
-    def verdict(pct):
-        return f"unusual ({pct:.0f}%)" if pct < 5 or pct > 95 else f"about what luck gives ({pct:.0f}%)"
-    c.stats_row([
-        ("Gap a year, D − R", f"{v['gap_year']:+.1%}", None, "Average yearly return under Democratic presidents "
-         "minus under Republican ones (log returns, price only)."),
-        ("Under Democrats", f"{v['dem_year']:+.1%} a year", None, None),
-        ("Under Republicans", f"{v['rep_year']:+.1%} a year", None, None),
-        ("Luck test", f"beats {luck['mean']:.0f}% of {v['calendars']}", None,
-         "Fake calendars: the real presidents' terms slid along this market's own history (whole quarters, "
-         "at least a year from the real dates). A gap that beats more than 95% of them would be unusual."),
-        ("Volatility D ÷ R", f"{v['vol_ratio']:.2f}", None, "Daily ups and downs under Democrats divided by "
-         "under Republicans (1 = the same)."),
-        ("Big falls D − R", f"{v['crashes']:+.1f} per 1,000 days", None, "Days that fell more than 4 sd, "
-         "per 1,000 days, under Democrats minus under Republicans."),
-    ])
-    herd = mixes["herding"][0]
-    model_line = ""
-    if herd is not None:
-        g = ex.model_party_gap(herd)
-        model_line = (f" The model on the same presidents' calendar gives {g:+.1%} a year"
-                      + (f", with your party effect of {run['party']:+.1f}%." if run.get("party", 0.0)
-                         else ": it has no politics, so that gap is pure luck."))
-    st.caption(
-        f"{v['start']:%Y} to {v['end']:%Y}, {v['changes']} changes of party. Against the fake calendars (a "
-        f"result beyond 5 to 95% would be unusual): the return gap is {verdict(luck['mean'])}, volatility "
-        f"{verdict(luck['vol'])}, big falls {verdict(luck['crashes'])}. Party here is a correlation, "
-        "not a cause." + model_line + " Shaded on the chart: Democratic presidents. More in the project's "
-        "[report](https://github.com/avishj19/can-herding-explain-market-crashes/blob/main/figures/RESULTS.md).")
 
 
 def _share_text(p):
@@ -834,8 +744,6 @@ def _earlier_runs():
 def _earlier_label(prm, now):
     label = f"Earlier history: herding strength {prm['a1']:.2f}, seed {prm['seed']}"
     extra = [f"{k} {prm[k]:.2f}" for k in ("a2", "v1") if prm[k] != now[k]]
-    if prm.get("party", 0.0) != now.get("party", 0.0):
-        extra.append(f"party effect {prm.get('party', 0.0):+.1f}%")
     if prm["days"] != now["days"]:
         extra.append(f"{prm['days']:,} days")
     return label + (", " + ", ".join(extra) if extra else "")
@@ -938,13 +846,11 @@ def _chart_panel(name, symbol, close, r, mixes, source, live=False, fetch=None):
         if view == "Price":
             # the switches are in Settings (the sidebar): read here, so a switch reruns this chart
             show_big, show_dd = ss.get("t_big", True), ss.get("t_dd", True)
-            show_party, log = ss.get("t_party", False) and not intraday, ss.get("t_log", True)
+            log = ss.get("t_log", True)
             c.show(_price_fig(PAGE_VERSION, name, cl, r, daily_range, show_big, show_dd, log, intraday,
-                              ex.trading_hours(symbol, bars), show_party), key="price_chart")
+                              ex.trading_hours(symbol, bars)), key="price_chart")
             c.try_this(TRY["Price"])
             c.hint(HINTS["Price"])
-            if show_party:
-                _party_panel(name, r, mixes, ss.run)
         else:
             rr = ex.moves_in_range(r, daily_range)    # n prices, n - 1 moves: none from before the range
             herd_label = c.MIX["herding"][0] if a1 != 0 else f"{c.MIX['chartists'][0]} (herding strength 0)"
@@ -1070,7 +976,7 @@ def _run_log_table():
     out = []
     for t, prm, tl in ss.log:
         row = {"Time": t, "Herding strength (a1)": prm["a1"], "Reaction to price trends (a2)": prm["a2"],
-               "Mood changes (v1)": prm["v1"], "Party effect (% a year)": prm.get("party", 0.0),
+               "Mood changes (v1)": prm["v1"],
                "Days": prm["days"], "Seed": prm["seed"]}
         # at a1 = 0 "trend chasers who herd" is the same history as "trend chasers, no herding": no second number
         shown = _shown_mixes(prm["a1"])
@@ -1084,20 +990,18 @@ def _run_log_view(df):
     """The run log as shown: tail exponents with 2 decimals and "—" where there is none (a history
     that ran away, or trend chasers who herd at a1 = 0); the numbers underneath stay numbers."""
     tails = [c.MIX[m][0] for m in ex.MIXES]
-    return df.style.format({**{k: "{:.2f}" for k in tails + RUN_LOG_SETTINGS}, "Days": "{:,}",
-                            "Party effect (% a year)": "{:+.1f}"}, na_rep="—")
+    return df.style.format({**{k: "{:.2f}" for k in tails + RUN_LOG_SETTINGS}, "Days": "{:,}"}, na_rep="—")
 
 
 RUN_LOG_SETTINGS = ["Herding strength (a1)", "Reaction to price trends (a2)", "Mood changes (v1)"]
-SLIDERS = (("in_a1", "a1"), ("in_a2", "a2"), ("in_v1", "v1"), ("in_days", "days"), ("in_seed", "seed"),
-           ("in_party", "party"))
+SLIDERS = (("in_a1", "a1"), ("in_a2", "a2"), ("in_v1", "v1"), ("in_days", "days"), ("in_seed", "seed"))
 
 
 def _control_values():
     """The run the model controls describe now."""
     ss = st.session_state
     return {"a1": float(ss.in_a1), "a2": float(ss.in_a2), "v1": float(ss.in_v1),
-            "days": int(ss.in_days), "seed": int(ss.in_seed), "party": float(ss.in_party)}
+            "days": int(ss.in_days), "seed": int(ss.in_seed)}
 
 
 def _run(new):
@@ -1120,8 +1024,7 @@ def _run_line(name, s, sums, run, log):
     Empty until a run is made on this page."""
     if not log or log[0][1] != run:
         return ""
-    head = f"Ran at herding strength {run['a1']:.2f}" + (
-        f" with a party effect of {run['party']:+.1f}% a year" if run.get("party", 0.0) else "")
+    head = f"Ran at herding strength {run['a1']:.2f}"
     herd = sums["herding"]
     if herd is None:
         return f"{head}: the history with herding ran away, so it has no tail exponent."

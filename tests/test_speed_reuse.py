@@ -13,16 +13,15 @@ A1, A2, V1 = float(P["a1"]), float(P["a2"]), float(P["v1"])
 KEYS = ("price", "value", "z", "x", "r")
 
 
-# Spec: the paths a run hands back are exactly model_market's, for every mix and with a party drift.
-@pytest.mark.parametrize("party", [0.0, 0.02])
-def test_run_mixes_paths_equal_model_market(party):
+# Spec: the paths a run hands back are exactly model_market's, for every mix.
+def test_run_mixes_paths_equal_model_market():
     paths = {}
-    out = ex.run_mixes(P, BURN, A1, 0.3, 1.5, 3000, 7, party=party, paths=paths)
+    out = ex.run_mixes(P, BURN, A1, 0.3, 1.5, 3000, 7, paths=paths)
     for m in ex.MIXES:
         if out[m][0] is None:
             assert m not in paths            # a run that ran away hands back nothing
             continue
-        mm = ex.model_market(P, BURN, m, A1, 0.3, 1.5, 3000, 7, party=party)
+        mm = ex.model_market(P, BURN, m, A1, 0.3, 1.5, 3000, 7)
         for k in KEYS:
             assert np.array_equal(paths[m][k], mm[k]), (m, k)
         assert paths[m]["runaway_day"] is None
@@ -64,7 +63,7 @@ def test_site_reuses_the_history_without_running_it_again(monkeypatch):
     st.cache_data.clear()
     c._MARKETS.clear()
     c._MIX_RESULTS.clear()
-    run = dict(a1=1.23, a2=A2, v1=V1, days=3000, seed=4, party=0.0)
+    run = dict(a1=1.23, a2=A2, v1=V1, days=3000, seed=4)
     c.run_mixes(**run)
     calls = []
     real = model.simulate
@@ -84,7 +83,7 @@ def test_site_market_store_is_bounded():
     c._MARKETS.clear()
     c._MIX_RESULTS.clear()
     for i in range(c.MARKETS_MAX // 3 + 3):
-        c.run_mixes(a1=0.5 + i / 100, a2=A2, v1=V1, days=600, seed=i, party=0.0)
+        c.run_mixes(a1=0.5 + i / 100, a2=A2, v1=V1, days=600, seed=i)
     assert 0 < len(c._MARKETS) <= c.MARKETS_MAX
 
 

@@ -2,9 +2,9 @@
 and describe returns with a few numbers. app.py only draws what these functions return.
 
 Assets come in three groups:
-    stocks       the 20 saved stocks (data/stocks/), or any ticker fetched live from Yahoo
+    stocks       the 5 saved stocks (data/stocks/), or any ticker fetched live from Yahoo
     indexes      S&P 500, Nasdaq-100, Dow Jones (data/)
-    commodities  Brent oil, gold, copper (data/factors/)
+    commodities  Brent oil, gold, copper (data/commodities/)
 
 Trader mixes are three versions of the Lux-Marchesi model (docs/SPEC.md):
     fundamentalists  everybody trades on value (chartists=False): the bell-curve base case
@@ -24,12 +24,13 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import pandas as pd
 
-from . import experiments, factors, market_data, model, politics, stats
-from .checks import is_number
+from . import market_data, model, stats
+from .checks import finite_1d, is_number
 
 FIT = market_data.ROOT / "settings" / "sp500_calibrated.json"
 INDEXES = {"S&P 500": "spx", "Nasdaq-100": "ndx", "Dow Jones": "dow"}
-COMMODITIES = {"Brent oil": "oil", "Gold": "gold", "Copper": "copper"}
+COMMODITIES = {"Brent oil": "oil_brent.csv", "Gold": "gold.csv", "Copper": "copper.csv"}   # files in COMMODITY_DIR
+COMMODITY_DIR = market_data.DATA / "commodities"
 MIXES = ("fundamentalists", "chartists", "herding")
 MIN_DAYS = 1000          # about 4 years: fewer big days than this make the tail exponent noise
 MAX_DAYS = 20000         # longest model run the web app allows (about 80 years)
@@ -53,11 +54,7 @@ YAHOO = {"S&P 500": "^GSPC", "Nasdaq-100": "^NDX", "Dow Jones": "^DJI", "Brent o
 # differ (usually by 1-2%), so typing the futures symbol says the saved spot price is shown
 SAVED_SPOT = {"Brent oil"}
 # the company behind each saved stock ticker, so a visitor who doesn't know DIS reads "Disney"
-COMPANY = {"AAPL": "Apple", "ALL": "Allstate", "CB": "Chubb", "CI": "Cigna", "CSCO": "Cisco",
-           "CVX": "Chevron", "DIS": "Disney", "FDX": "FedEx", "HD": "Home Depot", "HON": "Honeywell",
-           "ITW": "Illinois Tool Works", "LOW": "Lowe's", "MSFT": "Microsoft", "NKE": "Nike",
-           "ORCL": "Oracle", "RTX": "RTX (Raytheon)", "SBUX": "Starbucks", "TRV": "Travelers",
-           "TXN": "Texas Instruments", "UNP": "Union Pacific"}
+COMPANY = {"DIS": "Disney", "HD": "Home Depot", "HON": "Honeywell", "MSFT": "Microsoft", "NKE": "Nike"}
 # what the ticker messages suggest when a typed ticker can't be used
 PICK_INSTEAD = "or pick a market above"
 
@@ -116,11 +113,9 @@ def market_group(name):
 
 
 def display_name(name):
-    """How a market is named on screen: a saved stock with its company ("DIS · Disney", or the company
-    alone when it already starts with the ticker: "RTX (Raytheon)"); anything else (an index, a commodity, a typed ticker) as it is."""
-    if name not in COMPANY:
-        return name
-    return COMPANY[name] if COMPANY[name].startswith(name) else f"{name} · {COMPANY[name]}"   # not "RTX · RTX ..."
+    """How a market is named on screen: a saved stock with its company ("DIS · Disney"); anything else
+    (an index, a commodity, a typed ticker) as it is."""
+    return f"{name} · {COMPANY[name]}" if name in COMPANY else name
 
 
 def saved_prices(name):
@@ -131,7 +126,7 @@ def saved_prices(name):
         df = market_data.load_prices(market_data.MARKETS[key])
         close = df["Close"].drop(pd.DatetimeIndex(market_data.BAD_CLOSES.get(key, ())))
     elif name in COMMODITIES:
-        close = market_data.load_prices(factors.FACTOR_DIR / factors.FACTORS[COMMODITIES[name]])["Close"]
+        close = market_data.load_prices(COMMODITY_DIR / COMMODITIES[name])["Close"]
     elif name in market_data.stock_tickers():
         close = market_data.load_prices(market_data.STOCKS / f"{name}.csv")["Close"]
     else:
@@ -444,12 +439,11 @@ def mix_settings(p, mix, a1):
     return q, True
 
 
-def run_mix(p, mix, a1, days, seed, burn, party=0.0, paths=None):
+def run_mix(p, mix, a1, days, seed, burn, paths=None):
     """One model history for a trader mix: (returns, None), with the first `burn` days
     dropped so the starting state does not matter, or (None, the RunawayError) if the
     price left its value for good. (With the S&P 500 fit and a1 = 0, measured Nov 2026:
     9 of seeds 0-9 run away as a bubble with 99% chartists.)
-    party: an optional party drift (party_shocks), 0 = the model of SPEC.md, unchanged.
     paths: an optional dict, filled with this history's day-by-day market (market_paths) when it did
     not run away, so the Simulated market chart needn't run the same history a second time."""
     if isinstance(days, bool) or not isinstance(days, (int, np.integer)) or not 500 <= days <= MAX_DAYS:
@@ -458,9 +452,8 @@ def run_mix(p, mix, a1, days, seed, burn, party=0.0, paths=None):
         raise ValueError(f"burn must be a whole number >= 0, got {burn!r}")
     seed = _whole(seed, "seed", 0)        # numpy would turn -1, 1.5 or "1" into a confusing error
     q, chartists = mix_settings(p, mix, a1)
-    shocks = party_shocks(int(days), int(burn), party)
     try:
-        out = model.simulate(q, int(days) + int(burn), seed=seed, chartists=chartists, shocks=shocks)
+        out = model.simulate(q, int(days) + int(burn), seed=seed, chartists=chartists)
     except model.RunawayError as e:
         return None, e
     if paths is not None:
@@ -485,16 +478,16 @@ def mix_key(mix, a1, a2, v1):
     """The slider settings one trader mix's history actually depends on: none for fundamentalists only
     (no chartists, so a1, a2 and v1 are never used), (a2, v1) for chartists without herding (their a1
     is 0 whatever the slider says), (a1, a2, v1) for chartists who herd. Two runs with the same key,
-    seed, days and party drift give the same history for that mix, so it can be reused."""
+    seed and days give the same history for that mix, so it can be reused."""
     if mix not in MIXES:
         raise ValueError(f"unknown trader mix {mix!r}; choose from {MIXES}")
     return {"fundamentalists": (), "chartists": (float(a2), float(v1)),
             "herding": (float(a1), float(a2), float(v1))}[mix]
 
 
-def run_mixes(p, burn, a1, a2, v1, days, seed, party=0.0, known=None, paths=None):
+def run_mixes(p, burn, a1, a2, v1, days, seed, known=None, paths=None):
     """The three trader mixes on one seed, with a2 and v1 replaced: {mix: (returns or None,
-    the runaway day after burn-in or None)}. party: the party drift (party_shocks), 0 = none.
+    the runaway day after burn-in or None)}.
     known: {mix: result} already computed for these settings (see mix_key), which is reused instead
     of run again: moving only the herding slider then runs one history, not three.
     paths: an optional dict, filled with {mix: market_paths} for the mixes run here that didn't run away."""
@@ -505,7 +498,7 @@ def run_mixes(p, burn, a1, a2, v1, days, seed, party=0.0, known=None, paths=None
     # after another in about a third of the wait (0.8 s -> 0.3 s for an S&P-length run, Nov 2026)
     with ThreadPoolExecutor(max_workers=len(MIXES)) as pool:
         got = {m: {} for m in MIXES if m not in known}
-        jobs = {m: pool.submit(run_mix, q, m, a1, days, seed, burn, party, got[m]) for m in got}
+        jobs = {m: pool.submit(run_mix, q, m, a1, days, seed, burn, got[m]) for m in got}
     out = {}
     for m in MIXES:
         if m in known:
@@ -565,9 +558,8 @@ def mix_tails(mixes):
 
 def differs_from_fit(run, p, keys=("a2", "v1"), tol=1e-9):
     """True if a run's settings other than the herding strength differ from the fit p, so the run
-    can't be read against the saved sweep (which changed only a1). A party drift counts too: the
-    saved sweep has none."""
-    return any(abs(float(run[k]) - float(p[k])) > tol for k in keys) or abs(float(run.get("party", 0.0))) > tol
+    can't be read against the saved sweep (which changed only a1)."""
+    return any(abs(float(run[k]) - float(p[k])) > tol for k in keys)
 
 
 def dial_runs(log, p):
@@ -720,14 +712,30 @@ def bell_check(kurtoses, n):
             "passed": bool(np.all(np.abs(k) < tol))}
 
 
-TAIL_RANGE = (2.5, 3.5)    # check 3's pass range for the median tail exponent ("about 3")
+# check 3's rule: the proposal's own range for the median tail exponent, written before any result. (Until
+# 28 Nov the site used 2.5-3.5, chosen after the results; the Opus review flagged that as moving the goalposts.)
+PROPOSAL_TAIL = (2.6, 3.0)
 
 
-def tail_check(tails, lo=TAIL_RANGE[0], hi=TAIL_RANGE[1]):
-    """The inverse-cubic-law check: the median tail exponent must lie in [lo, hi]
-    ("about 3"; the proposal expected 2.6 to 3). The median, not the mean, so one odd history
-    can't decide it (the Checks page states this rule). None marks a history that ran away: it
-    is left out and counted in left_out. low/high are the smallest and largest tail."""
+def tail_interval(r, tail=0.05, block=250, n=500, seed=0):
+    """The S&P 500's own uncertainty about its tail exponent: the 2.5th and 97.5th percentiles of the
+    Hill estimate (largest `tail` share of days) over n block-bootstrap resamples of its daily returns r
+    (runs of `block` days, about a trading year, so bursts of wild days stay together; the same block as the
+    fit's own bootstrap, calibrate.BOOTSTRAP_BLOCK). Fixed seed: the same every call."""
+    if isinstance(n, bool) or int(n) != n or n < 100:
+        raise ValueError(f"n must be a whole number of at least 100 resamples, got {n}")
+    v = finite_1d(r, "returns")
+    rng = np.random.default_rng(seed)
+    est = [stats.hill_alpha(v[stats.block_indices(len(v), block, rng)], tail) for _ in range(int(n))]
+    return float(np.percentile(est, 2.5)), float(np.percentile(est, 97.5))
+
+
+def tail_check(tails, lo=PROPOSAL_TAIL[0], hi=PROPOSAL_TAIL[1], close=None):
+    """The inverse-cubic-law check: the median tail exponent must lie in [lo, hi], the proposal's
+    "around 2.6-3". The median, not the mean, so one odd history can't decide it (the Checks page
+    states this rule). close: an optional (lo, hi), the S&P 500's own uncertainty (tail_interval);
+    "close" is True when the check does not pass but the median is inside it. None marks a history
+    that ran away: it is left out and counted in left_out. low/high are the smallest and largest tail."""
     # NaN is a runaway too (how None shows up after pandas or a JSON-to-DataFrame round trip)
     vals = np.asarray([np.nan if v is None else v for v in tails] if not isinstance(tails, np.ndarray)
                       else tails, dtype=float)
@@ -738,9 +746,13 @@ def tail_check(tails, lo=TAIL_RANGE[0], hi=TAIL_RANGE[1]):
         raise ValueError("need one list of finite tail exponents (at least one)")
     if not lo < hi:
         raise ValueError(f"lo must be below hi, got {lo}, {hi}")
+    if close is not None and (len(close) != 2 or not close[0] < close[1]):
+        raise ValueError(f"close must be (low, high) with low below high, got {close}")
     m = float(np.median(t))
+    passed = lo <= m <= hi
     return {"median": m, "mean": float(t.mean()), "low": float(t.min()), "high": float(t.max()),
-            "n": int(t.size), "left_out": int(vals.size - t.size), "passed": lo <= m <= hi}
+            "n": int(t.size), "left_out": int(vals.size - t.size), "passed": passed,
+            "close": bool(close is not None and not passed and close[0] <= m <= close[1])}
 
 
 # ------------------------------------------------------------------ how long between crashes
@@ -803,6 +815,31 @@ def crash_table(nums, spx_r):
     return rows
 
 
+def kurtosis_without_worst(r):
+    """Excess kurtosis of daily returns r with the single largest fall left out: how much of a market's
+    kurtosis one day carries (each day counts to the 4th power). Used on the S&P 500 and, like for like,
+    on every simulated history (web/numbers.json checks.herding.kurtosis_wo_worst)."""
+    v = finite_1d(r, "returns")
+    if v.size < 3:
+        raise ValueError("need at least 3 returns")
+    return float(stats.kurtosis(np.delete(v, int(np.argmin(v)))))
+
+
+def wait_interval(count, years, level=0.95):
+    """How uncertain a wait between rare events is when only `count` were seen in `years`: the exact
+    (Garwood) Poisson interval for the rate, turned into waits (years / rate). Returns (shortest, longest)
+    wait; longest is inf when count is 0. With 2 falls in 3,068 years: about 425 to 12,700 years."""
+    from scipy.stats import chi2
+    if isinstance(count, bool) or int(count) != count or count < 0:
+        raise ValueError(f"count must be a whole number of at least 0, got {count}")
+    if not is_number(years) or years <= 0 or not 0 < level < 1:
+        raise ValueError("years must be above 0 and level between 0 and 1")
+    a = (1 - level) / 2
+    low_rate = 0.0 if count == 0 else chi2.ppf(a, 2 * count) / 2
+    high_rate = chi2.ppf(1 - a, 2 * count + 2) / 2
+    return float(years / high_rate), (math.inf if low_rate == 0 else float(years / low_rate))
+
+
 def crash_check(nums, spx_r, size=CRASH_CHECK_SIZE, limit=DECADES):
     """The proposal's crash check, in two parts:
     decades:      falls of `size` sd, which a bell curve puts trillions of years apart, come in the
@@ -820,6 +857,7 @@ def crash_check(nums, spx_r, size=CRASH_CHECK_SIZE, limit=DECADES):
     bm_model = math.inf if bm_count == 0 else pooled / YEAR_DAYS / bm_count
     out = {"size": size, "limit": limit, "row": rows[size], "worst_sd": worst,
            "bm_bell": bell_crash_years(worst), "bm_model": bm_model, "bm_count": bm_count,
+           "bm_range": wait_interval(bm_count, pooled / YEAR_DAYS),      # few falls: a wide range
            "decades": rows[size]["model"] <= limit, "black_monday": bm_model <= limit}
     out["passed"] = out["decades"] and out["black_monday"]
     return out
@@ -1064,10 +1102,10 @@ def runaway_path(p, mix, a1, seed, day):
     return {k: out[k] for k in ("lp", "lf", "z")}
 
 
-def model_market(p, burn, mix, a1, a2, v1, days, seed, party=0.0):
+def model_market(p, burn, mix, a1, a2, v1, days, seed):
     """The simulated market behind one trader mix, day by day after the burn-in, for the Test
     program's "Model market" chart: the same history as run_mixes gives for that mix (same seed,
-    settings and party drift). Returns a dict of numpy arrays, one value per day's close:
+    settings). Returns a dict of numpy arrays, one value per day's close:
         price   the price, as an index that starts at 100 on day 0
         value   the fundamental value on the same scale (the price it is pulled back to)
         z       share of traders who are chartists (0-1)
@@ -1079,16 +1117,14 @@ def model_market(p, burn, mix, a1, a2, v1, days, seed, party=0.0):
     q, chartists = mix_settings(dict(p, a2=a2, v1=v1), mix, a1)
     days, burn = _whole(days, "days", 1), _whole(burn, "burn", 0)
     seed = _whole(seed, "seed", 0)
-    shocks = party_shocks(days, burn, party)
     ran = None
     try:
-        out = model.simulate(q, days + burn, seed=seed, chartists=chartists, shocks=shocks)
+        out = model.simulate(q, days + burn, seed=seed, chartists=chartists)
     except model.RunawayError as e:
         ran = runaway_day(e, burn)
         if ran < 1:
             raise ValueError("this history ran away in the warm-up, before day 0") from e
-        out = model.simulate(q, int(e.day), seed=seed, chartists=chartists, max_gap=None,
-                             shocks={d: f for d, f in (shocks or {}).items() if d < e.day})
+        out = model.simulate(q, int(e.day), seed=seed, chartists=chartists, max_gap=None)
     return market_paths(out, burn, ran)
 
 
@@ -1470,112 +1506,6 @@ def web_numbers(path=WEB_NUMBERS):
     return d
 
 
-# ------------------------------------------------------------------ the president's party (extension)
-# politics.py and Figs 12-15 found: US stocks returned more under Democratic presidents, but the gap
-# is about what luck gives (the real returns with the party calendar slid along), and crashes,
-# volatility and fat tails show no party difference. The site shows that test for any market, and
-# can add an optional party drift to the model's value (off by default; the paper has none).
-PARTY_CALENDAR = "Dow Jones"     # the longest party calendar we have (trading days since 1896)
-PARTY_MAX = 0.20                 # largest party drift the site allows: 20 points a year
-
-
-def party_view(r):
-    """The president's-party test for one market's daily log returns r (a Series indexed by date):
-    {gap_year (D minus R, log return a year: 0.05 = 5 points), dem_year, rep_year, vol_ratio (D / R),
-    kurtosis (D minus R), crashes (crash days per 1,000, D minus R), luck {measure: percentile among
-    the shifted calendars, 0-100}, calendars (how many), changes (party changes), dem_days,
-    rep_days, start, end}. Days before the first president in politics.PRESIDENTS are left out.
-    Raises ValueError when there are fewer than 500 days under either party."""
-    if not isinstance(r, pd.Series) or not isinstance(r.index, pd.DatetimeIndex):
-        raise ValueError("need daily returns as a Series indexed by dates")
-    r = r[r.index >= pd.Timestamp(politics.PRESIDENTS[0][0])].dropna()
-    dem = politics.democrat(r.index)
-    if dem.sum() < 500 or (~dem).sum() < 500:
-        raise ValueError(f"needs at least 500 days under each party (has {int(dem.sum()):,} under "
-                         f"Democrats and {int((~dem).sum()):,} under Republicans)")
-    v = r.values
-    real = politics.party_gap(v, dem)
-    shifted = politics.shifted_gaps(v, dem)
-    luck = {k: experiments.percentile(real[k], [g[k] for g in shifted]) for k in politics.MEASURES}
-    return dict(gap_year=politics.return_gap(v, dem),
-                dem_year=float(v[dem].mean() * politics.DAYS_PER_YEAR),
-                rep_year=float(v[~dem].mean() * politics.DAYS_PER_YEAR),
-                vol_ratio=real["vol"], kurtosis=real["kurtosis"], crashes=real["crashes"],
-                luck=luck, calendars=len(shifted), changes=len(politics.switches(r.index)[0]) - 1,
-                dem_days=int(dem.sum()), rep_days=int((~dem).sum()), start=r.index[0], end=r.index[-1])
-
-
-def party_terms(dates):
-    """Each presidency within these dates (sorted): [{name, party, start, end}], for shading a chart.
-    Dates before the first president in the table are skipped."""
-    dates = pd.DatetimeIndex(dates)
-    dates = dates[dates >= pd.Timestamp(politics.PRESIDENTS[0][0])]
-    if len(dates) == 0:
-        return []
-    return [dict(name=t["name"], party=t["party"], start=t["start"], end=t["end"])
-            for t in politics.terms(dates, min_days=1)]
-
-
-def party_calendar(days):
-    """Which of `days` model days had a Democratic president: the model's days are laid on the last
-    `days` real trading days of the Dow Jones (PARTY_CALENDAR), as politics.compare does with the
-    model. Returns (bool array, those dates)."""
-    days = _whole(days, "days", 1)
-    dates = saved_prices(PARTY_CALENDAR).index[1:]       # the dates of its daily returns
-    if days > len(dates):
-        raise ValueError(f"the party calendar has {len(dates):,} trading days; asked for {days:,}")
-    dates = dates[-days:]
-    return politics.democrat(dates), dates
-
-
-def party_shocks(days, burn, party):
-    """The party drift as model.simulate shocks: on each model day after the burn-in, the true value
-    moves by +party/2 a year (spread over the trading days) under a Democratic president and by
-    -party/2 under a Republican one, so the value grows `party` a year faster under Democrats (0.05 =
-    5 points). The burn-in days get none. party = 0 gives None: the model exactly as in SPEC.md."""
-    if not is_number(party) or abs(party) > PARTY_MAX:
-        raise ValueError(f"party drift must be a number from -{PARTY_MAX} to {PARTY_MAX} "
-                         f"(a fraction a year), got {party!r}")
-    if party == 0:
-        return None
-    dem, _ = party_calendar(days)
-    step = party / 2 / politics.DAYS_PER_YEAR
-    return {int(burn) + i: math.expm1(step if d else -step) for i, d in enumerate(dem)}
-
-
-def model_party_gap(r):
-    """The yearly D-minus-R return gap of one model history r (after burn-in), cut at the same
-    calendar as party_shocks: what a party drift (or luck alone, without one) gives in the model."""
-    r = np.asarray(r, dtype=float)
-    dem, _ = party_calendar(len(r))
-    return politics.return_gap(r, dem)
-
-
-def party_gap_year(r):
-    """Just the yearly D-minus-R return gap of returns r (a Series indexed by date), as party_view's
-    gap_year, without the luck test (fast enough for a help text). Days before the first president in
-    politics.PRESIDENTS are left out."""
-    if not isinstance(r, pd.Series) or not isinstance(r.index, pd.DatetimeIndex):
-        raise ValueError("need daily returns as a Series indexed by dates")
-    r = r[r.index >= pd.Timestamp(politics.PRESIDENTS[0][0])].dropna()
-    return politics.return_gap(r.values, politics.democrat(r.index))
-
-
-def party_gap_without(r, name):
-    """The yearly D-minus-R return gap of returns r (a Series indexed by date) with one presidency's
-    days left out (name as in politics.PRESIDENTS, e.g. "Hoover"; every term with that name)."""
-    if not isinstance(r, pd.Series) or not isinstance(r.index, pd.DatetimeIndex):
-        raise ValueError("need daily returns as a Series indexed by dates")
-    r = r[r.index >= pd.Timestamp(politics.PRESIDENTS[0][0])].dropna()
-    spans = [t for t in politics.terms(r.index, min_days=1) if t["name"] == name]
-    if not spans:
-        raise ValueError(f"no presidency named {name!r} in these dates")
-    keep = np.ones(len(r), dtype=bool)
-    for t in spans:
-        keep[t["a"]:t["b"]] = False
-    return politics.return_gap(r.values[keep], politics.democrat(r.index[keep]))
-
-
 # ------------------------------------------------------------------ big days with a known cause
 
 DAY_EVENTS = market_data.DATA / "big_days_events.csv"
@@ -1606,9 +1536,9 @@ def day_story(day, move, sd, events=None):
 
 # ------------------------------------------------------------------ shareable links
 
-LINK_LIMITS = {"a1": (0.0, 2.0), "a2": (0.0, 1.0), "v1": (0.5, 5.0), "party": (-10.0, 10.0)}
+LINK_LIMITS = {"a1": (0.0, 2.0), "a2": (0.0, 1.0), "v1": (0.5, 5.0)}
 LINK_SEEDS = (0, 10_000)
-LINK_KEYS = ("market", "a1", "a2", "v1", "party", "days", "seed")
+LINK_KEYS = ("market", "a1", "a2", "v1", "days", "seed")
 
 
 def read_link(params, day_choices, markets):

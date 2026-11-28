@@ -1,5 +1,4 @@
-"""Do the day's news, political events and history move the market, and is the
-reaction "logical"?
+"""Do the day's news and history move the market, and is the reaction "logical"?
 
 THE DEFINITION USED EVERYWHERE BELOW
     news       new information about what shares are worth. In the model it is known
@@ -11,33 +10,28 @@ THE DEFINITION USED EVERYWHERE BELOW
     NOT LOGICAL (an over-reaction) when the move is much bigger than the news (here:
                more than OVER times bigger). This is what herding should produce.
 
-Three tests:
+Two tests:
   PART 1  the model, where the news is known. S&P-calibrated histories (seeds
           62000-62039, used nowhere else) with and without chartists (the herding
           traders). How much of the returns does the news explain, and on the biggest
           days was the news big too?
-  PART 2  political news in the real market: the 33 presidential elections from 1896
-          to 2024 in the Dow Jones average. How big was the move over election day,
-          measured against ordinary days as a yardstick?
-  PART 3  history: the 20 largest daily moves of the Dow and what happened that day,
+  PART 2  history: the 20 largest daily moves of the Dow and what happened that day,
           read from data/big_days_events.csv. Every row there has a source that was
           opened in November 2026; a cause that could not be confirmed is "unverified".
 
-The classic study behind Part 3 is Cutler, Poterba & Summers (1989), "What moves
+The classic study behind Part 2 is Cutler, Poterba & Summers (1989), "What moves
 stock prices?", Journal of Portfolio Management 15(3): 4-12. It asks the same question
 of the S&P's largest moves. No number from that paper is used here: it was not
 re-read for this script.
 
 Run from the project folder:  python3 scripts/analysis/news_and_reactions.py
-It prints three tables and writes scratch/party/news_results.json (a smaller, quick
+It prints two tables and writes scratch/news/news_results.json (a smaller, quick
 run, e.g. main(days=3000, n=2), writes news_results_quick.json instead):
     definition   the sentence above, so the file explains itself
     part1        days, seeds, and for "with_chartists" / "without_chartists":
                  histories, runaways, and per measure {median, low, high} across
                  histories (low/high = 5th/95th percentile). Measures: see MEASURES.
-    part2        "elections": one row per election and window length (1, 5, 20 days);
-                 "splits": per window length and group, the numbers of split_row()
-    part3        "days": the rows of big_days_events.csv; "counts": rows per kind
+    part2        "days": the rows of big_days_events.csv; "counts": rows per kind
     seconds      how long the run took
 """
 import json
@@ -49,7 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import numpy as np
 import pandas as pd
 
-from herding import calibrate, experiments, market_data, politics
+from herding import calibrate, experiments, market_data
 
 DEFINITION = ("A reaction is LOGICAL when the price moves about as much as the news does that "
               "day; it is NOT logical (an over-reaction) when the move is much bigger than the news.")
@@ -59,14 +53,11 @@ BIG = 0.01                              # "biggest-move days": the 1% largest |r
 BIG_NEWS = 0.05                         # "big news": the 5% largest |news|
 OVER = 2.0                              # over-reaction: the move is more than 2x the news
 LAGS = 5                                # also let the news of the previous 5 days count
-RESULTS = market_data.ROOT / "scratch" / "party" / "news_results.json"
+RESULTS = market_data.ROOT / "scratch" / "news" / "news_results.json"
 QUICK_RESULTS = RESULTS.with_name("news_results_quick.json")   # smaller runs (tests) go here
 EVENTS = market_data.DATA / "big_days_events.csv"
 KINDS = ("news", "policy", "no clear news", "rebound", "unverified")
 COLUMNS = ["date", "move_percent", "event", "kind", "source_url"]
-WINDOWS = (1, 5, 20)                    # trading days after election day
-NEAR = 750                              # "nearby" ordinary days: the 750 before (about 3 years)
-UNKNOWN_RESULT = (2000,)                # winner not known until mid-December (Bush v. Gore)
 
 
 # ---------------------------------------------------------------- PART 1: the model
@@ -199,142 +190,7 @@ def print_model(part):
         print(f"  {name}: {part[name]['histories']} histories, {part[name]['runaways']} ran away")
 
 
-# ---------------------------------------------------------------- PART 2: elections
-
-def election_day(year):
-    """US presidential election day: the Tuesday after the first Monday of November,
-    every 4 years (1896, 1900, ...)."""
-    if isinstance(year, bool) or int(year) != year or year % 4 != 0 or year < 1848:
-        raise ValueError(f"{year!r} is not a presidential election year (every 4 years)")
-    first = pd.Timestamp(year=int(year), month=11, day=1)
-    monday = first + pd.Timedelta(days=(7 - first.dayofweek) % 7)    # Monday is dayofweek 0
-    return monday + pd.Timedelta(days=1)
-
-
-president_on = politics.president_on    # (party, name) of the president on a date
-
-
-def winner(year):
-    """(party, name) of the election's winner: whoever is president on 1 April of the
-    next year, after the inauguration (4 March until 1933, 20 January since 1937)."""
-    election_day(year)                                   # rejects a non-election year
-    return president_on(pd.Timestamp(year=int(year) + 1, month=4, day=1))
-
-
-def changed_party(year):
-    """True if the White House changed party: the winner's party differs from the party
-    of the president on election day."""
-    return winner(year)[0] != president_on(election_day(year))[0]
-
-
-def reaction(r, day, k=1):
-    """The market's move over an event day: the log return from the last close BEFORE
-    `day` to the k-th close AFTER it, and the number of trading days that spans.
-    r: daily log returns indexed by date. If the market was closed on `day` (the NYSE
-    closed on election day through 1980) that is k trading days; if open, k + 1."""
-    if isinstance(k, bool) or int(k) != k or k < 1:
-        raise ValueError(f"k must be a whole number >= 1, got {k!r}")
-    day = pd.Timestamp(day)
-    a = int(r.index.searchsorted(day))                         # first trading day on or after
-    b = int(r.index.searchsorted(day, side="right")) + int(k)  # one past the k-th day after
-    if a >= len(r) or b > len(r):
-        raise ValueError(f"the returns do not reach {int(k)} trading day(s) after {day.date()}")
-    return float(r.iloc[a:b].sum()), b - a
-
-
-window_sums = experiments.window_sums     # the total of every run of n days in a row
-
-
-def yardstick(r, day, n, back=None):
-    """Ordinary n-day moves to judge an event against: every n-day window that ends
-    before `day`, or only those within the `back` trading days before it (nearby days
-    share the era's volatility, which changed a lot over 130 years)."""
-    end = int(r.index.searchsorted(pd.Timestamp(day)))
-    start = 0 if back is None else max(0, end - int(back))
-    if end - start < n:
-        raise ValueError(f"fewer than {n} trading days before {pd.Timestamp(day).date()}")
-    return window_sums(r.values[start:end], n)
-
-
-def election_row(r, year, k=1):
-    """One election: its reaction and where it sits (0-100) among ordinary windows of
-    the same length. pct_abs = percentile of the SIZE |reaction| (near 100 = an unusually
-    large move either way); pct_signed = of the reaction itself (near 0 = a big fall)."""
-    day = election_day(year)
-    move, n = reaction(r, day, k)
-    near, every = yardstick(r, day, n, NEAR), window_sums(r.values, n)
-    party, name = winner(year)
-    return dict(year=int(year), day=str(day.date()), winner=name, party=party,
-                changed=bool(changed_party(year)), open_that_day=bool(day in r.index), k=int(k),
-                trading_days=n, reaction=move, percent=float(100 * np.expm1(move)),
-                pct_abs_all=experiments.percentile(abs(move), np.abs(every)),
-                pct_abs_near=experiments.percentile(abs(move), np.abs(near)),
-                pct_signed_near=experiments.percentile(move, near),
-                result_unknown=year in UNKNOWN_RESULT)
-
-
-def group_z(pcts):
-    """Is a group of percentiles higher than chance? If the events were ordinary days,
-    each percentile would be equally likely anywhere from 0 to 100: mean 50, standard
-    deviation 100 / sqrt(12) = 28.9. Returns (mean - 50) in units of the standard error
-    28.9 / sqrt(number of events). Beyond about +-2 is unlikely by luck alone."""
-    pcts = experiments.finite_1d(pcts, "percentiles")
-    if pcts.size == 0:
-        raise ValueError("need at least one percentile")
-    return float((pcts.mean() - 50) / (100 / np.sqrt(12) / np.sqrt(pcts.size)))
-
-
-def split_row(rows):
-    """Summary of a group of elections: how many, mean and median reaction (percent),
-    mean size |reaction|, and the percentiles against nearby ordinary windows with
-    their group_z (z_abs for sizes, z_signed for direction)."""
-    if len(rows) == 0:
-        raise ValueError("need at least one election")
-    pct = np.array([row["percent"] for row in rows])
-    size, signed = ([row[k] for row in rows] for k in ("pct_abs_near", "pct_signed_near"))
-    return dict(n=len(rows), mean=float(pct.mean()), median=float(np.median(pct)),
-                mean_abs=float(np.abs(pct).mean()), up=int((pct > 0).sum()),
-                pct_abs=float(np.median(size)), z_abs=group_z(size),
-                pct_signed=float(np.median(signed)), z_signed=group_z(signed),
-                above_90=int(np.sum(np.array(size) > 90)))
-
-
-GROUPS = {
-    "all elections": lambda row: True,
-    "all but 2000 (result unknown)": lambda row: not row["result_unknown"],
-    "Republican won": lambda row: row["party"] == "R",
-    "Democrat won": lambda row: row["party"] == "D",
-    "White House changed party": lambda row: row["changed"],
-    "White House kept by party": lambda row: not row["changed"],
-}
-
-
-def election_part(r, years, windows=WINDOWS):
-    """Part 2: every election's row for each window length, and the split summaries."""
-    rows = [election_row(r, y, k) for k in windows for y in years]
-    splits = {str(k): {name: split_row([row for row in rows if row["k"] == k and keep(row)])
-                       for name, keep in GROUPS.items()} for k in windows}
-    return dict(elections=rows, splits=splits)
-
-
-def print_elections(part):
-    """The Part 2 tables: each election (1 day after), then the splits per window."""
-    print("\n  year  winner         party changed  move    size pctile (nearby / all days)")
-    for row in (x for x in part["elections"] if x["k"] == 1):
-        print(f"  {row['year']}  {row['winner']:<14} {row['party']:^5} {'yes' if row['changed'] else 'no':^7}"
-              f" {row['percent']:+6.2f}%   {row['pct_abs_near']:5.1f} / {row['pct_abs_all']:5.1f}"
-              f"{'   (result unknown until December)' if row['result_unknown'] else ''}")
-    for k, groups in part["splits"].items():
-        print(f"\n  up to the close {k} trading day(s) after election day:")
-        print(f"  {'group':<31}{'n':>3}{'mean':>8}{'median':>8}{'mean size':>10}{'up':>4}"
-              f"{'size pctile':>12}{'z':>6}{'signed pctile':>14}{'z':>6}{'>90th':>6}")
-        for name, s in groups.items():
-            print(f"  {name:<31}{s['n']:>3}{s['mean']:>+7.2f}%{s['median']:>+7.2f}%{s['mean_abs']:>9.2f}%"
-                  f"{s['up']:>4}{s['pct_abs']:>12.1f}{s['z_abs']:>+6.2f}{s['pct_signed']:>14.1f}"
-                  f"{s['z_signed']:>+6.2f}{s['above_90']:>6}")
-
-
-# ---------------------------------------------------------------- PART 3: history
+# ---------------------------------------------------------------- PART 2: history
 
 def biggest_days(r, n=20):
     """The n largest daily moves (by absolute log return), largest first, as percent
@@ -383,7 +239,7 @@ def kind_counts(ev):
 
 
 def history_part(r):
-    """Part 3: the checked events and the count of each kind."""
+    """Part 2: the checked events and the count of each kind."""
     ev = load_events()
     check_events(ev, r)
     days = [dict(date=str(row.date.date()), move_percent=row.move_percent, event=row.event,
@@ -392,7 +248,7 @@ def history_part(r):
 
 
 def print_history(part):
-    """The Part 3 table and the counts."""
+    """The Part 2 table and the counts."""
     print()
     for d in part["days"]:
         print(f"  {d['date']}  {d['move_percent']:+7.2f}%  {d['kind']:<14} {d['event'] or '(cause not confirmed)'}")
@@ -403,7 +259,7 @@ def print_history(part):
 
 
 def main(days=None, n=40):
-    """Run all three parts. days = simulated days per history (None = DAYS); n = number
+    """Run both parts. days = simulated days per history (None = DAYS); n = number
     of histories. A full-size run (the defaults) writes RESULTS; any smaller, quick run
     writes QUICK_RESULTS instead, so a test can never overwrite the full results."""
     t0, full = time.time(), days is None and n == len(SEEDS)
@@ -414,14 +270,10 @@ def main(days=None, n=40):
     part1 = dict(days=days, seeds=list(SEEDS[:n]), **model_part(calibrate.load("spx"), SEEDS[:n], days))
     print_model(part1)
     dow = market_data.returns("dow")
-    print("\nPART 2. Presidential elections in the Dow, 1896-2024 (move = last close before election "
-          "day to the first close after)")
-    part2 = election_part(dow, range(1896, 2025, 4))
-    print_elections(part2)
-    print("\nPART 3. The 20 largest daily moves of the Dow, 1896-2026, and what happened that day")
-    part3 = history_part(dow)
-    print_history(part3)
-    out = dict(definition=DEFINITION, part1=part1, part2=part2, part3=part3,
+    print("\nPART 2. The 20 largest daily moves of the Dow, 1896-2026, and what happened that day")
+    part2 = history_part(dow)
+    print_history(part2)
+    out = dict(definition=DEFINITION, part1=part1, part2=part2,
                seconds=round(time.time() - t0, 1))
     path = RESULTS if full else QUICK_RESULTS
     path.parent.mkdir(parents=True, exist_ok=True)

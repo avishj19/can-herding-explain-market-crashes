@@ -286,15 +286,13 @@ def _compile_model():
 def _warm_pages():
     """After the model is compiled: fill the caches the slowest first visits need, through the same
     cached functions the pages call, so the numbers are the same: the Story's default history (its
-    three mixes and the runaway story, about 1 s) and the Findings' party table (about 0.6 s)."""
+    three mixes and the runaway story, about 1 s)."""
     try:
         run = default_run()
         mixes = run_mixes(**run)
         day = mixes["chartists"][1]
         if day is not None and day >= 1:
             runaway_story(run["seed"], day)
-        for name in ex.INDEXES:
-            party_view(saved_asset(name)[1])
     except Exception:            # only a speed-up, as above
         pass
 
@@ -414,6 +412,16 @@ def stats_html(items):
 def stats_row(items):
     """A row of small label/number pairs: items = [(label, text, color or None, help or None)]."""
     st.markdown(stats_html(items), unsafe_allow_html=True)
+
+
+def wait_range(cc):
+    """How uncertain the model's Black-Monday wait is (explore.crash_check's bm_range, an exact Poisson
+    95% range from only a few falls), in words for the pages."""
+    lo, hi = cc["bm_range"]
+    n = cc["bm_count"]
+    top = "no upper limit" if hi == float("inf") else f"{hi:,.0f} years"
+    return (f"very uncertain: from only {n} such fall{'s' if n != 1 else ''}, the true wait could be "
+            f"anywhere from {lo:,.0f} years to {top}")
 
 
 def verdict(passed):
@@ -598,7 +606,7 @@ def default_run():
     p, _ = fitted()
     rec = numbers()["recipe"]
     return dict(a1=float(p["a1"]), a2=float(p["a2"]), v1=float(p["v1"]), days=int(rec["days"]),
-                seed=int(rec["seeds"][0]), party=0.0)
+                seed=int(rec["seeds"][0]))
 
 
 # Each trader mix's history, kept by the settings it really depends on (explore.mix_key): moving the
@@ -613,18 +621,18 @@ _MARKETS = OrderedDict()
 MARKETS_MAX = 24               # about 24 x 0.8 MB = 19 MB at most
 
 
-def _mix_store_key(m, a1, a2, v1, days, seed, party, stamp):
-    return (m, ex.mix_key(m, a1, a2, v1), int(days), int(seed), float(party), stamp)
+def _mix_store_key(m, a1, a2, v1, days, seed, stamp):
+    return (m, ex.mix_key(m, a1, a2, v1), int(days), int(seed), stamp)
 
 
 @st.cache_data(show_spinner=False, max_entries=60)
-def _run_mixes(a1, a2, v1, days, seed, party, stamp):
+def _run_mixes(a1, a2, v1, days, seed, stamp):
     p, burn = fitted()
-    keys = {m: _mix_store_key(m, a1, a2, v1, days, seed, party, stamp) for m in ex.MIXES}
+    keys = {m: _mix_store_key(m, a1, a2, v1, days, seed, stamp) for m in ex.MIXES}
     with _MIX_LOCK:
         known = {m: _MIX_RESULTS[k] for m, k in keys.items() if k in _MIX_RESULTS}
     paths = {}
-    out = ex.run_mixes(p, burn, a1, a2, v1, days, seed, party=party / 100, known=known, paths=paths)
+    out = ex.run_mixes(p, burn, a1, a2, v1, days, seed, known=known, paths=paths)
     with _MIX_LOCK:
         for m, k in keys.items():
             if m in out:
@@ -640,45 +648,30 @@ def _run_mixes(a1, a2, v1, days, seed, party, stamp):
     return out
 
 
-def run_mixes(a1, a2, v1, days, seed, party=0.0):
+def run_mixes(a1, a2, v1, days, seed):
     """{mix: (returns or None, runaway day after burn-in or None)} for the three trader mixes.
     The runaway day is negative when a history ran away during the burn-in (see gone_text).
-    Keyed on the fit's file too: after a refit, cached runs made with the old settings are not reused.
-    party: the optional party drift in points a year (3.5 = 3.5%; explore.party_shocks), 0 = none."""
-    return _run_mixes(a1, a2, v1, days, seed, float(party), file_stamp(ex.FIT, ex.market_data.MARKETS["dow"]))
+    Keyed on the fit's file too: after a refit, cached runs made with the old settings are not reused."""
+    return _run_mixes(a1, a2, v1, days, seed, file_stamp(ex.FIT))
 
 
 @st.cache_data(show_spinner=False, max_entries=30)
-def _model_market(mix, a1, a2, v1, days, seed, party, stamp):
+def _model_market(mix, a1, a2, v1, days, seed, stamp):
     with _MIX_LOCK:          # this history was just run for the other charts: reuse it, not rerun it
-        kept = _MARKETS.get(_mix_store_key(mix, a1, a2, v1, days, seed, party, stamp))
+        kept = _MARKETS.get(_mix_store_key(mix, a1, a2, v1, days, seed, stamp))
     if kept is not None:
         return kept
     p, burn = fitted()
     try:
-        return ex.model_market(p, burn, mix, a1, a2, v1, days, seed, party=party / 100)
+        return ex.model_market(p, burn, mix, a1, a2, v1, days, seed)
     except ValueError:          # ran away in the warm-up: nothing to draw
         return None
 
 
-def model_market(mix, a1, a2, v1, days, seed, party=0.0):
+def model_market(mix, a1, a2, v1, days, seed):
     """The simulated market behind one trader mix (explore.model_market), or None when that history
     ran away in the warm-up. Same arguments and cache key as run_mixes."""
-    return _model_market(mix, a1, a2, v1, days, seed, float(party),
-                         file_stamp(ex.FIT, ex.market_data.MARKETS["dow"]))
-
-
-@st.cache_data(show_spinner=False, max_entries=40)
-def _party_view(r):
-    try:
-        return ex.party_view(r), ""
-    except ValueError as e:
-        return None, str(e)
-
-
-def party_view(r):
-    """(explore.party_view of these returns, "") or (None, why it can't be measured)."""
-    return _party_view(r)
+    return _model_market(mix, a1, a2, v1, days, seed, file_stamp(ex.FIT))
 
 
 @st.cache_data(show_spinner=False)

@@ -17,10 +17,10 @@ A1, A2, V1 = float(P["a1"]), float(P["a2"]), float(P["v1"])
 
 # Spec: the same histories as running each mix alone, one after another (the threads share nothing).
 def test_parallel_run_mixes_equals_one_mix_at_a_time():
-    out = ex.run_mixes(P, BURN, A1, 0.3, 1.5, 3000, 11, party=0.02)
+    out = ex.run_mixes(P, BURN, A1, 0.3, 1.5, 3000, 11)
     q = dict(P, a2=0.3, v1=1.5)
     for m in ex.MIXES:
-        r, err = ex.run_mix(q, m, A1, 3000, 11, BURN, 0.02)
+        r, err = ex.run_mix(q, m, A1, 3000, 11, BURN)
         assert (out[m][0] is None) == (r is None)
         if r is not None:
             assert np.array_equal(out[m][0], r)
@@ -45,13 +45,12 @@ def test_parallel_run_mixes_is_repeatable():
 # ------------------------------------------------------------------ model_market
 
 # Spec: its returns are exactly run_mixes' returns for that mix, and price/value start where they should.
-@pytest.mark.parametrize("party", [0.0, 0.03])
-def test_model_market_is_the_same_history_as_run_mixes(party):
-    mixes = ex.run_mixes(P, BURN, A1, A2, V1, 3000, 3, party=party)
+def test_model_market_is_the_same_history_as_run_mixes():
+    mixes = ex.run_mixes(P, BURN, A1, A2, V1, 3000, 3)
     for m in ex.MIXES:
         if mixes[m][0] is None:
             continue
-        mm = ex.model_market(P, BURN, m, A1, A2, V1, 3000, 3, party)
+        mm = ex.model_market(P, BURN, m, A1, A2, V1, 3000, 3)
         assert mm["runaway_day"] is None
         assert np.array_equal(mm["r"], mixes[m][0])
         assert len(mm["price"]) == len(mm["value"]) == len(mm["z"]) == len(mm["x"]) == 3001
@@ -237,11 +236,11 @@ def test_scorecard_ran_away():
 
 DAYS = [5000, 10000, 19329]
 MARKETS = ["S&P 500", "Gold", "NVDA"]
-FIT_RUN = dict(a1=A1, a2=A2, v1=V1, party=0.0, days=19329, seed=1000)
+FIT_RUN = dict(a1=A1, a2=A2, v1=V1, days=19329, seed=1000)
 
 
 # Spec: write_link then read_link gives back exactly the same run (the fit's long decimals included).
-@pytest.mark.parametrize("run", [FIT_RUN, dict(FIT_RUN, a1=1.6, seed=7, days=5000, party=-2.5)])
+@pytest.mark.parametrize("run", [FIT_RUN, dict(FIT_RUN, a1=1.6, seed=7, days=5000)])
 def test_link_round_trip_is_exact(run):
     got = ex.read_link(ex.write_link("Gold", run), DAYS, MARKETS)
     assert got == {"market": "Gold", **run}
@@ -263,8 +262,9 @@ def test_link_leaves_out_defaults():
     ({"seed": "1" * 500, "a1": "1" * 500, "market": "S&P 500<img src=x>"}, {}),
     ({"a1": "0", "seed": "0", "days": "5000", "market": "S&P 500"},
      {"a1": 0.0, "seed": 0, "days": 5000, "market": "S&P 500"}),
-    ({"a1": "2", "a2": "1", "v1": "5", "party": "10", "seed": "10000"},
-     {"a1": 2.0, "a2": 1.0, "v1": 5.0, "party": 10.0, "seed": 10000}),
+    ({"a1": "2", "a2": "1", "v1": "5", "seed": "10000"},
+     {"a1": 2.0, "a2": 1.0, "v1": 5.0, "seed": 10000}),
+    ({"party": "3.5", "a1": "1"}, {"a1": 1.0}),      # an old link's party drift (removed Nov 2026) is ignored
 ])
 def test_read_link_checks_everything(params, want):
     assert ex.read_link(params, DAYS, MARKETS) == want

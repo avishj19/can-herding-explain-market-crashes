@@ -278,7 +278,7 @@ def test_workspace_intraday_note_never_credits_yahoo_for_saved_prices(app):
 def test_workspace_1y_high_and_low_match_the_52_week_numbers(app):
     # WS-6: 1Y and the 52-week numbers now cover the same 52 weeks
     at = app()
-    at.session_state["asset"] = ("saved", "ORCL")
+    at.session_state["asset"] = ("saved", "HON")
     at.session_state["frame"] = "1Y"
     at.run()
     assert _stat(at, "High") == _stat(at, "52-week high")
@@ -334,7 +334,7 @@ def test_workspace_ticker_error_clears_when_another_market_is_picked(app):
 def test_workspace_yahoo_symbols_of_saved_markets_open_the_saved_market(app, typed, saved):
     # WS-11: ^GSPC opened a live "Stock" instead of the saved S&P 500
     at = app()
-    at.session_state["asset"] = ("saved", "AAPL")         # start elsewhere, so staying put can't pass
+    at.session_state["asset"] = ("saved", "MSFT")         # start elsewhere, so staying put can't pass
     at.run()
     at.text_input(key="ticker_box").set_value(typed).run()
     assert at.session_state["asset"] == ("saved", saved)
@@ -609,7 +609,7 @@ def test_guide_example_chart_shows_the_whole_tail(open_page):
 def test_workspace_max_drawdown_never_shows_minus_zero(app):
     # WS-19: a range that never fell showed "Max drawdown -0.0%"
     at = app()
-    for name in ("CVX", "Brent oil"):
+    for name in ("HD", "Brent oil"):
         at.session_state["asset"] = ("saved", name)
         at.session_state["frame"] = "1D"
         at.run()
@@ -743,11 +743,11 @@ def test_workspace_52_week_high_is_at_least_the_intraday_high(app):
 def test_workspace_clearing_the_search_box_is_not_an_error(app, cleared):
     # BR3-2: emptying the box showed "Type a ticker first, like NVDA" under AAPL
     at = app()
-    at.text_input(key="ticker_box").set_value("AAPL").run()
-    assert at.session_state["asset"] == ("saved", "AAPL")
+    at.text_input(key="ticker_box").set_value("MSFT").run()
+    assert at.session_state["asset"] == ("saved", "MSFT")
     at.text_input(key="ticker_box").set_value(cleared).run()
     assert not at.exception and not at.error, [e.value for e in at.error]
-    assert at.session_state["asset"] == ("saved", "AAPL")
+    assert at.session_state["asset"] == ("saved", "MSFT")
 
 
 def test_workspace_clearing_the_search_box_clears_an_old_ticker_error(app):

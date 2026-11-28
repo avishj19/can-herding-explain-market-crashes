@@ -292,14 +292,15 @@ def step_herding(ctx):
                     "Optimism spreads, then collapses, so **bursts of wild days** come and end on their own.")
         st.markdown(f"The tail exponent (lower = more big days) is **{hs['tail']:.2f}** in this history and "
                     f"**{tails['median']:.2f}** (median) over {tails['n']} simulated histories. The S&P 500's is "
-                    f"**{spx['tail']:.2f}**.")
+                    f"**{spx['tail']:.2f}**. (The settings were fitted to the S&P 500 with this number as one target, "
+                    f"so the match is partly by design. The bell curve without trend chasers was never a target.)")
         st.markdown(f"Up to about 4 sd the two lines agree. The S&P 500's most extreme days go further: its worst "
                     f"day is {abs(spx['worst']):.0f} sd (Black Monday); this history's worst is "
                     f"{abs(hs['worst']):.0f} sd.")
         st.markdown(f"Over {len(nums['crashes']['days'])} simulated histories, the model has an {cc['size']}-sd fall about "
                     f"every **{cc['row']['model']:.0f} years** (a bell curve: every "
                     f"{ten_to(cc['row']['bell'])} years), and a fall the size of Black Monday about "
-                    f"every **{cc['bm_model']:,.0f} years**. Herding makes crashes ordinary, though the "
+                    f"every **{cc['bm_model']:,.0f} years** ({c.wait_range(cc)}). Herding makes crashes ordinary, though the "
                     f"biggest ones stay rarer than in the S&P 500 (the **Checks** page, check 4).")
         bignum(f"{tails['median']:.2f}", f"tail exponent (lower = more big days), middle value of {tails['n']} "
                                          f"simulated histories. The S&P 500: {spx['tail']:.2f}.")
@@ -372,7 +373,8 @@ def step_verdict(ctx):
               f"against {mem['sp500']:.2f})."),
         ("✓", f"<b>Crashes within decades:</b> an {cc['size']}-sd fall about every {cc['row']['model']:.0f} years, "
               f"not {ten_to(cc['row']['bell'])} years."),
-        ("≈", f"A <b>fall the size of Black Monday</b> comes about every {cc['bm_model']:,.0f} years in the model. "
+        ("≈", f"A <b>fall the size of Black Monday</b> comes about every {cc['bm_model']:,.0f} years in the model "
+              f"({c.wait_range(cc)}). "
               f"The S&amp;P 500 had one in {years:.0f} years."),
         ("✗", "<b>Falls bigger than rises.</b> In the S&amp;P 500 the biggest falls are bigger than the biggest "
               "rises. In the model they are the same size."),
@@ -392,7 +394,7 @@ def step_verdict(ctx):
         items = "".join(f"<li><span class='m'>{m}</span><span>{t}</span></li>" for m, t in rows)
         st.markdown(f"<ul class='story-verdict'>{items}</ul>", unsafe_allow_html=True)
     st.markdown("**Try it yourself.** The model was fitted to the S&P 500 only. Test it against markets it never "
-                "saw: 20 stocks, two other indexes (Nasdaq-100, Dow Jones) and three commodities, or any stock "
+                "saw: 5 stocks, two other indexes (Nasdaq-100, Dow Jones) and three commodities, or any stock "
                 "symbol you like.")
     a, b, d = st.columns(3)
     a.page_link("web/page_explore.py", label="Open the test program", icon=":material/candlestick_chart:")

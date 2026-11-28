@@ -102,10 +102,7 @@ def check_slow_figures(pool, p, tmp_path):
         assert all(np.isnan(v).all() for v in out["diffs"].values())
     lo_hi = [v for k, v in out.items() if k.startswith("surprise_") and k.endswith("%")]
     assert sum(v["n"] for v in lo_hi) + out["surprise_runaways"] == 10
-    out = mf.fig12_politics(pool, p, tmp_path / "f12.png", market="spx", seeds=range(1000, 1003))
-    assert out["n_model"] <= 3 and out["n_shifted"] >= 20
-    assert all(0 <= v <= 100 for w in out["pct"].values() for v in w.values())
-    for name in ("f8.png", "f9.png", "f10.png", "f11.png", "f12.png"):
+    for name in ("f8.png", "f9.png", "f10.png", "f11.png"):
         assert is_image(tmp_path / name)
 
 
@@ -124,7 +121,7 @@ def test_fig8_gives_the_stocks_their_own_seeds(tmp_path, monkeypatch):
                    for s in seeds}
     assert index_seeds == set(mf.HELD_OUT[:3]) and stock_seeds == set(mf.HELD_OUT[3:6])
     assert len(calls) == 3                       # S&P 1928, Nasdaq, and one run shared by all stocks
-    assert rows.shape == (22, len(keys))
+    assert rows.shape == (7, len(keys))      # two indexes and the 5 stocks
     with pytest.raises(ValueError, match="n must be"):
         mf.fig8_out_of_sample(SerialPool(), None, tmp_path / "x.png", n=21)
 

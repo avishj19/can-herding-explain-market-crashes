@@ -172,170 +172,6 @@ def test_model_part_herding_breaks_the_link_to_the_news():
     assert wo["z_all"]["median"] == 0
 
 
-# ---- elections -----------------------------------------------------------------
-
-@pytest.mark.parametrize("year, date", [
-    (1896, "1896-11-03"), (1932, "1932-11-08"), (1960, "1960-11-08"), (2000, "2000-11-07"),
-    (2008, "2008-11-04"), (2016, "2016-11-08"), (2020, "2020-11-03"), (2024, "2024-11-05"),
-    (1904, "1904-11-08"),      # 1 November a Tuesday: the latest possible date, the 8th
-    (1988, "1988-11-08"), (1976, "1976-11-02"),   # 1 November a Monday: the earliest, the 2nd
-])
-def test_election_day_known_dates(year, date):
-    assert nr.election_day(year) == pd.Timestamp(date)
-
-
-def test_election_day_is_always_a_tuesday_from_2_to_8_november():
-    years = list(range(1896, 2025, 4))
-    assert len(years) == 33
-    for y in years:
-        d = nr.election_day(y)
-        assert d.day_name() == "Tuesday" and d.month == 11 and 2 <= d.day <= 8
-
-
-@pytest.mark.parametrize("year", [1897, 2022, 2001.5, True, 1800])
-def test_election_day_rejects_other_years(year):
-    with pytest.raises(ValueError):
-        nr.election_day(year)
-
-
-# The public record, typed here independently of politics.PRESIDENTS.
-WINNERS = {1896: "R", 1900: "R", 1904: "R", 1908: "R", 1912: "D", 1916: "D", 1920: "R", 1924: "R",
-           1928: "R", 1932: "D", 1936: "D", 1940: "D", 1944: "D", 1948: "D", 1952: "R", 1956: "R",
-           1960: "D", 1964: "D", 1968: "R", 1972: "R", 1976: "D", 1980: "R", 1984: "R", 1988: "R",
-           1992: "D", 1996: "D", 2000: "R", 2004: "R", 2008: "D", 2012: "D", 2016: "R", 2020: "D",
-           2024: "R"}
-NAMES = {1896: "McKinley", 1904: "T. Roosevelt", 1912: "Wilson", 1924: "Coolidge", 1932: "Roosevelt",
-         1948: "Truman", 1960: "Kennedy", 1964: "Johnson", 1980: "Reagan", 2000: "Bush",
-         2008: "Obama", 2016: "Trump", 2020: "Biden", 2024: "Trump"}
-CHANGED = {1896, 1912, 1920, 1932, 1952, 1960, 1968, 1976, 1980, 1992, 2000, 2008, 2016, 2020, 2024}
-
-
-def test_winners_match_the_public_record():
-    assert {y: nr.winner(y)[0] for y in WINNERS} == WINNERS
-    assert {y: nr.winner(y)[1] for y in NAMES} == NAMES
-
-
-def test_changed_party_matches_the_public_record():
-    assert {y for y in WINNERS if nr.changed_party(y)} == CHANGED
-
-
-def test_president_on_boundaries():
-    assert nr.president_on("1933-03-03") == ("R", "Hoover")
-    assert nr.president_on("1933-03-04") == ("D", "Roosevelt")      # inauguration day itself
-    assert nr.president_on("1963-11-22") == ("D", "Johnson")
-    with pytest.raises(ValueError):
-        nr.president_on("1890-01-01")
-    with pytest.raises(ValueError):
-        nr.winner(1999)
-
-
-# A hand-made week: returns 1, 2, 4, 8, 16, 32 (x 0.01) on Mon 2 - Mon 9 Nov 2020,
-# so every sum of consecutive days is different and easy to check.
-WEEK = pd.Series([0.01, 0.02, 0.04, 0.08, 0.16, 0.32],
-                 index=pd.to_datetime(["2020-11-02", "2020-11-03", "2020-11-04", "2020-11-05",
-                                       "2020-11-06", "2020-11-09"]))
-
-
-def test_reaction_when_the_market_is_open_on_the_day():
-    # Tuesday 3rd open: Monday's close to Wednesday's close = Tuesday + Wednesday
-    assert nr.reaction(WEEK, "2020-11-03") == (pytest.approx(0.06), 2)
-    assert nr.reaction(WEEK, "2020-11-03", k=3) == (pytest.approx(0.02 + 0.04 + 0.08 + 0.16), 4)
-
-
-def test_reaction_when_the_market_is_closed_on_the_day():
-    closed = WEEK.drop(pd.Timestamp("2020-11-03"))
-    # Monday's close to Wednesday's close is now Wednesday's return alone
-    assert nr.reaction(closed, "2020-11-03") == (pytest.approx(0.04), 1)
-    assert nr.reaction(closed, "2020-11-03", k=2) == (pytest.approx(0.12), 2)
-    assert nr.reaction(WEEK, "2020-11-07") == (pytest.approx(0.32), 1)    # a Saturday
-
-
-def test_reaction_rejects_windows_past_the_data():
-    with pytest.raises(ValueError):
-        nr.reaction(WEEK, "2020-11-09")            # nothing after the last day
-    with pytest.raises(ValueError):
-        nr.reaction(WEEK, "2020-11-03", k=5)
-    with pytest.raises(ValueError):
-        nr.reaction(WEEK, "2020-11-03", k=0)
-
-
-def test_reaction_on_the_real_dow_2008(dow):
-    # independent: straight from the price file, 3 Nov 2008 close to 5 Nov 2008 close
-    close = pd.read_csv(market_data.MARKETS["dow"], parse_dates=["Date"], index_col="Date")["Close"]
-    want = np.log(close["2008-11-05"] / close["2008-11-03"])
-    assert nr.reaction(dow, nr.election_day(2008)) == (pytest.approx(want), 2)
-    assert pd.Timestamp("1960-11-08") not in dow.index             # closed on election day then
-    want = np.log(close["1960-11-09"] / close["1960-11-07"])
-    assert nr.reaction(dow, nr.election_day(1960)) == (pytest.approx(want), 1)
-
-
-def test_window_sums_by_hand():
-    assert list(nr.window_sums([1, 2, 4, 8], 2)) == [3, 6, 12]
-    assert list(nr.window_sums([1, 2, 4, 8], 1)) == [1, 2, 4, 8]
-    assert list(nr.window_sums([1, 2, 4, 8], 4)) == [15]
-    for n in (0, 5, 1.5):
-        with pytest.raises(ValueError):
-            nr.window_sums([1, 2, 4, 8], n)
-
-
-def test_yardstick_uses_only_days_before_the_event():
-    assert list(nr.yardstick(WEEK, "2020-11-05", 2)) == pytest.approx([0.03, 0.06])   # Mon-Wed only
-    assert list(nr.yardstick(WEEK, "2020-11-05", 1, back=2)) == pytest.approx([0.02, 0.04])
-    assert list(nr.yardstick(WEEK, "2020-11-05", 1, back=99)) == pytest.approx([0.01, 0.02, 0.04])
-    with pytest.raises(ValueError):
-        nr.yardstick(WEEK, "2020-11-03", 2)        # only one day before
-
-
-def test_election_row_on_the_real_dow(dow):
-    row = nr.election_row(dow, 2008)
-    assert (row["year"], row["day"], row["winner"], row["party"]) == (2008, "2008-11-04", "Obama", "D")
-    assert row["changed"] and row["open_that_day"] and row["trading_days"] == 2 and not row["result_unknown"]
-    assert row["percent"] == pytest.approx(100 * (np.exp(row["reaction"]) - 1))
-    # the percentile, recomputed here: share of the 749 two-day windows before with a smaller size
-    before = dow[dow.index < "2008-11-04"].values[-750:]
-    two_day = np.abs(before[1:] + before[:-1])
-    assert row["pct_abs_near"] == pytest.approx(100 * np.mean(two_day < abs(row["reaction"])), abs=0.2)
-    assert nr.election_row(dow, 2000)["result_unknown"]
-    assert not nr.election_row(dow, 1960)["open_that_day"]
-
-
-def test_group_z_by_hand():
-    assert nr.group_z([50.0]) == 0
-    assert nr.group_z([40, 60]) == 0
-    assert nr.group_z([100.0] * 12) == pytest.approx(50 / (100 / 12))    # se = 28.87 / sqrt(12)
-    assert nr.group_z([0.0] * 3) == pytest.approx(-3.0)                  # -50 / (28.87 / 1.732)
-    # ordinary days: z ~ N(0, 1). 16,000 rows (was 4,000, which left 3.9 sd of room for the
-    # sd check over 39 other seeds): the sd of z.std() is now 0.0064, of z.mean() 0.008
-    u = np.random.default_rng(1).uniform(0, 100, (16000, 33))
-    z = np.array([nr.group_z(row) for row in u])
-    assert abs(z.mean()) < 0.06 and z.std() == pytest.approx(1.0, abs=0.05)
-    with pytest.raises(ValueError):
-        nr.group_z([])
-
-
-def test_split_row_by_hand():
-    rows = [dict(percent=2.0, pct_abs_near=95.0, pct_signed_near=90.0),
-            dict(percent=-1.0, pct_abs_near=50.0, pct_signed_near=20.0),
-            dict(percent=0.5, pct_abs_near=20.0, pct_signed_near=70.0)]
-    s = nr.split_row(rows)
-    assert (s["n"], s["up"], s["above_90"]) == (3, 2, 1)
-    assert s["mean"] == pytest.approx(0.5) and s["median"] == 0.5 and s["mean_abs"] == pytest.approx(3.5 / 3)
-    assert s["pct_abs"] == 50.0 and s["pct_signed"] == 70.0
-    assert s["z_abs"] == pytest.approx((55 - 50) / (100 / np.sqrt(12) / np.sqrt(3)))
-    with pytest.raises(ValueError):
-        nr.split_row([])
-
-
-def test_election_part_covers_33_elections_and_the_groups_add_up(dow):
-    part = nr.election_part(dow, range(1896, 2025, 4))
-    assert len(part["elections"]) == 33 * len(nr.WINDOWS)
-    for k in nr.WINDOWS:
-        s = part["splits"][str(k)]
-        assert s["all elections"]["n"] == 33 and s["all but 2000 (result unknown)"]["n"] == 32
-        assert s["Republican won"]["n"] == 18 and s["Democrat won"]["n"] == 15
-        assert s["White House changed party"]["n"] == 15 and s["White House kept by party"]["n"] == 18
-
-
 # ---- the biggest days and the events file ---------------------------------------
 
 def test_biggest_days_by_hand():
@@ -439,10 +275,9 @@ def test_print_functions_show_the_numbers(dow, capsys):
     m = {k: dict(median=0.123, low=0.1, high=0.2) for k in nr.MEASURES}
     nr.print_model(dict(with_chartists=dict(histories=2, runaways=0, **m),
                         without_chartists=dict(histories=2, runaways=0, **m)))
-    nr.print_elections(nr.election_part(dow, [1956, 1960, 2000], windows=(1,)))
     nr.print_history(nr.history_part(dow))
     out = capsys.readouterr().out
-    assert "0.123 (0.100 to 0.200)" in out and "Kennedy" in out and "result unknown" in out
+    assert "0.123 (0.100 to 0.200)" in out
     assert "-22.61%" in out and "(cause not confirmed)" in out
 
 
@@ -453,6 +288,6 @@ def test_quick_main_writes_the_quick_file_and_leaves_the_full_results_alone(caps
     assert (nr.RESULTS.read_bytes() if nr.RESULTS.exists() else None) == before
     saved = json.loads(nr.QUICK_RESULTS.read_text())
     assert saved["part1"]["days"] == 3000 and saved["part1"]["seeds"] == [62000, 62001]
-    assert set(saved) == {"definition", "part1", "part2", "part3", "seconds"}
-    assert out["part3"]["counts"] == saved["part3"]["counts"]
+    assert set(saved) == {"definition", "part1", "part2", "seconds"}
+    assert out["part2"]["counts"] == saved["part2"]["counts"]
     assert "LOGICAL" in capsys.readouterr().out

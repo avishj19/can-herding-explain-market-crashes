@@ -1,7 +1,6 @@
 """Findings (tabs of the Checks page since the redesign): what we found about Lux & Marchesi (1999),
-the party study, then every project figure with its plain
-caption (from figures/GALLERY.md). Every number comes from web/numbers.json (scripts/web_numbers.py,
-the same recipes as the figures) through herding/explore.py."""
+then every project figure with its plain caption (from figures/GALLERY.md). Every number comes from
+web/numbers.json (scripts/web_numbers.py, the same recipes as the figures) through herding/explore.py."""
 import numpy as np
 import streamlit as st
 
@@ -144,76 +143,6 @@ def paper_section():
         "tails over a few weeks somewhat faster than the S&P 500. Its settings are fitted, not the paper's "
         "own, and they rarely run away into an endless bubble. "
         f"<a href='{LIMITS}'>All the limitations</a> (KEY_POINTS, section 7).</p>", unsafe_allow_html=True)
-
-
-PARTY_MARKETS = ("Dow Jones", "S&P 500", "Nasdaq-100")
-
-
-def party_rows():
-    """The president's-party table: one row per index, every number from explore.party_view."""
-    rows, views = [], []
-    for name in PARTY_MARKETS:
-        _, r, _ = c.saved_asset(name)
-        v, _ = c.party_view(r)
-        if v is None:
-            continue
-        views.append((name, v))
-        rows.append({"Market": name, "Years": f"{v['start']:%Y} to {v['end']:%Y}",
-                     "Party changes": f"{v['changes']}",
-                     "Gap a year, D − R": f"{v['gap_year']:+.1%}",
-                     "Luck test: beats": f"{v['luck']['mean']:.0f}% of {v['calendars']} fake calendars",
-                     "Volatility D ÷ R": f"{v['vol_ratio']:.2f} ({v['luck']['vol']:.0f}%)",
-                     "Fat tails (kurtosis) D − R": f"{v['kurtosis']:+.1f} ({v['luck']['kurtosis']:.0f}%)",
-                     "Big falls D − R": f"{v['crashes']:+.1f} per 1,000 days ({v['luck']['crashes']:.0f}%)"})
-    return rows, views
-
-
-def unusual(views, measures=("vol", "kurtosis", "crashes")):
-    """[(market, measure)] whose real party difference sits outside 5 to 95% of the fake calendars."""
-    return [(name, k) for name, v in views for k in measures if not 5 <= v["luck"][k] <= 95]
-
-
-def politics_name(k):
-    return {"vol": "volatility", "kurtosis": "fat tails", "crashes": "big falls"}[k]
-
-
-def party_section():
-    """Does the president's party matter? Figs 12-15 (herding/politics.py), measured live."""
-    st.divider()
-    st.header("Does the president's party matter? (extra study)", anchor=False)
-    c.lead("This is an extra study, not part of the paper. US stocks are often said to do better under Democratic presidents. "
-           "Is that a real effect, or luck? The luck test slides the real presidents' terms along each "
-           "market's own history to make fake calendars: a real gap that beats more than 95% of them would "
-           "be unusual.")
-    rows, views = party_rows()
-    if rows:
-        st.html(html_table(rows))
-        _, dow, _ = c.saved_asset("Dow Jones")
-        hoover = ex.party_gap_without(dow, "Hoover")
-        dow_row, dow_v = rows[0], views[0][1]
-        odd = not 5 <= dow_v["luck"]["mean"] <= 95
-        st.markdown(
-            ("- **A gap bigger than luck usually gives.** " if odd else "- **A gap, but about what luck gives.** ")
-            + f"The Dow did {dow_row['Gap a year, D − R']} a year better under Democrats since "
-            f"{dow_row['Years'][:4]}, which beats {dow_row['Luck test: beats']}: "
-            + ("unusual. " if odd else "not unusual. ")
-            + f"Without Hoover's term (the 1929 crash) the Dow's gap is {hoover:+.1%} a year"
-            + (", so one presidency carries much of it.\n" if abs(hoover) < abs(dow_v["gap_year"]) / 2 else ".\n")
-            + (f"- **No party difference in big falls, volatility or fat tails:** the percentages in brackets "
-               f"are where each real difference sits among the fake calendars, and none of the "
-               f"{len(views) * 3} is beyond 5 to 95%.\n" if not unusual(views) else
-               "- **Big falls, volatility and fat tails:** outside 5 to 95% of the fake calendars: "
-               + ", ".join(f"{m} ({politics_name(k)})" for m, k in unusual(views))
-               + " (with this many tests, about 1 in 10 lands there by luck alone).\n")
-            +
-            "- **What it means for herding:** the way herding makes crashes shows no sign of depending on the "
-            "party in power. Party is a correlation, not a cause (Pástor & Veronesi 2020 explain the gap by "
-            "investors' fear, which this model does not have).\n"
-            "- **Try it:** on the Test program, turn on **Shade by the president's party (extra study)** in Settings for any "
-            "market, or give the model a **party effect on true value** to see how big a gap a real party effect would make.")
-    st.caption("Volatility, fat tails and big falls show the actual difference and, in brackets, its place among the fake "
-               "calendars. Price only (no dividends). Figures 12 to 15 (the Figures tab) show the same test at scale, "
-               "including 1,000 model histories as a second yardstick.")
 
 
 def figures_header():

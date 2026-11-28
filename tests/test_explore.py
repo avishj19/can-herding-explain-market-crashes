@@ -21,7 +21,7 @@ from herding import market_data, model, stats
 def test_catalog_groups_and_contents():
     c = e.catalog()
     assert list(c) == ["Stocks", "Indexes", "Commodities"]
-    assert c["Stocks"] == market_data.stock_tickers() and len(c["Stocks"]) == 20
+    assert c["Stocks"] == market_data.stock_tickers() and len(c["Stocks"]) == 5
     assert c["Indexes"] == ["S&P 500", "Nasdaq-100", "Dow Jones"]
     assert c["Commodities"] == ["Brent oil", "Gold", "Copper"]
 
@@ -44,12 +44,12 @@ def test_saved_returns_match_the_existing_loaders():
     # two separate code paths must give the same returns, to the last digit
     for name, key in e.INDEXES.items():
         assert np.array_equal(e.log_returns(e.saved_prices(name)).values, market_data.returns(key).values)
-    assert np.array_equal(e.log_returns(e.saved_prices("AAPL")).values,
-                          market_data.stock_returns("AAPL").values)
+    assert np.array_equal(e.log_returns(e.saved_prices("MSFT")).values,
+                          market_data.stock_returns("MSFT").values)
 
 
 def test_commodity_first_close_matches_file():
-    raw = pd.read_csv(ROOT / "data/factors/gold.csv")
+    raw = pd.read_csv(ROOT / "data/commodities/gold.csv")
     assert e.saved_prices("Gold").iloc[0] == raw["Close"].iloc[0]
 
 
@@ -372,10 +372,22 @@ def test_bell_check_rejects(k, n):
 
 
 def test_tail_check():
-    r = e.tail_check([2.8, 3.0, 3.2])
-    assert r["passed"] and r["mean"] == pytest.approx(3.0) and (r["low"], r["high"]) == (2.8, 3.2)
-    assert e.tail_check([2.5])["passed"] and e.tail_check([3.5])["passed"]   # ends included
-    assert not e.tail_check([2.49])["passed"] and not e.tail_check([5.9, 6.0])["passed"]
+    # the rule is the proposal's own range, 2.6 to 3.0 (set before any result; Opus review, 28 Nov)
+    assert e.PROPOSAL_TAIL == (2.6, 3.0)
+    r = e.tail_check([2.7, 2.8, 2.9])
+    assert r["passed"] and r["mean"] == pytest.approx(2.8) and (r["low"], r["high"]) == (2.7, 2.9)
+    assert e.tail_check([2.6])["passed"] and e.tail_check([3.0])["passed"]   # ends included
+    assert not e.tail_check([2.59])["passed"] and not e.tail_check([3.01])["passed"]
+    # "close": outside the proposal's range but inside the S&P 500's own uncertainty (close=(lo, hi))
+    r = e.tail_check([3.1], close=(2.57, 3.34))
+    assert not r["passed"] and r["close"]
+    assert not e.tail_check([3.4], close=(2.57, 3.34))["close"]
+    assert not e.tail_check([2.8], close=(2.57, 3.34))["close"]                # passing is not "close"
+    assert e.tail_check([3.1])["close"] is False                                # no interval given
+    with pytest.raises(ValueError):
+        e.tail_check([3.0], close=(3.3, 2.6))
+    with pytest.raises(ValueError):
+        e.tail_check([3.0], close=(3.0,))
     with pytest.raises(ValueError):
         e.tail_check([])
     with pytest.raises(ValueError):
@@ -662,7 +674,7 @@ def test_intraday_prices_drop_time_zone_and_mix_with_daily():
     idx = pd.date_range("2026-11-18 14:30", periods=6, freq="5min", tz="UTC")
     out = e.intraday_prices("AAPL", "1D", download=lambda t, p, i: pd.Series(np.arange(1.0, 7.0), index=idx))
     assert out.index.tz is None and out.index[0] == pd.Timestamp("2026-11-18 09:30")   # 14:30 UTC = 9:30 New York
-    daily = e.saved_prices("AAPL")
+    daily = e.saved_prices("MSFT")
     s = e.range_stats(out, daily=daily)                      # must not raise
     assert s["change"] == pytest.approx(5.0) and s["high_52w"] == daily.iloc[-252:].max()
 
@@ -888,10 +900,10 @@ def test_bell_check_and_tail_check_reject_2d():
 
 
 def test_tail_check_uses_the_median():
-    # the Checks page states "the median tail exponent lies between 2.5 and 3.5"
+    # the Checks page states "the median tail exponent lies between 2.6 and 3.0"
     r = e.tail_check([1.0, 3.0, 3.2])                    # mean 2.4 (outside), median 3.0 (inside)
     assert r["passed"] and r["median"] == 3.0 and r["n"] == 3 and (r["low"], r["high"]) == (1.0, 3.2)
-    assert e.tail_check([3.0, 3.2, 6.0])["passed"]        # mean 4.07, median 3.2
+    assert e.tail_check([2.6, 2.9, 6.0])["passed"]        # mean 3.83, median 2.9
     assert not e.tail_check([2.0, 2.4, 3.4])["passed"]    # mean 2.6, median 2.4
     r = e.tail_check([3.0, None, 3.4, None])              # None = a history that ran away: left out
     assert r["n"] == 2 and r["median"] == pytest.approx(3.2) and r["left_out"] == 2
@@ -899,8 +911,24 @@ def test_tail_check_uses_the_median():
 
 def test_tail_check_on_the_saved_histories_matches_results_md():
     tails = e.web_numbers()["checks"]["herding"]["tail"]
-    r = e.tail_check(tails)
-    assert r["passed"] and round(r["median"], 2) == 3.10 and r["n"] == 40
+    r = e.tail_check(tails, close=e.tail_interval(e.log_returns(e.saved_prices("S&P 500")).values))
+    # 3.10: just above the proposal's 3.0, inside the S&P 500's own 95% interval: "close", not "passes"
+    assert not r["passed"] and r["close"] and round(r["median"], 2) == 3.10 and r["n"] == 40
+
+
+# Spec: the S&P 500's own uncertainty: a 95% block-bootstrap interval of its Hill tail exponent (blocks of 250
+# days, as the fit's own bootstrap, keep the bursts of wild days); the same every call; about 2.57-3.41.
+def test_tail_interval():
+    r = e.log_returns(e.saved_prices("S&P 500")).values
+    lo, hi = e.tail_interval(r)
+    assert e.tail_interval(r) == (lo, hi)
+    assert lo < e.summary(r)["tail"] < hi
+    assert lo == pytest.approx(2.57, abs=0.05) and hi == pytest.approx(3.41, abs=0.05)
+    bell = np.random.default_rng(0).standard_normal(20_000)
+    blo, bhi = e.tail_interval(bell)
+    assert blo > 4.5                                                   # a bell curve's tail is far thinner
+    with pytest.raises(ValueError):
+        e.tail_interval(r, n=10)
 
 
 # ------------------------------------------------------------------ run_mix / sweep seeds (BE-14)
@@ -1194,7 +1222,7 @@ def test_range_stats_52_weeks_by_date_for_a_market_open_every_day():
 
 
 def test_range_stats_52_weeks_by_date_for_a_stock():
-    daily = e.saved_prices("AAPL")
+    daily = e.saved_prices("MSFT")
     s = e.range_stats(daily.iloc[-5:], daily=daily)
     cut = daily.index[-1] - pd.Timedelta(weeks=52)
     year = [x for t, x in daily.items() if t > cut]
@@ -1512,116 +1540,3 @@ def test_measurements_are_not_tickers(t):
 @pytest.mark.parametrize("t", ["^GSPC", "SPY", "BTC-USD", "BRK-B", "GC=F"])
 def test_prices_are_still_tickers(t):
     assert e.clean_ticker(t) == t
-
-
-# ------------------------------------------------------------------ the president's party (extension)
-# Spec: party_view reproduces politics.py's test (the numbers in RESULTS.md, Figs 12-15); party_shocks
-# moves the value by +party/2 a year on Democratic days and -party/2 on Republican ones, none in the
-# burn-in, and nothing at all for party = 0 (the model exactly as in SPEC.md).
-
-def _dated(values, start="2000-01-03"):
-    return pd.Series(values, index=pd.bdate_range(start, periods=len(values)))
-
-
-def test_party_view_reproduces_results_md():
-    dow = e.party_view(e.log_returns(e.saved_prices("Dow Jones")))
-    assert round(dow["gap_year"], 3) == 0.035 and round(dow["luck"]["mean"]) == 91 and dow["changes"] == 15
-    spx = e.party_view(e.log_returns(e.saved_prices("S&P 500")))
-    assert round(spx["gap_year"], 3) == 0.053 and round(spx["luck"]["mean"]) == 95
-    assert round(spx["vol_ratio"], 2) == 0.86 and round(spx["crashes"], 1) == -1.6   # RESULTS Fig 12 table
-    ndx = e.party_view(e.log_returns(e.saved_prices("Nasdaq-100")))
-    assert round(ndx["gap_year"], 3) == 0.117 and round(ndx["luck"]["mean"]) == 91
-
-
-def test_party_view_by_hand():
-    # 2000-2016: Clinton (D) to 2001-01-20, Bush (R) to 2009-01-20, then Obama (D): two changes.
-    # Constant +1 bp on D days, -1 bp on R days:
-    # the gap is 2 bp a day, 252 days a year
-    r = _dated(np.zeros(4300))
-    dem = e.politics.democrat(r.index)
-    r[dem], r[~dem] = 1e-4, -1e-4
-    r += np.random.default_rng(0).normal(0, 1e-3, len(r))     # some spread, so the sd is not zero
-    v = e.party_view(r)
-    assert v["gap_year"] == pytest.approx(e.politics.return_gap(r.values, dem), abs=1e-12)
-    assert v["gap_year"] == pytest.approx(r[dem].mean() * 252 - r[~dem].mean() * 252, abs=1e-12)
-    assert v["dem_days"] == int(dem.sum()) and v["dem_days"] + v["rep_days"] == len(r)
-    assert v["changes"] == 2 and v["start"] == r.index[0]
-    assert set(v["luck"]) == set(e.politics.MEASURES) and all(0 <= p <= 100 for p in v["luck"].values())
-
-
-def test_party_view_refuses_too_little_history():
-    with pytest.raises(ValueError, match="500 days under each party"):
-        e.party_view(_dated(np.full(600, 1e-3), start="2010-01-04"))   # all Obama: no Republican days
-    with pytest.raises(ValueError, match="Series indexed by dates"):
-        e.party_view(np.zeros(5000))
-
-
-def test_party_terms():
-    t = e.party_terms(pd.bdate_range("2016-06-01", "2021-06-01"))
-    assert [(x["name"], x["party"]) for x in t] == [("Obama", "D"), ("Trump", "R"), ("Biden", "D")]
-    assert t[1]["start"] == pd.Timestamp("2017-01-20") and t[1]["end"] == pd.Timestamp("2021-01-19")
-    assert e.party_terms(pd.bdate_range("1880-01-01", "1890-01-01")) == []          # before the table
-
-
-def test_party_calendar_is_the_end_of_the_dow():
-    dem, dates = e.party_calendar(1000)
-    dow = e.saved_prices("Dow Jones").index
-    assert len(dem) == 1000 and dates[-1] == dow[-1] and dates[0] == dow[-1000]
-    assert np.array_equal(dem, e.politics.democrat(dates))
-    with pytest.raises(ValueError, match="party calendar has"):
-        e.party_calendar(10 ** 6)
-
-
-def test_party_shocks_by_hand():
-    assert e.party_shocks(5000, 1000, 0.0) is None                 # off: the model as in SPEC.md
-    sh = e.party_shocks(5000, 1000, 0.05)
-    dem, _ = e.party_calendar(5000)
-    assert sorted(sh) == list(range(1000, 6000))                    # every day after the burn-in, none before
-    step = 0.05 / 2 / 252
-    assert all(sh[1000 + i] == pytest.approx(math.expm1(step if d else -step), abs=1e-15)
-               for i, d in enumerate(dem))
-    logs = np.log1p([sh[1000 + i] for i in range(5000)])
-    assert logs[dem].sum() / dem.sum() * 252 - logs[~dem].sum() / (~dem).sum() * 252 == pytest.approx(0.05, abs=1e-12)
-    for bad in (0.25, -0.21, float("nan"), "0.05", True):
-        with pytest.raises(ValueError, match="party drift"):
-            e.party_shocks(5000, 1000, bad)
-
-
-def test_party_zero_leaves_the_model_unchanged_and_run_mix_passes_the_shocks(monkeypatch):
-    p, burn = e.fitted_settings()
-    a, _ = e.run_mix(p, "herding", p["a1"], 1000, 7, burn)
-    b, _ = e.run_mix(p, "herding", p["a1"], 1000, 7, burn, 0.0)
-    assert np.array_equal(a, b)
-    seen = []
-    real = e.model.simulate
-    monkeypatch.setattr(e.model, "simulate", lambda *a, **k: seen.append(k["shocks"]) or real(*a, **k))
-    e.run_mix(p, "herding", p["a1"], 1000, 7, burn, 0.04)
-    e.run_mix(p, "herding", p["a1"], 1000, 7, burn)
-    assert seen[0] == e.party_shocks(1000, burn, 0.04) and seen[1] is None
-
-
-def test_a_party_drift_shows_up_as_a_price_gap():
-    # Measured Nov 23 2026 (10,000 days, seeds 1000-1011): no drift gives -0.3 to +0.4 points over 4
-    # histories; a 10-point drift gives 6.4 to 9.3 more. Paired on the same seeds, so luck mostly cancels.
-    p, burn = e.fitted_settings()
-    diff = [e.model_party_gap(e.run_mix(p, "herding", p["a1"], 10000, s, burn, 0.10)[0])
-            - e.model_party_gap(e.run_mix(p, "herding", p["a1"], 10000, s, burn)[0]) for s in range(1000, 1004)]
-    assert 0.05 < np.mean(diff) < 0.15
-
-
-def test_model_party_gap_and_without():
-    r = np.zeros(2000)
-    dem, _ = e.party_calendar(2000)
-    r[dem] = 0.001
-    assert e.model_party_gap(r) == pytest.approx(0.001 * 252, abs=1e-12)
-    dow = e.log_returns(e.saved_prices("Dow Jones"))
-    assert round(e.party_gap_without(dow, "Hoover"), 3) == 0.008                # RESULTS.md Figs 13-15
-    with pytest.raises(ValueError, match="no presidency named"):
-        e.party_gap_without(dow, "Lincoln")
-
-
-def test_a_party_drift_differs_from_the_fit():
-    p, _ = e.fitted_settings()
-    run = {"a1": 1.0, "a2": p["a2"], "v1": p["v1"]}
-    assert not e.differs_from_fit(run, p) and not e.differs_from_fit(dict(run, party=0.0), p)
-    assert e.differs_from_fit(dict(run, party=3.5), p)

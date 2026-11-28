@@ -67,14 +67,14 @@ def test_company_names_cover_exactly_the_saved_stocks():
     assert sorted(ex.COMPANY) == sorted(market_data.stock_tickers())
 
 
-@pytest.mark.parametrize("name, want", [("DIS", "DIS · Disney"), ("RTX", "RTX (Raytheon)"),
+@pytest.mark.parametrize("name, want", [("DIS", "DIS · Disney"), ("HD", "HD · Home Depot"),
                                         ("S&P 500", "S&P 500"), ("Gold", "Gold"), ("NVDA", "NVDA")])
 def test_display_name(name, want):
     assert ex.display_name(name) == want
 
 
-@pytest.mark.parametrize("name, want", [("S&P 500", "Indexes"), ("Dow Jones", "Indexes"), ("AAPL", "Stocks"),
-                                        ("UNP", "Stocks"), ("Brent oil", "Commodities"), ("NVDA", None),
+@pytest.mark.parametrize("name, want", [("S&P 500", "Indexes"), ("Dow Jones", "Indexes"), ("MSFT", "Stocks"),
+                                        ("HON", "Stocks"), ("Brent oil", "Commodities"), ("NVDA", None),
                                         ("^GSPC", None)])
 def test_market_group(name, want):
     assert ex.market_group(name) == want
@@ -317,9 +317,7 @@ def test_labels_in_plain_words(app):
     labels = [s.label for s in at.slider]
     # the wording guide's names (docs/redesign/WORDING.md): a2 and v1 are said in plain words
     assert labels == ["Herding strength (a1)", "Reaction to price trends (a2)",
-                      "How often trend chasers change mood (v1)",
-                      "Party effect on true value (extra study; % a year, Democrats − Republicans)"]
-    assert at.slider(key="in_party").value == 0.0          # off by default: the paper's model has no politics
+                      "How often trend chasers change mood (v1)"]
     days = at.selectbox(key="in_days")
     # short, so it fits the narrow panel ("19,329 (as long as the S&P 500 record)" was cut off);
     # the full explanation is in the help
@@ -445,53 +443,6 @@ def test_dial_caption_explains_the_marks(open_page):
     assert "Fig 10" in text
 
 
-# ------------------------------------------------------------------ the president's party (extension)
-def test_party_switch_shades_the_chart_and_shows_the_luck_test(app):
-    at = app()                                              # the S&P 500, saved data
-    at.toggle(key="t_party").set_value(True).run()
-    assert not at.exception, [e.value for e in at.exception]
-    v = ex.party_view(ex.log_returns(ex.saved_prices("S&P 500")))
-    page_text = " ".join(m.value for m in at.markdown)
-    assert f"{v['gap_year']:+.1%}" in page_text and f"beats {v['luck']['mean']:.0f}% of {v['calendars']}" in page_text
-    shapes = _fig(at, "price_chart")["layout"]["shapes"]
-    dem_terms = [t for t in ex.party_terms(ex.saved_prices("S&P 500").index) if t["party"] == "D"]
-    assert len([s for s in shapes if s.get("fillcolor") == "rgba(128,128,128,0.18)"]) >= len(dem_terms)
-    assert "it has no politics, so that gap is pure luck" in _captions(at)
-    at.toggle(key="t_party").set_value(False).run()
-    assert not any(s.get("fillcolor") == "rgba(128,128,128,0.18)"
-                   for s in _fig(at, "price_chart")["layout"].get("shapes", []))
-
-
-def test_party_drift_runs_the_model_with_it_and_logs_it(app):
-    at = app()
-    _run_model(at, in_party=5.0, in_days=5000)
-    assert at.session_state["run"]["party"] == 5.0
-    assert any("with a party effect of +5.0% a year" in s.value for s in at.success)
-    log = [d.value for d in at.dataframe if "Ran away" in d.value.columns][0]
-    assert log.loc[0, "Party effect (% a year)"] == 5.0
-    at.toggle(key="t_party").set_value(True).run()
-    assert "with your party effect of +5.0%" in _captions(at)
-
-
-def test_presets_switch_the_party_drift_off(app):
-    at = app()
-    at.slider(key="in_party").set_value(3.0).run()
-    [b for b in at.get("button_group") if b.proto.id.endswith("-preset")][0].set_value("Best fit").run()
-    assert at.slider(key="in_party").value == 0.0
-
-
-def test_findings_party_section_matches_the_backend(open_page):
-    at = open_page("web/page_checks.py")
-    assert not at.exception, [e.value for e in at.exception]
-    text = " ".join(m.value for m in at.markdown)
-    dow = ex.log_returns(ex.saved_prices("Dow Jones"))
-    v = ex.party_view(dow)
-    assert f"The Dow did {v['gap_year']:+.1%} a year better under Democrats since 1896" in text
-    assert f"the Dow's gap is {ex.party_gap_without(dow, 'Hoover'):+.1%} a year" in text
-    html = " ".join(h.proto.body for h in at.get("html"))
-    assert "Nasdaq-100" in html and f"{v['luck']['mean']:.0f}% of {v['calendars']} fake calendars" in html
-
-
 # Spec: with Run automatically on (the default), moving a slider runs the model at once: the run
 # shown and the top of the run log are the new settings, and no "Settings changed" note appears.
 @pytest.mark.slow
@@ -562,7 +513,6 @@ def test_each_preset_sets_the_backend_values_and_renders(app, preset):
     assert at.slider(key="in_a1").value == pytest.approx(want, abs=1e-12)
     assert at.slider(key="in_a2").value == pytest.approx(float(p["a2"]), abs=1e-12)
     assert at.slider(key="in_v1").value == pytest.approx(float(p["v1"]), abs=1e-12)
-    assert at.slider(key="in_party").value == 0.0
     assert at.session_state["run"]["a1"] == pytest.approx(want, abs=1e-12)     # ran automatically
     assert _group(at, "preset").value == preset
 
@@ -570,10 +520,10 @@ def test_each_preset_sets_the_backend_values_and_renders(app, preset):
 def test_settings_live_in_the_sidebar(app):
     at = app()
     side = at.sidebar
-    assert {s.key for s in side.slider} == {"in_a2", "in_v1", "in_party"}
+    assert {s.key for s in side.slider} == {"in_a2", "in_v1"}
     assert [s.key for s in side.selectbox] == ["in_days"]
     assert [n.key for n in side.number_input] == ["in_seed"]
-    assert {t.key for t in side.toggle} >= {"live", "t_big", "t_dd", "t_log", "t_party", "auto_run"}
+    assert {t.key for t in side.toggle} >= {"live", "t_big", "t_dd", "t_log", "auto_run"}
     assert [t.key for t in side.text_input] == ["ticker_box"]
     assert any(b.proto.id.endswith("-group") for b in side.get("button_group"))
     assert [b.label for b in side.button] == ["Reset everything"]

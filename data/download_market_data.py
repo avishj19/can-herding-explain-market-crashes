@@ -7,26 +7,17 @@ Sources
     Yahoo Finance (yfinance, auto_adjust=False: split-adjusted, NOT dividend-adjusted)
         ^GSPC  S&P 500 index        -> sp500_daily.csv (1950-), sp500_daily_from_1928.csv (1928-)
         ^NDX   Nasdaq-100 index     -> nasdaq100_daily.csv (1985-)
-        ^VIX   volatility index     -> vix_fear_index_daily.csv (1990-)
-        20 stocks with market beta 0.9-1.1 (see stocks/README.md) -> stocks/<TICKER>.csv
-    FRED (Federal Reserve Bank of St. Louis)
-        USREC  NBER recession months -> us_recessions_monthly.csv
-    FRED, outside factors (all in factors/; FRED series ids in FACTORS_FRED)
-        DCOILBRENTEU  Brent crude oil spot price, $/barrel (1987-) -> factors/oil_brent.csv
+        5 stocks with market beta 0.9-1.1, the tickers in stocks/market_beta.csv (see stocks/README.md) -> stocks/<TICKER>.csv
+    FRED, the site's Commodities group (in commodities/)
+        DCOILBRENTEU  Brent crude oil spot price, $/barrel (1987-) -> commodities/oil_brent.csv
                       (Brent, not WTI: WTI closed below zero on 2020-04-20, which has no log return)
-        DGS10         10-year Treasury yield, percent (1962-)   -> factors/treasury_10y_yield.csv
-        DTWEXBGS      broad trade-weighted US dollar (2006-)    -> factors/dollar_index.csv
-        DFEDTAR, DFEDTARU  federal funds target (upper end after 2008-12-16) -> factors/fed_funds_target.csv
     Yahoo Finance, front-month futures (continuous contract, 2000-)
-        GC=F gold -> factors/gold.csv, HG=F copper -> factors/copper.csv
-    Federal Reserve Board (federalreserve.gov/monetarypolicy/fomccalendars.htm and
-    fomchistorical<YEAR>.htm), with the FRED target above
-        FOMC decision days since February 1994 -> fed_decisions.csv
+        GC=F gold -> commodities/gold.csv, HG=F copper -> commodities/copper.csv
     MeasuringWorth (S. H. Williamson, "Daily Closing Values of the DJA in the United States,
     1885 to Present", measuringworth.com/datasets/DJA)
         Dow Jones Industrial Average 1927-1952 -> dow_jones_daily_1927_1952.csv
         Dow Jones Industrial Average 1896-     -> dow_jones_daily_from_1896.csv (first DJIA day: 26 May 1896),
-        a market of its own (Figs 13-15); the 1927-1952 slice is used to find bad closes in the
+        a market of its own (the site's Dow Jones); the 1927-1952 slice is used to find bad closes in the
         early S&P file (herding/market_data.py)
 
 Every series stops at the same fixed date (END), so results can be reproduced
@@ -37,7 +28,6 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 END = "2026-10-30"                  # last trading day included (a Friday)
@@ -45,17 +35,11 @@ INDEXES = {                         # file: (ticker, first day)
     "sp500_daily.csv": ("^GSPC", "1950-01-01"),
     "sp500_daily_from_1928.csv": ("^GSPC", "1927-12-01"),
     "nasdaq100_daily.csv": ("^NDX", "1985-10-01"),
-    "vix_fear_index_daily.csv": ("^VIX", "1990-01-01"),
 }
 STOCK_START = "2000-01-01"
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={}"
-FACTORS_FRED = {"oil_brent.csv": "DCOILBRENTEU", "treasury_10y_yield.csv": "DGS10",
-                "dollar_index.csv": "DTWEXBGS"}
-FACTORS_YAHOO = {"gold.csv": "GC=F", "copper.csv": "HG=F"}
-FOMC_FIRST = 1994                    # the Fed has announced its decisions the same day since Feb 1994
-FED = "https://www.federalreserve.gov/monetarypolicy/"
-MONTHS = {m: i + 1 for i, m in enumerate(("January", "February", "March", "April", "May", "June", "July",
-                                          "August", "September", "October", "November", "December"))}
+COMMODITIES_FRED = {"oil_brent.csv": "DCOILBRENTEU"}
+COMMODITIES_YAHOO = {"gold.csv": "GC=F", "copper.csv": "HG=F"}
 DOW_URL = "https://www.measuringworth.com/datasets/DJA/result.php"
 DOW_START = "1896-05-26"             # the first day of the Dow Jones Industrial Average
 
@@ -128,95 +112,6 @@ def fred(series, end=END):
     return out[out.index <= pd.Timestamp(end)]
 
 
-def recessions(end=END):
-    """NBER recession indicator by month (1 = recession) from FRED, up to END."""
-    return fred("USREC", end).astype(int).rename("USREC").reset_index().rename(
-        columns={"Date": "observation_date"})
-
-
-def fed_funds_target(end=END):
-    """The federal funds target in percent: one rate until 2008-12-15, then the top of the range."""
-    old, new = fred("DFEDTAR", end), fred("DFEDTARU", end)
-    return pd.concat([old[old.index < new.index[0]], new]).rename("Close").to_frame()
-
-
-def _last_day(month, days, year):
-    """The last day of a meeting written like ('March', '17-18') or ('Oct/Nov', '31-1')."""
-    month = month.split("/")[-1].strip()
-    month = next(m for m in MONTHS if m.startswith(month[:3]))
-    return pd.Timestamp(year, MONTHS[month], int(days.split("-")[-1]))
-
-
-def scheduled_fomc_days(first=FOMC_FIRST, last=None):
-    """Last days of the FOMC's scheduled meetings (the days decisions are announced). Unscheduled
-    meetings, conference calls, notation votes and cancelled meetings are left out."""
-    import re
-    last = last or pd.Timestamp(END).year
-    days = []
-    for year in range(first, last + 1):
-        try:
-            page = _fetch(f"{FED}fomchistorical{year}.htm")
-        except urllib.error.HTTPError:            # recent years are on the calendar page instead
-            break
-        # e.g. "March 17-18 Meeting - 2015", "January 31-February 1 Meeting - 2006" or
-        # "Jan/Feb 31-1 Meeting - 2017"
-        for m1, d1, m2, d2 in re.findall(r"<h5[^>]*>\s*([A-Z][a-z]+(?:/[A-Z][a-z]+)?) (\d+)"
-                                         r"(?:-(?:([A-Z][a-z]+) )?(\d+))?\s+"
-                                         r"Meeting - \d{4}", page):
-            days.append(_last_day(m2 or m1, d2 or d1, year))
-    else:
-        return _one_per_decision(days)
-    page = _fetch(f"{FED}fomccalendars.htm")
-    for block in re.split(r'<h4><a id="\d+">', page)[1:]:
-        y = int(block[:4])
-        if y < year or y > last:
-            continue
-        pairs = re.findall(r'fomc-meeting__month[^>]*><strong>([^<]+)</strong>.*?'
-                           r'fomc-meeting__date[^>]*>([^<]+)<', block, flags=re.S)
-        for month, d in pairs:
-            d = d.strip().rstrip("*").strip()
-            if re.fullmatch(r"\d+(-\d+)?", d):     # skips "(unscheduled)", "(notation vote)", "(cancelled)"
-                days.append(_last_day(month, d, y))
-    return _one_per_decision(days)
-
-
-def _one_per_decision(days):
-    """Sorted meeting days, with back-to-back days (2003-09-15 and -16 are listed as two
-    meetings) kept once, as the later day, when the decision was announced."""
-    days = pd.DatetimeIndex(sorted(set(days)))
-    return days[np.append(np.diff(days.values) > np.timedelta64(1, "D"), True)]
-
-
-RANGE_START = pd.Timestamp("2008-12-16")   # the Fed's target became a range
-
-
-def fed_decisions(target, end=END):
-    """Fed decision days since February 1994, from the announcement dates (not the dates
-    the new target took effect). Columns: date, kind, change_bp.
-      scheduled    every scheduled FOMC meeting's last day, with the target change it
-                   decided (0 = no change). Since 2008-12-16 a new target range takes
-                   effect the day after the announcement, so a change up to 3 days after a
-                   meeting belongs to that meeting.
-      unscheduled  a change on any other day (a surprise between meetings). Since
-                   2008-12-16 it was announced the day before it took effect (2020-03-15, a
-                   Sunday, first reached the market on Monday 2020-03-16)."""
-    sched = scheduled_fomc_days()
-    sched = sched[sched <= pd.Timestamp(end)]
-    t = target["Close"]
-    t = t[t.index >= pd.Timestamp(FOMC_FIRST, 1, 1)]
-    change = (t.diff() * 100).round().fillna(0)
-    by_meeting = dict.fromkeys(sched, 0)
-    surprise = []
-    for day, c in change[change != 0].items():
-        before = sched[(sched <= day) & (sched >= day - pd.Timedelta(days=3))]
-        if len(before):
-            by_meeting[before[-1]] += int(c)
-        else:
-            surprise.append((day - pd.Timedelta(days=1) if day > RANGE_START else day, int(c)))
-    rows = [(d, "scheduled", c) for d, c in by_meeting.items()] + [(d, "unscheduled", c) for d, c in surprise]
-    return pd.DataFrame(rows, columns=["date", "kind", "change_bp"]).sort_values("date")
-
-
 def dow_jones(first=1927, last=1952):
     """Daily Dow closes from MeasuringWorth (its query form returns an HTML table)."""
     import html
@@ -246,34 +141,28 @@ def main(outdir):
     for ticker in pd.read_csv(here / "stocks" / "market_beta.csv")["ticker"]:
         daily_closes(ticker, STOCK_START).to_csv(outdir / "stocks" / f"{ticker}.csv")
         print("saved stocks/" + ticker)
-    recessions().to_csv(outdir / "us_recessions_monthly.csv", index=False)
-    print("saved us_recessions_monthly.csv")
     long = dow_jones(1896, pd.Timestamp(END).year)       # one download; the short file is a slice
     long[(long.index.year >= 1927) & (long.index.year <= 1952)].to_csv(outdir / "dow_jones_daily_1927_1952.csv")
     long[(long.index >= DOW_START) & (long.index <= END)].to_csv(outdir / "dow_jones_daily_from_1896.csv")
     print("saved dow_jones_daily_1927_1952.csv and dow_jones_daily_from_1896.csv")
-    save_factors(outdir)
+    save_commodities(outdir)
 
 
-def save_factors(outdir):
-    """The outside factors (commodities, rates, the dollar) and the Fed's decision days."""
+def save_commodities(outdir):
+    """The site's Commodities group: Brent oil (FRED), gold and copper (Yahoo futures)."""
     outdir = Path(outdir)
-    (outdir / "factors").mkdir(parents=True, exist_ok=True)
-    for name, series in FACTORS_FRED.items():
-        fred(series).rename("Close").to_frame().to_csv(outdir / "factors" / name)
-        print("saved factors/" + name)
-    for name, ticker in FACTORS_YAHOO.items():
-        daily_closes(ticker, STOCK_START).to_csv(outdir / "factors" / name)
-        print("saved factors/" + name)
-    target = fed_funds_target()
-    target.to_csv(outdir / "factors" / "fed_funds_target.csv")
-    fed_decisions(target).to_csv(outdir / "fed_decisions.csv", index=False)
-    print("saved factors/fed_funds_target.csv and fed_decisions.csv")
+    (outdir / "commodities").mkdir(parents=True, exist_ok=True)
+    for name, series in COMMODITIES_FRED.items():
+        fred(series).rename("Close").to_frame().to_csv(outdir / "commodities" / name)
+        print("saved commodities/" + name)
+    for name, ticker in COMMODITIES_YAHOO.items():
+        daily_closes(ticker, STOCK_START).to_csv(outdir / "commodities" / name)
+        print("saved commodities/" + name)
 
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    if args[:1] == ["--factors"]:             # only the outside factors and Fed days
-        save_factors(args[1] if len(args) > 1 else Path(__file__).resolve().parent)
+    if args[:1] == ["--commodities"]:         # only the three commodity files
+        save_commodities(args[1] if len(args) > 1 else Path(__file__).resolve().parent)
     else:
         main(args[0] if args else Path(__file__).resolve().parent)

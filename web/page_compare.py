@@ -64,7 +64,7 @@ def market_map(t, nums):
 
 @st.fragment
 def tails_side_by_side(t):
-    names = st.multiselect("Markets (up to 6)", list(t["name"]), default=["S&P 500", "Gold", "AAPL"],
+    names = st.multiselect("Markets (up to 6)", list(t["name"]), default=["S&P 500", "Gold", "MSFT"],
                            max_selections=6)
     series = [(n, c.saved_asset(n)[1].values, dict(color=c.PICK[i], width=2.4, dash=c.PICK_DASH[i]))
               for i, n in enumerate(names)]

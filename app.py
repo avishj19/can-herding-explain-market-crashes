@@ -16,7 +16,7 @@ import streamlit as st
 # herding/explore.py and web/common.py and crashed ("setup() takes 0 positional arguments",
 # "no attribute KIRMAN_PASS", Nov 2026) until someone rebooted it by hand.
 SITE_MODULES = ["herding.checks", "herding.stats", "herding.model", "herding.market_data",
-                "herding.calibrate", "herding.experiments", "herding.politics", "herding.factors",
+                "herding.calibrate", "herding.experiments",
                 "herding.kirman", "herding.explore", "web.common",
                 "web.page_compare", "web.page_findings"]   # drawn inside the Checks page
 

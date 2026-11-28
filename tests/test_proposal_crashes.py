@@ -197,7 +197,10 @@ def test_checks_page_scoreboard_in_proposal_order(open_page):
         assert f"href='#check-{i}'" in " ".join(m.value for m in at.markdown)
     assert heads[0].startswith("1. Kirman") and heads[3].startswith("4. Crashes")
     board = at.table[0].value
-    assert list(board["Verdict"])[:5] == ["✅ Passes", "✅ Passes", "✅ Passes", "🟡 Partly", "ℹ️ No pass mark set"]
+    # check 3 is "close" against the proposal's 2.6-3.0 (median 3.10; inside the S&P 500's own 95% range)
+    assert list(board["Verdict"])[:5] == ["✅ Passes", "✅ Passes", "🟡 Close", "🟡 Partly", "ℹ️ No pass mark set"]
+    line = [m.value for m in at.markdown if "Model median **3.10**" in m.value][0]
+    assert "The check is <b>close</b>: the median is just above the proposal's 2.6 to 3.0" in line
     assert "10⁸⁶" in board["The proposal expected"].iloc[3]
     text = " ".join(m.value for m in at.markdown)
     assert "every **35 years**" in text and "every **1,534 years**" in text
@@ -257,9 +260,28 @@ def test_simulated_market_zooms_to_the_biggest_crash(app):
     assert any("News in, moves out" in m.value for m in at.markdown)
     _group(at, "mm_zoom").set_value("crash").run()
     run = at.session_state["run"]
-    mm = ex.model_market(P, BURN, "herding", **{k: run[k] for k in ("a1", "a2", "v1", "days", "seed")},
-                         party=run.get("party", 0.0))
+    mm = ex.model_market(P, BURN, "herding", **{k: run[k] for k in ("a1", "a2", "v1", "days", "seed")})
     first, last = ex.zoom_window(mm["r"], "crash")
     fig = _fig(at, "model_market_chart")
     assert fig["layout"]["xaxis"]["range"] == [first - 0.5, last + 0.5]
     assert any(f"Showing days {first:,} to {last:,}" in c.value for c in at.caption)
+
+
+# Spec: the Black Monday wait rests on 1-2 falls, so it comes with its exact Poisson 95% range (Opus review,
+# 28 Nov): 2 falls in 3,068 years -> about 425 to 12,700 years; 1 in 3,068 -> about 550 to 121,000; 0 -> up to inf.
+def test_wait_interval():
+    lo, hi = ex.wait_interval(2, 3068)
+    assert lo == pytest.approx(425, rel=0.01) and hi == pytest.approx(12_700, rel=0.01)
+    lo, hi = ex.wait_interval(1, 3068)
+    assert lo == pytest.approx(550, rel=0.01) and hi == pytest.approx(121_000, rel=0.01)
+    lo, hi = ex.wait_interval(0, 100)
+    assert lo == pytest.approx(100 / 3.689, rel=0.01) and math.isinf(hi)
+    lo, hi = ex.wait_interval(1000, 1000)                 # many events: tight around 1 year
+    assert 0.9 < lo < 1 < hi < 1.1
+    for bad in ((-1, 10), (1.5, 10), (True, 10), (1, 0), (1, -5)):
+        with pytest.raises(ValueError):
+            ex.wait_interval(*bad)
+    cc = ex.crash_check(NUMS, ex.log_returns(ex.saved_prices("S&P 500")).values)
+    years = sum(NUMS["crashes"]["days"]) / ex.YEAR_DAYS
+    assert cc["bm_range"] == ex.wait_interval(cc["bm_count"], years)
+    assert cc["bm_range"][0] > ex.DECADES                 # even the shortest wait fails the "decades" rule

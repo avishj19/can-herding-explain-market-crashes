@@ -1,6 +1,6 @@
 """Checks: the proposal's checks, each with its rule and its numbers, in four tabs (the redesign,
 docs/redesign/README.md): the five checks; Beyond the paper (the textbook checklist against GARCH, the
-paper comparison, the party study); All markets (was the Compare page); Figures (was Findings).
+paper comparison); All markets (was the Compare page); Figures (was Findings).
 
 Model numbers come from web/numbers.json (scripts/web_numbers.py): the same 40 held-out histories as
 the project's figures, so this page and figures/RESULTS.md agree. Kirman's ants run live.
@@ -107,6 +107,12 @@ def _crash_chart(rows, cc):
     return fig
 
 
+@st.cache_data(show_spinner=False)
+def _spx_tail_band(stamp):
+    """The S&P 500's own 95% interval for its tail exponent (explore.tail_interval), once per data file."""
+    return ex.tail_interval(ex.log_returns(ex.saved_prices("S&P 500")).values)
+
+
 def _scoreboard(rows):
     """The proposal's checks in one table (wrapping its text): what the proposal said, what came out, the verdict."""
     st.table(pd.DataFrame(rows).set_index("Check"))
@@ -205,29 +211,44 @@ def page():
 
         # 2 ------------------------------------------------------------------
         tails = nums["checks"]["herding"]["tail"]
-        tres = ex.tail_check(tails)          # skips the histories that ran away (None) and counts them
+        band = _spx_tail_band(c.file_stamp(ex.market_data.SPX))       # the S&P 500's own 95% interval
+        tres = ex.tail_check(tails, close=band)   # skips the histories that ran away (None) and counts them
+        lo, hi = ex.PROPOSAL_TAIL
         st.header("3. With herding, the tail exponent is about 3", anchor="check-3")
         left, right = st.columns([1, 2], gap="large")
         with left:
             st.markdown("When trend chasers copy each other, big days should become about as common as in the "
                         "S&P 500.")
-            st.markdown(f"**Rule:** the median tail exponent (lower = more big days) lies between {ex.TAIL_RANGE[0]} and {ex.TAIL_RANGE[1]}. The inverse cubic law "
-                        "(Gopikrishnan et al. 1998) says about 3; the proposal expected 2.6 to 3.")
+            st.markdown(f"**Rule (the proposal's):** the median tail exponent (lower = more big days) lies between "
+                        f"{lo} and {hi}. The inverse cubic law (Gopikrishnan et al. 1998) says about 3.")
             with st.expander("How the rule is computed"):
                 st.markdown("Each history's tail exponent is the Hill estimate over its largest 5% of days (by "
-                            "size, up or down). The rule uses the median over the simulated histories that did not run away.")
+                            "size, up or down). The rule uses the median over the simulated histories that did not "
+                            "run away. **Close** means the median misses the proposal's range but sits inside the "
+                            "S&P 500's own uncertainty: the range its tail exponent takes over 500 resamples of its "
+                            "history (in runs of 50 days, so bursts stay together), middle 95%.")
+            # passes / does not pass in the site's ✓ ✗ style (common.verdict); "close" in words, between the two
+            verdict = (c.verdict(tres["passed"]) if tres["passed"] or not tres["close"]
+                       else "is <b>close</b>")
+            near = tres["passed"] or tres["close"]           # "just" only when it is inside the S&P's own range
+            where = ("inside" if tres["passed"] else ("just " if near else "") + ("above" if tres["median"] > hi
+                                                                                   else "below"))
             st.markdown(f"Model median **{tres['median']:.2f}** (range {tres['low']:.2f} to {tres['high']:.2f}) over "
                         f"all {tres['n']} simulated histories that did not run away; "
-                        f"S&P 500 **{spx['tail']:.2f}**. The check {c.verdict(tres['passed'])}.",
+                        f"S&P 500 **{spx['tail']:.2f}**. The check {verdict}: the median is {where} the "
+                        f"proposal's {lo} to {hi}; the S&P 500's own range is {band[0]:.2f} to {band[1]:.2f}.",
                         unsafe_allow_html=True)
-            st.markdown(f"Against the proposal's own guess of 2.6 to 3, the median is "
-                        f"{'inside' if 2.6 <= tres['median'] <= 3 else 'a little above' if tres['median'] > 3 else 'below'} "
-                        f"that range; the S&P 500's {spx['tail']:.2f} is inside it.")
+            st.caption("Not a fully independent test: the model's settings were fitted to the S&P 500, and this "
+                       "tail exponent was one of the fit's 11 targets (herding/calibrate.py, stats.FINGERPRINT: also "
+                       "excess kurtosis, the typical move, how move sizes and directions correlate across days, Hurst "
+                       "H, and kurtosis over 5 and 25 days). Fully independent of the fit: check 1 (Kirman's ants) and "
+                       "check 2 (no trend chasers gives a bell curve). Check 4 (how often crashes come) was not a "
+                       "target, but it follows largely from the fitted tail and kurtosis.")
             if tres["left_out"]:
                 st.caption(f"{tres['left_out']} simulated histories ran away and are left out.")
         with right:
             fig = _dots([s for s, t in zip(seeds, tails) if t is not None], [t for t in tails if t is not None],
-                        c.MIX["herding"][2], (2.5, 3.5),
+                        c.MIX["herding"][2], ex.PROPOSAL_TAIL,
                         ref=spx["tail"], ref_label="S&P 500", ytitle="Tail exponent")
             fig.update_yaxes(range=[2.2, 4.2])
             c.show(fig, key="c2")
@@ -252,7 +273,8 @@ def page():
                         unsafe_allow_html=True)
             st.markdown(f"(b) Black Monday was a {cc['worst_sd']:.0f}-sd fall. Bell curve: once every "
                         f"**{_years(cc['bm_bell'])}**. Model: every **{_years(cc['bm_model'])}** "
-                        f"({cc['bm_count']} such falls in {_years(pooled_years)} of simulated market). "
+                        f"({cc['bm_count']} such falls in {_years(pooled_years)} of simulated market; "
+                        f"{c.wait_range(cc)}). Even the shortest of those waits is far more than {cc['limit']} years: "
                         f"{c.verdict(cc['black_monday'])}.", unsafe_allow_html=True)
             st.caption(f"The proposal's 10{p20} years is for a 20-sd fall ({_years(ex.bell_crash_years(20))} here). "
                        f"Measured against the S&P 500's typical day since 1950, Black Monday was "
@@ -294,8 +316,15 @@ def page():
             "S&P 500": st.column_config.TextColumn("S&P 500", help="The S&P 500 since 1950, measured the same way.")})
         st.markdown("\n".join(f"- **{label[m][0]}:** {c.HELP[m]}" for m in t.index if m in c.HELP))
         hk = t.loc["kurtosis", "median"]
-        st.caption(f"Kurtosis is the weak spot: the S&P 500's {spx['kurtosis']:.0f} is driven mostly by one day "
-                   f"(Black Monday), and the model's median is {hk:.1f}. The project's [report]({RESULTS}) discusses this.")
+        k_wo = ex.kurtosis_without_worst(spx_r)                       # the S&P without Black Monday
+        wo = ex.spread(nums["checks"]["herding"]["kurtosis_wo_worst"])  # each history without its own worst fall
+        where = "inside" if wo["low"] <= k_wo <= wo["high"] else "above" if k_wo > wo["high"] else "below"
+        st.caption(f"Excess kurtosis is the weak spot: the S&P 500's {spx['kurtosis']:.0f} is driven mostly by one "
+                   f"day (Black Monday: each day counts to the 4th power, so one {abs(spx['worst']):.0f}-sd day adds "
+                   f"about {(abs(spx['worst']) ** 4) / len(spx_r):.0f}). Without that day it is {k_wo:.1f}. Compared "
+                   f"like for like, with each simulated history also losing its own worst fall, the model's middle "
+                   f"90% is {wo['low']:.1f} to {wo['high']:.1f} (median {wo['median']:.1f}): the S&P 500 is {where} "
+                   f"it, so the model's days are still a little too tame. The project's [report]({RESULTS}) discusses this.")
 
     with tab_beyond:
         # 6 ------------------------------------------------------------------
@@ -338,7 +367,6 @@ def page():
 
         st.divider()
         page_findings.paper_section()
-        page_findings.party_section()
     with tab_markets:
         page_compare.body()
     with tab_figures:
@@ -354,7 +382,7 @@ def page():
              "Verdict": "✅ Passes" if res["passed"] else "❌ Fails"},
             {"Check": "3. Tail exponent", "The proposal expected": "With trend chasers, about 2.6 to 3 (inverse cubic law)",
              "Result": f"Model {tres['median']:.2f} (median), S&P 500 {spx['tail']:.2f}",
-             "Verdict": "✅ Passes" if tres["passed"] else "❌ Fails"},
+             "Verdict": "✅ Passes" if tres["passed"] else ("🟡 Close" if tres["close"] else "❌ Fails")},
             {"Check": "4. Crashes", "The proposal expected": f"Crashes within a few decades, not 10{p20} years",
              "Result": f"{'An' if cc['size'] in (8, 11, 18) else 'A'} {cc['size']}-sd fall every {_years(cc['row']['model'])}; "
                        f"a fall the size of Black Monday every "

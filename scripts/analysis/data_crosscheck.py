@@ -2,9 +2,9 @@
 
 Independent copies (downloaded into scratch/crosscheck/, git-ignored, if not already there):
     FRED  SP500, DJIA, NASDAQ100 (S&P Dow Jones Indices / Nasdaq, via the St. Louis Fed;
-          SP500 and DJIA cover only the last ~10 years), DGS10, DCOILBRENTEU, DTWEXBGS,
-          DFEDTAR and DFEDTARU (the factor files were made from these, so for them this is
-          a check that nothing was lost or revised, not a second source)
+          SP500 and DJIA cover only the last ~10 years), and DCOILBRENTEU (the saved Brent
+          oil file was made from it, so for oil this is a check that nothing was lost or
+          revised, not a second source)
     Yahoo ^DJI (1992-): a second source for the MeasuringWorth Dow
 Plus two checks inside data/: the 1950- and 1928- S&P files, and the two Dow files, must
 agree where they overlap.
@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "scratch" / "crosscheck"
 END = pd.Timestamp("2026-10-30")
 LIMIT = 0.001          # 0.1%: a difference above this is listed
-FRED = ["SP500", "DJIA", "NASDAQ100", "DGS10", "DCOILBRENTEU", "DTWEXBGS", "DFEDTAR", "DFEDTARU"]
+FRED = ["SP500", "DJIA", "NASDAQ100", "DCOILBRENTEU"]
 SHOW = 12              # at most this many dates are printed per list
 
 
@@ -63,18 +63,12 @@ def saved(name):
     return market_data.load_prices(ROOT / "data" / name)["Close"]
 
 
-def fed_target():
-    """FRED's federal funds target: DFEDTAR to 2008-12-15, then the upper end DFEDTARU."""
-    old, new = fred("DFEDTAR"), fred("DFEDTARU")
-    return pd.concat([old[old.index < new.index[0]], new])
-
-
 def _dates(index):
     shown = ", ".join(d.strftime("%Y-%m-%d") for d in index[:SHOW])
     return shown + (f", ... ({len(index)} in all)" if len(index) > SHOW else "")
 
 
-def compare(label, a, b, a_name="saved", b_name="other", levels_only=False):
+def compare(label, a, b, a_name="saved", b_name="other"):
     """Print how closely two daily series agree; return the dates whose close differs > LIMIT."""
     lo, hi = max(a.index[0], b.index[0]), min(a.index[-1], b.index[-1], END)
     a, b = a[(a.index >= lo) & (a.index <= hi)], b[(b.index >= lo) & (b.index <= hi)]
@@ -92,14 +86,13 @@ def compare(label, a, b, a_name="saved", b_name="other", levels_only=False):
           f"median {rel.median():.2e}, days above 0.1%: {len(bad)}")
     for d in bad.sort_values(ascending=False).index[:SHOW]:
         print(f"     {d:%Y-%m-%d}  {a_name} {a[d]:.4f}  {b_name} {b[d]:.4f}  ({a[d] / b[d] - 1:+.3%})")
-    if not levels_only:
-        ra, rb = np.log(a[both]).diff().dropna(), np.log(b[both]).diff().dropna()
-        dr = (ra - rb).abs()
-        big = dr[dr > LIMIT]
-        print(f"   log returns (on common days): max |difference| {dr.max():.2e} ({dr.idxmax():%Y-%m-%d}), "
-              f"median {dr.median():.2e}, days above 0.001: {len(big)}")
-        for d in big.sort_values(ascending=False).index[:SHOW]:
-            print(f"     {d:%Y-%m-%d}  {a_name} {ra[d]:+.5f}  {b_name} {rb[d]:+.5f}")
+    ra, rb = np.log(a[both]).diff().dropna(), np.log(b[both]).diff().dropna()
+    dr = (ra - rb).abs()
+    big = dr[dr > LIMIT]
+    print(f"   log returns (on common days): max |difference| {dr.max():.2e} ({dr.idxmax():%Y-%m-%d}), "
+          f"median {dr.median():.2e}, days above 0.001: {len(big)}")
+    for d in big.sort_values(ascending=False).index[:SHOW]:
+        print(f"     {d:%Y-%m-%d}  {a_name} {ra[d]:+.5f}  {b_name} {rb[d]:+.5f}")
     return pd.DatetimeIndex(bad.index), both
 
 
@@ -138,14 +131,10 @@ def main(days=None, n=None):
     compare("S&P 500: 1950- file vs 1928- file", spx, spx28, "1950file", "1928file")
     compare("Dow: 1896- file vs 1927-1952 file", dow, dow_short, "1896file", "1927file")
 
-    print("\nOutside-news factors against today's FRED (the source they were made from)")
-    compare("Brent oil vs DCOILBRENTEU", saved("factors/oil_brent.csv"), fred("DCOILBRENTEU"), "saved", "fred")
-    compare("10-year yield vs DGS10", saved("factors/treasury_10y_yield.csv"), fred("DGS10"), "saved", "fred")
-    compare("Broad dollar vs DTWEXBGS", saved("factors/dollar_index.csv"), fred("DTWEXBGS"), "saved", "fred")
-    compare("Fed funds target vs DFEDTAR/DFEDTARU", saved("factors/fed_funds_target.csv"), fed_target(),
-            "saved", "fred", levels_only=True)
+    print("\nBrent oil (the site's Commodities group) against today's FRED (the source it was made from)")
+    compare("Brent oil vs DCOILBRENTEU", saved("commodities/oil_brent.csv"), fred("DCOILBRENTEU"), "saved", "fred")
     print("\nNot checked here: gold and copper (Yahoo futures; FRED has no free daily series), "
-          "the VIX and the 20 stocks.")
+          "and the 5 stocks.")
 
 
 if __name__ == "__main__":
