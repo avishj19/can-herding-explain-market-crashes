@@ -1,0 +1,88 @@
+[title] Can herding explain market crashes?
+[header] What the model is
+[header] How to use it
+[header] How to read the charts
+[header] The controls
+[header] Words used on the site
+[header] Things to keep in mind
+[header] Run it yourself
+[subheader] How the program answers it
+[subheader] Your first five minutes
+[markdown] <p class='lead'>If the news is plain bell-curve noise, can traders copying each other (herding) alone cause the fat tails, crashes and bursts of wild days that real markets show? This site runs a simulated market of 500 traders to find out, and compares it with the S&P 500 (the 500 biggest US companies' stocks). It is a student project for 02-120 Programming for Scientists at CMU (Fall 2026).</p>
+[markdown] **How long to wait for a fall the size of Black Monday** (19 October 1987: 23 sd, measured against the S&P 500's typical day)
+[markdown] <span class='muted'>STEP 1</span>
+[markdown] **Read the argument**  
+Eight short steps, one chart each. About three minutes.
+[markdown] <span class='muted'>STEP 2</span>
+[markdown] **Watch a crash**  
+In the Test program, open **Watch a crash** and press **Biggest crash**.
+[markdown] <span class='muted'>STEP 3</span>
+[markdown] **See what passed**  
+The proposal's checks, with a verdict for each, including the ones that fail.
+[markdown] **Short answer: partly.**
+
+- **Yes:** with plain bell-curve news, herding alone gives the S&P 500's fat tails and bursts of wild days. The model's tail exponent is 3.10 (median of 40 simulated histories), just above the proposal's 2.6 to 3.0; the S&P 500's is 2.92. The settings were fitted to the S&P 500, so this match is partly by design; the bell curve without trend chasers was never a target.
+- **Crashes:** a bell curve puts 20-sd falls 10⁸⁶ years apart, and Black Monday (23 sd) 10¹¹⁴ years apart. In the model, an 8-sd fall comes about every 35 years, and a fall the size of Black Monday about every 1,534 years (very uncertain: from only 2 such falls, the true wait could be anywhere from 425 years to 12,667 years). That is far closer, but still rarer than in the S&P 500.
+- **No skew:** it does not make falls bigger than rises, as the S&P 500 does.
+- **Daily reversal:** its prices reverse a little from one day to the next, which the S&P 500's do not (Hurst H 0.39 against 0.50 in the project's [report](https://github.com/avishj19/can-herding-explain-market-crashes/blob/main/figures/RESULTS.md)).
+- **Weeks:** its fat tails fade over a few weeks somewhat faster than the S&P 500's.
+
+The **Checks** page has the details (see Beyond the paper).
+[markdown] The model is from Lux and Marchesi (*Nature*, 1999). 500 simulated traders each follow one of two strategies:
+
+- **Value traders** (economists call them fundamentalists) buy when the price is below the true value and sell when it is above.
+- **Trend chasers** (economists call them chartists) ignore value and follow the trend. They are either optimists or pessimists, and they tend to copy whatever mood most trend chasers are in. That copying is **herding**.
+
+Each trader switches to whichever kind is making more money. News moves the true value by bell-curve amounts, so if big days show up, the traders made them.
+[markdown] 1. **Story** walks through the argument in eight short steps. Read this first.
+2. **Test program** is where you try it yourself on stocks and other markets.
+    - Everything that is not on the page itself is in **⚙ Settings**, the sidebar on the left (the ☰ button at the top left on a phone).
+    - Pick a market in **⚙ Settings**: choose a group (Indexes, Stocks or Commodities), then click a market. Or type any stock symbol (a market's short code, for example `NVDA` for Nvidia) in the box beside it and press Enter.
+    - Use the range buttons (1D, 7D, YTD, 1Y, 5Y, 20Y, All) to change the time span. 1D is one day and 7D is one week.
+    - 1D and 7D show prices within the day from Yahoo Finance: always for a ticker you type, and for a market from the list once **Live prices** is on. That switch is in **⚙ Settings** too.
+    - **Three things to try** at the top gives you three tasks, with a tick as you do each one.
+    - Switch the chart between four tabs: **Price**, **Watch a crash**, **How rare big days are** (with a Tail / Histogram switch) and **Bursts of wild days** (with a Bursts / Memory switch). Each has a **Try this** line under it. Move the mouse over a chart (or touch it on a phone) to read the exact values under it. Drag to zoom, double-click to zoom back out, and click a legend entry to hide a line.
+    - **Presets** in the model panel on the right fill in the model's controls for you: **Wilder**, **Best fit** (the S&P 500 fit), **Calmer** or **No herding**. Each says what to expect: with too little herding the price runs away, and more herding calms it. **Reset everything** (in ⚙ Settings) takes you back to the start.
+    - Move the herding strength on the right: the model reruns by itself (turn off **Run automatically** to use the **Run model** button instead). Each simulated history is added to the chart under **Every history on one chart**, so you can see how the tail exponent changes as you turn the dial.
+    - **Watch a crash** shows the model's own price, its true value and its traders day by day. **Biggest crash** and **Wildest year** jump straight to them.
+3. **Checks** shows the proposal's checks in its order, with a scoreboard at the top and the rule for each one. Check 4 asks whether crashes come within decades. Its tabs hold more: **Beyond the paper** compares herding with a formula that has no traders, **All markets** puts every saved market on one map next to the model, and **Figures** collects the project's figures, which are averaged over many simulated histories.
+[markdown] **Tail** is the main chart. Across: how big a day's move was, in sd (a standard deviation is the usual size of a day's move). Up: the share of days with a move at least that big. Both axes use a **log scale**: each step along an axis is 10 times the last, so the rarest days still fit on the chart.
+
+- A bell curve drops away: a 5-sd day should come once in thousands of years.
+- The S&P 500 falls along a straight line instead. Its slope is the **tail exponent**, near 3 (lower = more big days). That straight line is the *inverse cubic law*: a move twice as big is about 2³ = 8 times rarer.
+
+**Histogram** shows the same thing as a shape: a market with fat tails has a taller middle and longer tails than the bell curve.
+
+**Bursts** shows each day's move over time. In real markets wild days come in bursts.
+
+**Memory** measures those bursts: how much a big move today predicts big moves 1 to 200 days later.
+[markdown] - **Herding strength (a1):** how strongly trend chasers copy the crowd's mood. 0 means not at all.
+- **Reaction to price trends (a2):** how strongly trend chasers react to recent price moves.
+- **How often trend chasers change mood (v1):** how often trend chasers reconsider whether they are optimistic.
+- **Simulated trading days and seed:** how long a simulated history lasts, and the number that picks one simulated history. The same settings and seed always give exactly the same history.
+
+Every other setting stays at the values fitted to the S&P 500 ([`settings/sp500_calibrated.json`](https://github.com/avishj19/can-herding-explain-market-crashes/blob/main/settings/sp500_calibrated.json)).
+[markdown] - **Index:** one number that follows many companies' prices at once, like the S&P 500 (500 large US companies).
+- **Ticker:** a market's short code on the stock exchange, like `AAPL` for Apple.
+- **Standard deviation (sd):** the usual size of a day's move. A 4-sd day moves four times as much as usual.
+- **Big day:** a day that moves more than 4 sd, up or down.
+- **Fat tails:** big days come far more often than a bell curve predicts.
+- **Tail exponent:** A score for how common big days are (lower = more big days). The S&P 500 is near 3: a move twice as big is about 2³ = 8 times rarer. A bell curve, measured the same way, comes out near 6.
+- **Excess kurtosis:** 0 for a bell curve; bigger means more very calm and very wild days (fat tails).
+- **Bursts of wild days:** wild days come in bunches, not alone (economists call this volatility clustering). A **wild day** is a day that moves much more than usual.
+- **Memory of wild days:** Correlation of move sizes a month (20 trading days) apart. 0 means no memory; above 0 means bursts of wild days.
+- **Hurst H:** another memory score, used on the Checks page. 0.5 means no memory; above 0.5 means what happened keeps happening; below 0.5 means it tends to reverse.
+- **Median:** the middle value: half the simulated histories are above it and half below.
+- **Seed / held-out:** the model is random, and a number called a seed picks one simulated history. The same seed always gives the same history. Held-out seeds were never used to fit the settings, so they test the model fairly.
+- **Log scale:** an axis where each step is 10 times the last (1, 10, 100, ...), so the rarest days still fit.
+- **Drawdown:** how far the price has fallen from its last high.
+- **Annualized volatility:** how much the price typically moves in a year.
+- **Runaway:** the simulated price leaves its true value and never comes back, a bubble or fall that does not end. We say when it happens instead of hiding it.
+[markdown] - **One simulated history is one random draw.** The Test program shows one simulated history, so its numbers move around when you change the seed. The Checks page and the figures use 40 simulated histories and report the median, which is why their numbers are steadier.
+- **Everything starts from the S&P 500 fit.** Other markets are compared on shape only (tail exponent, kurtosis, memory), which does not depend on how volatile a market is.
+- **This is not investment advice.** The model explains the shape of returns, not where a price goes next.
+- **Data:** saved prices end on 30 October 2026 (Yahoo Finance, FRED, MeasuringWorth). Live and intraday prices come from Yahoo Finance and are sometimes unavailable.
+[markdown] The code is public on GitHub: [github.com/avishj19/can-herding-explain-market-crashes](https://github.com/avishj19/can-herding-explain-market-crashes).
+[markdown] Tests: `python3 -m pytest tests/ -q`. Every number on the site comes from [`herding/explore.py`](https://github.com/avishj19/can-herding-explain-market-crashes/blob/main/herding/explore.py), which is tested in [`tests/test_explore.py`](https://github.com/avishj19/can-herding-explain-market-crashes/blob/main/tests/test_explore.py).
+[caption] The model's 500 traders, day by day, around its biggest one-day fall. Each dot is one trader. Trend chasers copy each other's mood, so pessimism spreads: on the day of the fall, optimists go from 25 to 9 and pessimists from 79 to 105. Value traders, who buy below the true value, pull the price back up.
+[caption] An example with made-up numbers: the two curves agree for small moves and split apart for big ones.

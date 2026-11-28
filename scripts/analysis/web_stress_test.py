@@ -195,7 +195,7 @@ def part_c(offline):
         return
     say("| Live symbol | saved file | days compared | max relative difference | fetch s |")
     say("|---|---|---|---|---|")
-    for sym, name in (("^GSPC", "S&P 500"), ("GC=F", "Gold"), ("AAPL", "AAPL")):
+    for sym, name in (("^GSPC", "S&P 500"), ("GC=F", "Gold"), ("MSFT", "MSFT")):
         t0 = time.perf_counter()
         try:
             live = ex.live_prices(sym)
@@ -337,15 +337,18 @@ def part_e(at):
     row("Checks", "kurtosis median", m and float(m.group(1)), float(np.median(fund_k)), 0.0005)
     m = re.search(r"Model median \*\*([\d.]+)\*\*", t)
     row("Checks", "tail median", m and float(m.group(1)), float(np.median(herd_tails)), 0.005)
-    # the scoreboard: the proposal's checks 1-3 pass; check 4 is what crash_check says ("partly": crashes
-    # within decades, but a Black-Monday-sized fall still rarer than in the S&P 500, as the page explains)
+    # the scoreboard: checks 1-2 pass; check 3 is what tail_check says against the proposal's 2.6-3.0 (with the
+    # S&P 500's own range for "close"); check 4 is what crash_check says ("partly": crashes within decades, but
+    # a Black-Monday-sized fall still rarer than in the S&P 500, as the page explains)
     board = list(at.table[0].value["Verdict"])
-    cc = ex.crash_check(nums, ex.log_returns(ex.saved_prices("S&P 500")).values)
-    want4 = "✅ Passes" if cc["passed"] else ("🟡 Partly" if cc["decades"] else "❌ Fails")
-    check(board[:3] == ["✅ Passes"] * 3 and board[3] == want4,
-          f"Checks: scoreboard verdicts {board[:4]}, expected 3 passes then {want4}")
-    say(f"| Checks | scoreboard verdicts {board[:4]} | 3 passes, then {want4} | "
-        f"{'yes' if board[:3] == ['✅ Passes'] * 3 and board[3] == want4 else 'NO'} |")
+    spx_r = ex.log_returns(ex.saved_prices("S&P 500")).values
+    cc = ex.crash_check(nums, spx_r)
+    tr = ex.tail_check(nums["checks"]["herding"]["tail"], close=ex.tail_interval(spx_r))
+    want = ["✅ Passes", "✅ Passes",
+            "✅ Passes" if tr["passed"] else ("🟡 Close" if tr["close"] else "❌ Fails"),
+            "✅ Passes" if cc["passed"] else ("🟡 Partly" if cc["decades"] else "❌ Fails")]
+    check(board[:4] == want, f"Checks: scoreboard verdicts {board[:4]}, expected {want}")
+    say(f"| Checks | scoreboard verdicts {board[:4]} | {want} | {'yes' if board[:4] == want else 'NO'} |")
 
     at.switch_page("web/page_explore.py").run()
     df = next(d.value for d in at.dataframe if "Tail exponent" in getattr(d.value, "index", []))   # model vs market

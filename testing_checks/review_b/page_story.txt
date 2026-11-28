@@ -1,0 +1,13 @@
+[title] The argument in 8 steps
+[header] Real markets have days a bell curve says should never happen
+[markdown] <p class='lead'>If the news is plain bell-curve noise, can traders copying each other (herding) alone cause the fat tails, crashes and bursts of wild days that real markets show? Each step adds one thing and shows what changes. About 3 minutes.</p>
+[markdown] <div class='story-eyebrow'>STEP 1 OF 8</div>
+[markdown] A **standard deviation** (sd) is the usual size of a day's move. A 4-sd day moves four times as much as usual. A **big day** is a day that moves more than 4 sd.
+[markdown] If daily moves followed a **bell curve**, big days would almost never come. Since 1950 the S&P 500 (the 500 biggest US companies' stocks) has had **108 big days**. A bell curve expects about **1.2** in the same 19,329 days.
+[markdown] Black Monday (19 October 1987) fell **23 sd**. On a bell curve a 20-sd fall comes once in about **10⁸⁶ years** (a 1 followed by 86 zeros), far longer than the age of the universe. Yet the S&P 500 had one within 77 years.
+[markdown] The chart's bell curve drops away. The S&P 500 falls along a straight line instead. Its slope is the **tail exponent** (lower = more big days). The S&P 500 is near 3.
+[markdown] <div class='story-num'><span class='n'>108 days</span><span class='w'>beyond 4 sd since 1950. A bell curve expects 1.2.</span></div>
+[markdown] <div class='key'><span><i class='sw' style='border-color:#F2F4F8;border-top-width:3.5px'></i>real market</span><span><i class='sw' style='border-color:#737A87;border-top-style:dotted'></i>bell curve</span></div>
+[markdown] <div class='story-note'>Right of 4 sd, the bell curve drops away. The white S&P 500 line keeps going.</div>
+[markdown] <p class='hint'>Across: size of the day's move in sd. Up: share of days at least that big. Each step down is 10 times rarer. Higher means more common.</p>
+[caption] Use Back and Next, or click a step on the left.

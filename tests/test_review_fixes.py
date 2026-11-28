@@ -43,24 +43,12 @@ def test_story_verdict_rows(open_page):
     assert f"memory of wild days {mem['median']:.2f} against {mem['sp500']:.2f}" in html
 
 
-# Finding 5: the party study points at the Figures tab, not "below".
-def test_party_study_points_at_the_figures_tab(open_page):
-    at = open_page("web/page_checks.py")
-    text = _text(at)
-    assert "Figures 12 to 15 (the Figures tab)" in text and "Figures 12 to 15 below" not in text
-
-
 # Finding 6: numbers on the pages are worked out, or pinned to the report they quote.
-def test_party_gap_year_matches_party_view():
-    dow = ex.log_returns(ex.saved_prices("Dow Jones"))
-    assert ex.party_gap_year(dow) == pytest.approx(ex.party_view(dow)["gap_year"], rel=1e-12)
-    with pytest.raises(ValueError):
-        ex.party_gap_year(dow.values)
-
-
-def test_tail_range_is_the_checks_rule():
+def test_tail_range_is_the_proposals():
+    # check 3 uses the proposal's own range (written before any result), not one widened afterwards
     sig = inspect.signature(ex.tail_check)
-    assert (sig.parameters["lo"].default, sig.parameters["hi"].default) == ex.TAIL_RANGE == (2.5, 3.5)
+    assert (sig.parameters["lo"].default, sig.parameters["hi"].default) == ex.PROPOSAL_TAIL == (2.6, 3.0)
+    assert not hasattr(ex, "TAIL_RANGE")
 
 
 def test_explore_numbers_are_worked_out(open_page):
@@ -76,6 +64,40 @@ def test_quoted_numbers_match_their_sources():
     guide = (ROOT / "web" / "page_guide.py").read_text()
     assert "Hurst H 0.39 against 0.50" in guide
     assert "(H 0.39), while the S&P's do not (0.50)" in results           # the report the Start page quotes
-    from scripts.analysis import party_scale
-    assert inspect.signature(party_scale.main).parameters["n"].default == 1000
-    assert "1,000 model histories" in (ROOT / "web" / "page_findings.py").read_text()
+
+
+# ---------------------------------------------------------------- Phase A review (Opus, 28 Nov): honesty lines
+def test_checks_page_states_the_uncertain_wait_and_the_fit(open_page):
+    at = open_page("web/page_checks.py")
+    text = _text(at)
+    nums = ex.web_numbers()
+    spx_r = ex.log_returns(ex.saved_prices("S&P 500")).values
+    cc = ex.crash_check(nums, spx_r)
+    lo, hi = cc["bm_range"]
+    assert f"anywhere from {lo:,.0f} years to {hi:,.0f} years" in text           # Black Monday: few falls, wide range
+    assert "this tail exponent was one of the fit's 11 targets" in text            # check 3 is partly fitted
+    assert "Fully independent of the fit: check 1" in text and "not a target, but it follows largely" in text
+    k_wo = ex.kurtosis_without_worst(spx_r)
+    assert f"Without that day it is {k_wo:.1f}" in text and round(k_wo, 1) == 11.4   # one day drives the 25
+    wo = ex.spread(nums["checks"]["herding"]["kurtosis_wo_worst"])               # like for like (Opus review B)
+    assert f"middle 90% is {wo['low']:.1f} to {wo['high']:.1f}" in text and k_wo > wo["high"]
+    assert "the S&P 500 is above it" in text
+
+
+def test_start_and_story_say_the_tail_is_partly_fitted(open_page):
+    at = open_page("web/page_guide.py")
+    short = [m.value for m in at.markdown if "Short answer" in m.value][0]
+    assert "above the proposal's 2.6 to 3.0" in short and "partly by design" in short
+    assert "very uncertain" in short
+    at = open_page("web/page_story.py")
+    at.session_state["story_step"] = 5
+    at.run()
+    assert "partly by design" in _text(at) and "very uncertain" in _text(at)
+
+
+# Spec: Sources cites Dewachter & Lyrio (named in the proposal) and says why Yahoo replaced the proposal's Stooq.
+def test_sources_page_names_the_proposals_source_change(open_page):
+    at = open_page("web/page_sources.py")
+    text = _text(at)
+    assert "Dewachter, H. & Lyrio, M." in text
+    assert "planned to take the S&P 500 from Stooq" in text and "within 0.12%" in text

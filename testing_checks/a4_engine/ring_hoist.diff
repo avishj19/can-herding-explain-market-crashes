@@ -1,0 +1,22 @@
+204a205
+>     pi = 0                                     # t % window, kept by counting
+212,213c213,214
+<             trend = (np.exp(lp - past[t % window]) - 1.0) / TREND_WINDOW
+<             past[t % window] = lp
+---
+>             trend = (np.exp(lp - past[pi]) - 1.0) / TREND_WINDOW
+>             past[pi] = lp
+214a216,218
+>             pi += 1
+>             if pi == window:
+>                 pi = 0
+224a229
+>                 fr = v2 * n_f / N
+227c232
+<                                         v2 * n_f / N * np.exp(-U21), dt)
+---
+>                                         fr * np.exp(-U21), dt)
+229c234
+<                                         v2 * n_f / N * np.exp(-U22), dt)
+---
+>                                         fr * np.exp(-U22), dt)

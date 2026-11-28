@@ -58,7 +58,10 @@ def main():
         "checks": {
             "fundamentalists": {k: col("fundamentalists", k) for k in ("kurtosis", "tail", "memory")},
             "herding": {k: col("herding", k) for k in ("tail", "kurtosis", "memory", "worst")} |
-                       {"runaway_day": gone("herding")},
+                       {"runaway_day": gone("herding"),
+                        # like for like with the S&P 500 without Black Monday (Checks, check 5)
+                        "kurtosis_wo_worst": [ex.kurtosis_without_worst(out["herding", s][0])
+                                              if out["herding", s][0] is not None else None for s in seeds]},
             "chartists": {"runaway_day": gone("chartists")},
         },
         # the crash check: per held-out herding history, its falls of each size and every fall >= 8 sd

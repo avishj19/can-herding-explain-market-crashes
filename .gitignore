@@ -20,3 +20,7 @@ docs/course_project_guide.pdf
 # the redesign mock-up: copies made by docs/redesign/make_more.py (Plotly's library, the figures)
 docs/redesign/plotly.min.js
 docs/redesign/figs/
+
+# testing_checks/: regenerable result caches (run.py remakes them)
+testing_checks/**/*.pkl
+testing_checks/**/__pycache__/

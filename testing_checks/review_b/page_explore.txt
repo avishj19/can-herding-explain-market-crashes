@@ -1,0 +1,32 @@
+[subheader] The model
+[markdown] <p class='lab-eyebrow'>TRY IT YOURSELF</p><p class='lab-title'>Test program</p>
+[markdown] ⬜ **Watch a crash.** Open the **Watch a crash** chart and press **Biggest crash**.
+[markdown] ⬜ **Find the edge.** Slide **Herding strength** down to 0.8 or less. Does the market get wilder, or run away? (Copying less makes it less stable, not calmer.)
+[markdown] ⬜ **Challenge.** In **⚙ Settings**, change the **seed** to draw a new simulated history. Then move **Herding strength** until the model's tail exponent is within 0.1 of the S&P 500's 2.92. Is the fitted value still the answer?
+[markdown] <p class='phone-only'><a class='jump' href='#model'>Jump to the model controls ↓</a></p>
+[markdown] <div class='quote'><h1 style='margin:0'>S&P 500</h1><span class='price'>7,580.07</span><span class='chg'><span class='num' style='color:#FF7A6B'>▼ 1.82%</span> <span class='muted'>on the day</span></span><span class='src'>Index · saved data · last close 30 Oct 2026 · Live prices: in ⚙ Settings</span></div>
+[markdown] <div class='stats'><div><div class='l'>Change</div><div class='v' style='color:#34D399'>▲ 45,399%</div></div><div><div class='l'>High</div><div class='v'>7,818.93</div></div><div><div class='l'>Low</div><div class='v'>16.66</div></div><div><div class='l'>52-week high</div><div class='v'>7,818.93</div></div><div><div class='l'>52-week low</div><div class='v'>6,343.72</div></div><div title='Annualized volatility: the standard deviation (sd) of daily returns in the range, times √252 (√365 for a market open every day, like crypto).'><div class='l'>Volatility (per year)</div><div class='v'>15.8%</div></div><div title='The largest fall from a high point to a later low within the range.'><div class='l'>Max drawdown</div><div class='v'>56.8%</div></div></div><details class='muted stats-help'><summary>What these numbers mean</summary><p><b>Volatility (per year)</b>: Annualized volatility: the standard deviation (sd) of daily returns in the range, times √252 (√365 for a market open every day, like crypto).</p><p><b>Max drawdown</b>: The largest fall from a high point to a later low within the range.</p></details>
+[markdown] <p class='try'>Click <b>All</b> and count the triangles. Each one is a day that moved more than 4 sd, which a bell curve says should almost never happen.</p>
+[markdown] <p class='hint'>The price over the range you picked. Triangles mark big days: days that moved more than 4 standard deviations (sd; the usual size of a day's move). A bell curve says these should almost never happen. The lower panel shows how far the price has fallen from its last high.</p>
+[markdown] <div class='preset-notes'><div><b>Wilder</b> herding strength 0.60: runs away in 9 of 10; wild when it does not</div><div><b>Best fit</b> herding strength 1.08: tail exponent about 3.1 (like the S&P 500)</div><div><b>Calmer</b> herding strength 1.60: tail exponent about 4.7 (calmer: thin tails)</div><div><b>No herding</b> herding strength 0.00: runs away in all 10 saved histories</div></div>
+[markdown] <div class='a1-scale'><span>runs away</span><span>wilder</span><span>calmer</span></div>
+[markdown] **How close is the model to S&P 500?**
+[markdown] <div title='tail exponent (lower = more big days; the S&P 500 is about 3)' style='display:flex;gap:.5rem;align-items:baseline;padding:.15rem 0'><b style='color:#34D399;width:1rem'>✓</b><span style='flex:1'>Fat tails <span class='muted'>(matches)</span></span><span class='muted'>2.88 vs 2.92</span></div><div title='days beyond 4 sd per 1,000 days (a bell curve: 0.06)' style='display:flex;gap:.5rem;align-items:baseline;padding:.15rem 0'><b style='color:#34D399;width:1rem'>✓</b><span style='flex:1'>Big days (per 1,000 days) <span class='muted'>(matches)</span></span><span class='muted'>5.3 vs 5.6</span></div><div title='memory of wild days a month apart (0 = no bursts)' style='display:flex;gap:.5rem;align-items:baseline;padding:.15rem 0'><b style='color:#34D399;width:1rem'>✓</b><span style='flex:1'>Bursts of wild days <span class='muted'>(matches)</span></span><span class='muted'>0.18 vs 0.20</span></div>
+[markdown] **Tail exponent vs herding strength**
+[markdown] <div class='set-title'>⚙ Settings</div>
+[markdown] ### Market
+[markdown] <p class='muted' style='margin:-.3rem 0 .4rem'>A whole market in one number: the S&P 500 is 500 large US companies (an index fund buys all of them).</p>
+[markdown] ### Chart
+[markdown] ### More model settings
+[markdown] ### More
+[markdown] <p class='muted' style='margin:0 0 .2rem'>Copy a link to this exact view (the copy button is at the right of the box):</p>
+[caption] A simulation for learning, not a forecast or investment advice. The Start here page explains every word.
+[caption] S&P 500 had 108 days bigger than 4 sd; a bell curve expects about 1.2, so about 88 times more. Its tails and bursts of wild days are closest to the herding mix.
+[caption] The model reruns as you drag. The charts switch to the new simulated history.
+[caption] Model and market; hover a row for what the number is. ✓ is as close as luck allows.
+[caption] Reaction to price trends, mood changes, length, seed, other markets and the share link are in ⚙ Settings (the sidebar; the » button at the top left when it is closed).
+[caption] Model columns: one simulated history (herding strength 1.08, seed 1000, 19,329 days). The bell-curve column is as long as the market (19,329 days). For as many days as the simulated history, a bell curve expects 1.2 days beyond 4 sd.
+[caption] 108 big days (beyond 4 sd). A bell curve expects 1.2 in 19,329 days.
+[caption] Move the herding slider (or pick a preset): each simulated history you run is added here.
+[caption] Pink line and dots: the tail exponent at each herding strength, the middle value of 10 saved simulated histories (strengths where most of them ran away are left out; the shaded band holds the middle half). Solid dot: the history shown now; hollow circles: your earlier histories. The flat line marked "this market" is S&P 500's own tail exponent (2.92). Here stronger herding gives a higher exponent, so thinner tails. In the project's tests (Fig 10) the trend chasers locked into one mood and fewer traders stayed trend chasers, and either could calm the big days.
+[caption] Every option of the Test program that is not on the page itself.
