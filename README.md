@@ -77,7 +77,7 @@ streamlit run app.py                 # then open http://localhost:8501
 |---|---|
 | Start here | What the project is, how to use the site, how to read each chart |
 | Story | The argument in five steps, one chart each |
-| Workspace | Any market (saved, or any ticker live from Yahoo) next to the model; ranges 1D to All; run the model and see each run on the herding chart |
+| Test program | Any market (saved, or any ticker live from Yahoo) next to the model; ranges 1D to All; run the model and see each run on the herding chart |
 | Compare | All 26 saved markets on one map, next to the model |
 | Checks | The proposal's checks, each with its rule and result |
 | Findings | Every figure from `figures/`, with captions |

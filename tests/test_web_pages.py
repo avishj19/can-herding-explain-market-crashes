@@ -117,7 +117,7 @@ def test_workspace_7d_volatility_counts_every_day_shown(app):
     assert not at.exception, [e.value for e in at.exception]
     closes = daily["2026-11-12":"2026-11-18"].values        # 12th-18th: five closes, four moves
     want = np.diff(np.log(closes)).std(ddof=1) * np.sqrt(252)
-    assert _stat(at, "Volatility (yr)") == f"{want:.1%}"
+    assert _stat(at, "Volatility (per year)") == f"{want:.1%}"
 
 
 def test_workspace_ytd_on_the_first_trading_day_of_the_year(app):
@@ -165,8 +165,28 @@ def _run_model(at, **controls):
             at.number_input(key=k).set_value(v)
         else:
             at.slider(key=k).set_value(v)
-    [b for b in at.button if b.label == "Run model"][0].click().run()
+    _press_run(at)
     assert not at.exception, [e.value for e in at.exception]
+
+
+def _press_run(at):
+    """Run what the controls say: press Run model when it is on screen (Run automatically off);
+    with Run automatically on (the default) there is no button, and the next run runs the model."""
+    buttons = [b for b in at.button if b.label == "Run model"]
+    if buttons:
+        buttons[0].click().run()
+    else:
+        assert at.session_state["auto_run"] is True
+        at.run()
+
+
+def _preset(at, name):
+    """Click a preset button (Wilder, Best fit, Calmer, No herding) in the model panel."""
+    [b for b in at.get("button_group") if b.proto.id.endswith("-preset")][0].set_value(name).run()
+
+
+def _preset_value(at):
+    return [b for b in at.get("button_group") if b.proto.id.endswith("-preset")][0].value
 
 
 def _model_table(at):
@@ -222,8 +242,8 @@ def test_workspace_runaway_during_warmup_is_not_a_negative_day(app):
     assert _simulated_runaway_day(0.0, 1.0, 5.0, 5000, 1) < 0       # independent: really in the warm-up
     at = app()
     _run_model(at, in_a1=0.0, in_a2=1.0, in_v1=5.0, in_days=5000, in_seed=1)
-    days = _model_table(at).loc["Days", "Chartists, no herding"]
-    assert days == "ran away during the warm-up, before day 1"
+    days = _model_table(at).loc["Days", "Trend chasers, no herding"]
+    assert days == "ran away (warm-up)"
 
 
 def test_workspace_1d_uses_saved_closes_when_live_is_off(app):
@@ -252,7 +272,7 @@ def test_workspace_intraday_note_never_credits_yahoo_for_saved_prices(app):
     assert not at.exception, [e.value for e in at.exception]
     assert "saved data" in at.markdown[1].value or any("saved data" in m.value for m in at.markdown)
     assert "Yahoo's daily prices" not in _captions(at)
-    assert "need Live prices on" in _captions(at)
+    assert "Yahoo Finance is not answering, so this shows the saved daily closes." in _captions(at)
 
 
 def test_workspace_1y_high_and_low_match_the_52_week_numbers(app):
@@ -275,29 +295,28 @@ def test_workspace_1d_change_is_labelled_since_open(app):
         _stat(at, "Change")
 
 
-@pytest.mark.parametrize("mode", ["light", "dark"])
-def test_workspace_dial_caption_names_no_color_the_dot_is_not(open_page, mode):
-    # WS-8: "White dot" while the dot is near-black in light mode
-    at = open_page("web/page_explore.py", mode=mode)
+def test_workspace_dial_caption_names_no_color_the_dot_is_not(open_page):
+    # WS-8: "White dot" while the dot was near-black in light mode (light mode is gone; ?mode=light changes nothing)
+    at = open_page("web/page_explore.py", mode="light")
     dot = _trace(_fig(at, "dial"), "Shown now")["marker"]["color"]
-    assert dot == {"light": "#111827", "dark": "#F2F4F8"}[mode]
+    assert dot == "#F2F4F8"
     text = _captions(at)
-    assert "Solid dot: the run shown now" in text and "White dot" not in text
+    assert "Solid dot: the history shown now" in text and "White dot" not in text
 
 
 def test_workspace_herding_runaway_is_explained_in_every_view(app):
     # WS-9: "Weak herding" (a1 0.6, seed 1000) runs away; Bursts showed an empty panel, Tail a missing line
     day = _simulated_runaway_day(0.6, FIT["settings"]["a2"], FIT["settings"]["v1"], 19329, 1000)
     at = app()
-    at.radio(key="preset").set_value("Weak herding").run()
-    [b for b in at.button if b.label == "Run model"][0].click().run()
+    _preset(at, "Wilder")                                   # a1 0.6 (was "Weak herding")
+    _press_run(at)
     at.session_state["view"] = "Bursts"
     at.run()
     notes = [a["text"] for a in _fig(at, "bursts_chart")["layout"].get("annotations", [])]
     assert any(f"ran away on day {day:,}" in n for n in notes), notes
     at.session_state["view"] = "Tail"
     at.run()
-    assert f"\"Chartists who herd\" ran away on day {day:,}, so it has no line." in _captions(at)
+    assert f"\"Trend chasers who herd\" ran away on day {day:,}, so it has no line." in _captions(at)
 
 
 def test_workspace_ticker_error_clears_when_another_market_is_picked(app):
@@ -325,25 +344,25 @@ def test_workspace_yahoo_symbols_of_saved_markets_open_the_saved_market(app, typ
 def test_workspace_run_log_has_number_columns(app):
     # WS-12: "ran away" text in a tail column made Arrow fail and turned the numbers into text
     at = app()
-    at.radio(key="preset").set_value("Strong herding").run()
-    [b for b in at.button if b.label == "Run model"][0].click().run()
+    _preset(at, "Calmer")                                   # a1 1.6 (was "Strong herding")
+    _press_run(at)
     _run_model(at, in_a1=0.0, in_a2=0.0, in_v1=0.5, in_days=5000, in_seed=0)
     log = [d.value for d in at.dataframe if "Ran away" in d.value.columns][0]
-    for m in ("Fundamentalists only", "Chartists, no herding", "Chartists who herd"):
+    for m in ("Value traders only", "Trend chasers, no herding", "Trend chasers who herd"):
         assert log[m].dtype == float
-    assert np.isnan(log.loc[1, "Chartists, no herding"])            # Strong herding: chartists ran away
-    assert "Chartists, no herding" in log.loc[1, "Ran away"]
+    assert np.isnan(log.loc[1, "Trend chasers, no herding"])            # Strong herding: chartists ran away
+    assert "Trend chasers, no herding" in log.loc[1, "Ran away"]
 
 
 def test_workspace_a1_zero_shows_one_chartist_column(app):
-    # WS-13: at a1 = 0 "Chartists who herd" is the same history as "Chartists, no herding"
+    # WS-13: at a1 = 0 "Trend chasers who herd" is the same history as "Trend chasers, no herding"
     at = app()
     _run_model(at, in_a1=0.0, in_a2=0.0, in_v1=0.5, in_days=5000, in_seed=0)
-    assert "Chartists who herd" not in _model_table(at).columns
+    assert "Trend chasers who herd" not in _model_table(at).columns
     at.session_state["view"] = "Tail"
     at.run()
     names = [t.get("name") for t in _fig(at, "model_chart_Tail")["data"]]
-    assert "Chartists, no herding" in names and "Chartists who herd" not in names
+    assert "Trend chasers, no herding" in names and "Trend chasers who herd" not in names
 
 
 def test_workspace_earlier_runs_toggle_and_labels(app):
@@ -372,10 +391,10 @@ def test_workspace_same_run_twice_is_logged_once(app):
 def test_workspace_preset_follows_the_sliders_and_can_restore_the_fit(app):
     # WS-17: after moving a1 the radio still said "S&P 500 fit" and clicking it did nothing
     at = app()
-    assert at.radio(key="preset").value == "S&P 500 fit"
+    assert _preset_value(at) == "Best fit"
     _run_model(at, in_a1=1.5)
-    assert at.radio(key="preset").value is None
-    at.radio(key="preset").set_value("S&P 500 fit").run()
+    assert _preset_value(at) is None
+    _preset(at, "Best fit")
     assert at.slider(key="in_a1").value == pytest.approx(FIT["settings"]["a1"])
 
 
@@ -384,8 +403,8 @@ def test_workspace_bell_column_says_its_length(app):
     from scipy.stats import norm
     at = app()
     _run_model(at, in_days=5000)
-    assert "Bell curve (market length)" in _model_table(at).columns
-    assert f"as long as the model run it expects {5000 * 2 * norm.sf(4):.1f} days beyond 4 sd" in _captions(at)
+    assert "Bell curve" in _model_table(at).columns
+    assert f"a bell curve expects {5000 * 2 * norm.sf(4):.1f} days beyond 4 sd" in _captions(at)
 
 
 def test_workspace_bursts_thresholds_are_neutral(app):
@@ -394,17 +413,16 @@ def test_workspace_bursts_thresholds_are_neutral(app):
     at.session_state["view"] = "Bursts"
     at.run()
     colors = {s["line"]["color"] for s in _fig(at, "bursts_chart")["layout"]["shapes"]}
-    assert colors == {"#5C5E6B"}                          # dark GUIDE, not DOWN #FF7A6B
+    assert colors == {"#8A8D99"}                          # dark GUIDE (audit color), not DOWN #FF7A6B
 
 
 # ---------------------------------------------------------------------------------- shared parts
-def test_mode_button_knows_every_page(open_page):
-    # PG-1: the light/dark choice was saved only for pages the browser had opened before
+def test_no_light_dark_button(open_page):
+    # the redesign removed light mode: no button and no saved theme choice; the jump links stay
     at = open_page("web/page_guide.py")
-    script = [h.proto.body for h in at.get("html") if "stActiveTheme" in h.proto.body][0]
-    paths = json.loads(re.search(r"const PAGE_PATHS = (\[.*?\]);", script).group(1))
-    want = {"/"} | {f"/{p.stem}" for p in (ROOT / "web").glob("page_*.py") if p.stem != "page_guide"}
-    assert set(paths) == want
+    bodies = [h.proto.body for h in at.get("html")]
+    assert not any("stActiveTheme" in b or "mode-toggle" in b for b in bodies)
+    assert any("__jumpLinks" in b for b in bodies)
 
 
 def test_dial_hides_points_where_most_histories_ran_away(open_page):
@@ -440,36 +458,46 @@ def test_css_only_styles_parts_that_exist():
 
 
 # ---------------------------------------------------------------------------------- Story
+
+def story_step(open_page, n):
+    """The Story page at step n (1 to 8), reached by clicking Next like a visitor."""
+    at = open_page("web/page_story.py")
+    for _ in range(n - 1):
+        at.button(key="story_next").click().run()
+        assert not at.exception, [e.value for e in at.exception]
+    return at
+
+
 def test_story_runaway_chart_counts_days_like_the_text(open_page):
     # PG-2: the chart's days included the 1,000 warm-up days, so the runaway was drawn 1,000 days late
     day = _simulated_runaway_day(0.0, FIT["settings"]["a2"], FIT["settings"]["v1"], 19329, 1000)
-    at = open_page("web/page_story.py")
-    x = _values(_trace(_fig(at, "s3"), "Share of chartists")["x"])
+    at = story_step(open_page, 5)
+    x = _values(_trace(_fig(at, "s3"), "Share of trend chasers")["x"])
     assert x[0] == 0 and x[-1] == day
     assert any(f"for about {day - 3:,} days" in m.value for m in at.markdown)
 
 
 def test_story_colors_and_wording(open_page):
     # PG-5: red (loss) marked an upward bubble and the +-4 sd lines; PG-10: "three index funds ... it never saw"
-    at = open_page("web/page_story.py")
+    at = story_step(open_page, 5)
     ann = _fig(at, "s3")["layout"]["annotations"]
     off = [a for a in ann if a.get("text") == "off the chart"][0]
     assert off["arrowcolor"] != "#FF7A6B" and off["font"]["color"] != "#FF7A6B"
-    assert {s["line"]["color"] for s in _fig(at, "s4b")["layout"]["shapes"]} == {"#5C5E6B"}
-    text = " ".join(m.value for m in at.markdown)
+    at = story_step(open_page, 6)
+    assert {s["line"]["color"] for s in _fig(at, "s4b")["layout"]["shapes"]} == {"#8A8D99"}   # dark GUIDE (audit color)
+    text = " ".join(m.value for m in story_step(open_page, 8).markdown)
     assert "index funds" not in text and "two other indexes (Nasdaq-100, Dow Jones)" in text
 
 
 def test_story_numbers_match_the_saved_histories(open_page):
     # PG-8/DUP-17: Story's medians now come from explore.spread; checked with plain numpy here
-    at = open_page("web/page_story.py")
-    text = " ".join(m.value for m in at.markdown)
+    text = " ".join(m.value for n in (4, 5, 6) for m in story_step(open_page, n).markdown)
     k = NUMBERS["checks"]["fundamentalists"]["kurtosis"]
     tails = [t for t in NUMBERS["checks"]["herding"]["tail"] if t is not None]
     gone = sum(d is not None for d in NUMBERS["checks"]["chartists"]["runaway_day"])
-    assert f"**{np.median(k):.2f}** (median) over {len(k)} histories" in text
-    assert f"**{np.median(tails):.2f}** (median) over {len(tails)} histories" in text
-    assert f"In **{gone} of 40** histories" in text
+    assert f"**{np.median(k):.2f}** (median) over {len(k)} simulated histories" in text
+    assert f"**{np.median(tails):.2f}** (median) over {len(tails)} simulated histories" in text
+    assert f"In **{gone} of 40** simulated histories" in text
 
 
 # ---------------------------------------------------------------------------------- Checks
@@ -515,8 +543,8 @@ def test_checks_kirman_words_match_the_exact_shape(open_page, eps, words):
 
 # ---------------------------------------------------------------------------------- Compare
 def test_compare_stars_match_the_saved_histories(open_page):
-    at = open_page("web/page_compare.py")
-    star = _trace(_fig(at, "map"), "Model: chartists who herd")
+    at = open_page("web/page_checks.py")
+    star = _trace(_fig(at, "map"), "Model: trend chasers who herd")
     tails = [t for t in NUMBERS["checks"]["herding"]["tail"] if t is not None]
     assert _values(star["x"])[0] == pytest.approx(np.median(tails))
     assert _values(star["error_x"]["array"])[0] == pytest.approx(np.percentile(tails, 95) - np.median(tails))
@@ -524,7 +552,7 @@ def test_compare_stars_match_the_saved_histories(open_page):
 
 def test_compare_empty_picks_say_what_to_do(open_page):
     # PG-7
-    at = open_page("web/page_compare.py")
+    at = open_page("web/page_checks.py")
     at.get("button_group")[0].set_value([]).run()
     assert "Pick a group above" in _captions(at)
     at.multiselect[0].set_value([]).run()
@@ -542,24 +570,29 @@ def test_compare_some_chartist_histories_survive(open_page, monkeypatch):
         "tail": [h["tail"][i] if i in keep else None for i in range(40)],
         "memory": [h["memory"][i] if i in keep else None for i in range(40)]}
     monkeypatch.setattr(c, "numbers", lambda: fake)
-    at = open_page("web/page_compare.py")
-    assert "35 of 40 histories ran away" in _captions(at) and "all 35" not in _captions(at)
-    star = _trace(_fig(at, "map"), "Model: chartists, no herding")
+    at = open_page("web/page_checks.py")
+    assert "35 of 40 simulated histories ran away" in _captions(at) and "all 35" not in _captions(at)
+    star = _trace(_fig(at, "map"), "Model: trend chasers, no herding")
     assert _values(star["x"])[0] == pytest.approx(np.median([h["tail"][i] for i in keep]))
 
 
 # ---------------------------------------------------------------------------------- Findings, Start here
+def _gallery_picker(at):
+    """The Figures tab's section picker (by its key: the Checks page has other button groups)."""
+    return [b for b in at.get("button_group") if "findings_section" in b.proto.id][0]
+
+
 def test_findings_clicking_the_picked_section_keeps_it(open_page):
     # PG-6: unselecting showed section 0 under an empty control
-    at = open_page("web/page_findings.py")
-    bg = at.get("button_group")[0]
+    at = open_page("web/page_checks.py")             # the gallery is the Checks page's Figures tab
     sections = list(dict.fromkeys(e["section"] for e in ex.gallery_entries(
         (ROOT / "figures" / "GALLERY.md").read_text())))
-    bg.set_value(sections[2]).run()
-    first = [m.value for m in at.markdown][2:4]
-    at.get("button_group")[0].set_value(None).run()
+    _gallery_picker(at).set_value(sections[2]).run()
+    first = [h.value for h in at.subheader]
+    assert sections[2] in first
+    _gallery_picker(at).set_value(None).run()
     assert at.session_state["findings_section"] == sections[2]
-    assert [m.value for m in at.markdown][2:4] == first
+    assert [h.value for h in at.subheader] == first
 
 
 def test_guide_example_chart_shows_the_whole_tail(open_page):
@@ -658,7 +691,7 @@ def test_workspace_survives_yahoo_failing_after_a_live_ticker_is_open(app, monke
     at.run()
     assert not at.exception, [e.value for e in at.exception]
     assert at.session_state["asset"] == ("saved", "S&P 500")
-    assert "Live prices for ZZQ aren't available" in at.session_state["ticker_error"]
+    assert "Live prices for ZZQ are not available" in at.session_state["ticker_error"]
     assert any("ZZQ" in t.value for t in at.toast)
     spx = pd.read_csv(ROOT / "data" / "sp500_daily.csv", index_col=0)["Close"]
     assert f"{spx.iloc[-1]:,.2f}" in " ".join(m.value for m in at.markdown)     # the saved S&P close
@@ -681,11 +714,11 @@ def test_workspace_dial_warns_about_an_earlier_run_off_the_fit(app):
     # WS-24: after a run with a2 = 0.20 and then one back at the fit, the a2 = 0.20 run still sat on
     # the a1-only sweep, and the caption's warning (which looked at the current run only) was gone
     at = app()
-    warn_now, warn_earlier = "Your a2 or v1 differs from the fit", "Some earlier runs used an a2 or v1"
+    warn_now, warn_earlier = "Your reaction to price trends (a2) or mood changes (v1) differs from the fit", "Some earlier histories used an a2 or v1"
     _run_model(at, in_a1=1.0, in_a2=0.2, in_days=5000)
     assert at.session_state["log"][0][2]["herding"] is not None      # plotted on the dial
     assert warn_now in _captions(at)
-    at.radio(key="preset").set_value("S&P 500 fit").run()
+    _preset(at, "Best fit")
     _run_model(at)
     log = at.session_state["log"]
     assert len(log) == 2 and log[0][1]["a2"] == FIT["settings"]["a2"] and log[1][1]["a2"] == 0.2
@@ -743,6 +776,7 @@ def test_app_reloads_site_modules_after_a_push():
     # appear and every function is a new object; that is what is checked.)
     import os
     import sys
+    import time
     from streamlit.testing.v1 import AppTest
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=300)
     at.run()
@@ -752,7 +786,10 @@ def test_app_reloads_site_modules_after_a_push():
     try:
         old_summary = sys.modules["herding.explore"].summary
         old_setup = sys.modules["web.common"].setup
-        os.utime(path, (before.st_atime, before.st_mtime + 60))   # what a git pull does to the file
+        # what a git pull does to the file: stamp it with the current time. (+60 s on the old time
+        # was not enough when the compiled .pyc was made after that: the test then passed only
+        # when some other site file happened to be newer than its .pyc.)
+        os.utime(path, (before.st_atime, time.time() + 60))
         at.run()
         assert not at.exception, [e.value for e in at.exception]
         assert sys.modules["herding.explore"].summary is not old_summary      # explore was rerun
@@ -783,3 +820,23 @@ def test_app_reloads_a_module_loaded_before_the_check_existed():
         assert sys.modules["herding.explore"].summary is not old_summary
     finally:
         os.utime(path, (before.st_atime, before.st_mtime))
+
+
+def test_saved_numbers_are_read_again_when_the_file_changes(monkeypatch):
+    # The Findings page crashed (KeyError 'paper') when web/numbers.json gained a section: the cache
+    # kept the old file. numbers() keys its cache on the file's time, so a new file is read again.
+    import os
+    import streamlit as st
+    from web import common as c
+    st.cache_data.clear()
+    calls = []
+    monkeypatch.setattr(ex, "web_numbers", lambda: calls.append(1) or {"n": len(calls)})
+    path = ex.WEB_NUMBERS
+    before = os.stat(path)
+    try:
+        assert c.numbers() == {"n": 1} and c.numbers() == {"n": 1}     # unchanged file: read once
+        os.utime(path, (before.st_atime, before.st_mtime + 60))
+        assert c.numbers() == {"n": 2}                                    # changed file: read again
+    finally:
+        os.utime(path, (before.st_atime, before.st_mtime))
+        st.cache_data.clear()

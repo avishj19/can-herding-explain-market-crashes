@@ -23,7 +23,7 @@ model with no chartists.
 
 ![Quick check: S&P 500 vs the model](fig00_quick_check_sp500_vs_model.png)
 
-**fig00 — S&P 500 vs the herding model** (made by `main.py`). On the top row, real
+**fig00 — S&P 500 vs the herding model.** On the top row, real
 daily moves (left) sit next to one model history (right). Both show bursts of wild
 days. Bottom left: big moves are far more common than a bell curve predicts, for both
 the S&P and the model. With no chartists (green), the model falls back onto the bell
@@ -44,7 +44,8 @@ curve. Bottom right: the bursts appear when the share of chartists spikes.
 
 **fig06 — Kirman's ants.** This simulates the simple herding rule the model is built
 on and compares it with Kirman's exact formula. The simulation and the formula agree
-almost perfectly, which shows the herding code is right.
+almost perfectly, which shows the ant simulation matches the math the model's herding rule is
+built on.
 
 ---
 
@@ -101,7 +102,8 @@ burst ends on its own once the crowd drifts back.
 **fig10 — Turning the herding dial.** Only the herding strength (a1) is changed.
 Surprise: more herding does **not** always mean more crashes. For the paper-matched
 model, the tails are fattest at a middle setting and go back to a bell curve at
-strong herding. This dial is what the future web app will let users turn.
+strong herding. The web app's Test program has this dial too; it uses the settings fitted to the
+S&P 500, so its curve differs from the paper-matched one here.
 
 ---
 
@@ -157,7 +159,7 @@ Outside markets explain about twice as much of the S&P's moves in wild markets a
 ![Without outside news](fig17_without_outside_news.png)
 
 **fig17 — Take out the outside news: the fat tails and the memory survive.** Remove every S&P
-move that oil, gold, copper and interest rates explain (16% of the variance): the tail stays fat
+move that oil, gold, copper and interest rates explain (16% of how much it moves): the tail stays fat
 and the memory stays long, so outside news is not what makes them. What's left looks like a typical
 history of the herding model on all 8 measures. Surprise Fed moves are huge days, but there have
 been only 9 since 1994; scheduled Fed decisions are ordinary days.

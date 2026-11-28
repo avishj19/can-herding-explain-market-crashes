@@ -1,26 +1,43 @@
-# Two color sets for the web app (app.py). Visitors switch with the button at the top right
-# (web/common.py); a first-time visitor gets their device's light or dark setting. Controls are
-# gray in both, so color on a page always means data (web/common.py lists what each color means).
+# The web app's one color set (dark only since the redesign, docs/redesign/README.md), styled after a
+# trading terminal: black screen, amber for the site's own frame (headings, labels, the active tab,
+# buttons), white numbers. Amber is only ever the frame: inside a chart, color always means data
+# (web/common.py lists what each color means).
 [theme]
+base = "dark"
 showWidgetBorder = true
-baseRadius = "6px"
+baseRadius = "2px"
+buttonRadius = "2px"
+# plain sans for the explanations (easy to read for beginners), monospace for headings and numbers.
+# Names only: web/common.py's CSS loads both fonts from Google at the start. A font URL here made
+# Streamlit load them a second time and hold back the top navigation until then (about 4 s late).
+font = "IBM Plex Sans, sans-serif"
+headingFont = "JetBrains Mono, monospace"
+codeFont = "JetBrains Mono, monospace"
 
-[theme.dark]
-primaryColor = "#C7CDD8"
-backgroundColor = "#0B0E13"
-secondaryBackgroundColor = "#11151C"
-textColor = "#E6E8EE"
-borderColor = "#1F2632"
-
-[theme.light]
-primaryColor = "#374151"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F3F4F6"
-textColor = "#111827"
-borderColor = "#E5E7EB"
+primaryColor = "#FFA028"
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#0D0D0D"
+textColor = "#ECEAE4"
+# input borders a bit lighter than the panel lines, so a text box is visible (at least 3:1 on the page and on the panel color)
+borderColor = "#606060"
+linkColor = "#FFA028"
+dataframeHeaderBackgroundColor = "#141414"
+dataframeHeaderTextColor = "#FFA028"
+dataframeBorderColor = "#222222"
 
 [server]
 headless = true
+# compress what the server sends to the browser: the price chart's data shrinks from 141 kB to about
+# 34 kB (measured Nov 2026), so charts appear sooner on slow connections. No effect on any number.
+enableWebsocketCompression = true
+# on by default, written out so it can't be switched off by accident: forms and buttons only accept
+# requests that come from the site's own pages
+enableXsrfProtection = true
+
+[client]
+# the site is public: a crash shows visitors only the kind of error, never the traceback (file
+# paths, code lines). The full traceback still prints in the terminal running streamlit.
+showErrorDetails = "type"
 
 [browser]
 gatherUsageStats = false

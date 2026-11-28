@@ -239,7 +239,7 @@ def part_d():
     say("## D. Every page, headless\n")
     say("| Page | cold s | warm s | exception |")
     say("|---|---|---|---|")
-    pages = ["page_guide", "page_story", "page_explore", "page_compare", "page_checks", "page_findings"]
+    pages = ["page_guide", "page_story", "page_explore", "page_checks", "page_sources"]   # five pages since the redesign
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=PAGE_TIMEOUT)
     t0 = time.perf_counter()
     if not _run_page(at, "first visit"):              # opens the default page (Start here) with empty caches
@@ -257,20 +257,21 @@ def part_d():
         check(not at.exception, f"{pg}: {exc[:300]}")
         say(f"| {pg} | {times[0]:.2f} | {times[1]:.2f} | {exc[:80] or 'none'} |")
 
-    # the workspace flow: preset -> Run model -> one log line with the preset's a1
+    # the Test program flow (since the redesign): a preset button -> the model reruns by itself -> the
+    # newest history-log line has the preset's a1. (Before: a sidebar radio and a Run model button.)
     if not _run_page(at, "workspace", "web/page_explore.py"):
         return None
-    if not _run_page(at.radio(key="preset").set_value("No herding"), "workspace preset"):
+    preset = [b for b in at.get("button_group") if "preset" in b.proto.id]
+    check(len(preset) == 1, "workspace: one preset control")
+    if not preset or not _run_page(preset[0].set_value("No herding"), "workspace preset"):
         return None
     a1 = at.slider(key="in_a1").value
-    btn = [b for b in at.button if b.label == "Run model"]
-    check(len(btn) == 1, "workspace: one Run model button")
-    if btn and _run_page(btn[0].click(), "workspace Run model"):
-        log = at.session_state["log"]
-        check(len(log) == 1 and log[0][1]["a1"] == 0.0 == a1, f"workspace: run log after preset {log[:1]}")
-        check(not at.exception, "workspace: exception after Run model")
-        say(f"\nWorkspace flow: preset 'No herding' set a1 = {a1}; Run model added "
-            f"{len(at.session_state['log'])} log line; tails {log[0][2] if log else None}.\n")
+    check(not [b for b in at.button if b.label == "Run model"], "workspace: no Run model button while runs are automatic")
+    log = at.session_state["log"]
+    check(len(log) >= 1 and log[0][1]["a1"] == 0.0 == a1, f"workspace: newest log line after preset {log[:1]}")
+    check(not at.exception, "workspace: exception after the preset")
+    say(f"\nWorkspace flow: preset 'No herding' set a1 = {a1}; the model reran by itself; "
+        f"{len(log)} log line(s); newest tails {log[0][2] if log else None}.\n")
     return at
 
 
@@ -305,16 +306,30 @@ def part_e(at):
         check(ok, f"{page}: {label} shows {shown}, backend {want}")
         say(f"| {page} | {label}: {shown} | {want:.4g} | {'yes' if ok else 'NO'} |")
 
+    # the Story shows one step at a time since the redesign (8 steps, st.session_state["story_step"] 0-7):
+    # each number is read from its own step by the words around it, not by its place on one long page
     at.switch_page("web/page_story.py").run()
-    b = _bold_numbers(_text(at))
+
+    def story(step, pattern):
+        at.session_state["story_step"] = step
+        at.run()
+        m = re.search(pattern, _text(at))
+        return m and [float(g.replace(",", "")) for g in m.groups()]
+
+    num = r"([+-]?[\d,]*\.?\d+)"
+    b = story(0, rf"has had \*\*{num} big days\*\*\. A bell curve expects about \*\*{num}\*\*") or [None, None]
     row("Story", "S&P big days", b[0], spx["big_days"], 0)
     row("Story", "bell-curve big days", b[1], spx["bell_big_days"], 0.05)
-    row("Story", "kurtosis, this history", b[2], ex.summary(f1000)["kurtosis"], 0.005)
-    row("Story", "kurtosis, median of 40", b[3], float(np.median(fund_k)), 0.005)
-    row("Story", "runaways without herding", b[4], gone, 0)
-    row("Story", "herding tail, this history", b[5], ex.summary(r1000)["tail"], 0.005)
-    row("Story", "herding tail, median of 40", b[6], float(np.median(herd_tails)), 0.005)
-    row("Story", "S&P tail", b[7], spx["tail"], 0.005)
+    b = story(3, rf"\*\*{num}\*\* in this simulated history and \*\*{num}\*\* \(median\)") or [None, None]
+    row("Story", "kurtosis, this history", b[0], ex.summary(f1000)["kurtosis"], 0.005)
+    row("Story", "kurtosis, median of 40", b[1], float(np.median(fund_k)), 0.005)
+    b = story(4, rf"In \*\*{num} of {num}\*\* simulated histories") or [None, None]
+    row("Story", "runaways without herding", b[0], gone, 0)
+    b = story(5, rf"is \*\*{num}\*\* in this history and \*\*{num}\*\* \(median\).*?The S&P 500's is \*\*{num}\*\*") \
+        or [None, None, None]
+    row("Story", "herding tail, this history", b[0], ex.summary(r1000)["tail"], 0.005)
+    row("Story", "herding tail, median of 40", b[1], float(np.median(herd_tails)), 0.005)
+    row("Story", "S&P tail", b[2], spx["tail"], 0.005)
 
     at.switch_page("web/page_checks.py").run()
     t = _text(at)
@@ -322,7 +337,15 @@ def part_e(at):
     row("Checks", "kurtosis median", m and float(m.group(1)), float(np.median(fund_k)), 0.0005)
     m = re.search(r"Model median \*\*([\d.]+)\*\*", t)
     row("Checks", "tail median", m and float(m.group(1)), float(np.median(herd_tails)), 0.005)
-    check("passes" in t and "does not pass" not in t, "Checks: every check should pass")
+    # the scoreboard: the proposal's checks 1-3 pass; check 4 is what crash_check says ("partly": crashes
+    # within decades, but a Black-Monday-sized fall still rarer than in the S&P 500, as the page explains)
+    board = list(at.table[0].value["Verdict"])
+    cc = ex.crash_check(nums, ex.log_returns(ex.saved_prices("S&P 500")).values)
+    want4 = "✅ Passes" if cc["passed"] else ("🟡 Partly" if cc["decades"] else "❌ Fails")
+    check(board[:3] == ["✅ Passes"] * 3 and board[3] == want4,
+          f"Checks: scoreboard verdicts {board[:4]}, expected 3 passes then {want4}")
+    say(f"| Checks | scoreboard verdicts {board[:4]} | 3 passes, then {want4} | "
+        f"{'yes' if board[:3] == ['✅ Passes'] * 3 and board[3] == want4 else 'NO'} |")
 
     at.switch_page("web/page_explore.py").run()
     df = next(d.value for d in at.dataframe if "Tail exponent" in getattr(d.value, "index", []))   # model vs market
@@ -330,11 +353,13 @@ def part_e(at):
     row("Workspace", "S&P max drawdown %", float(df.loc["Max drawdown", "S&P 500"].rstrip("%")),
         100 * ex.max_drawdown(ex.log_returns(spx_close).values), 0.05)
 
-    at.switch_page("web/page_compare.py").run()
-    shown = at.dataframe[-1].value
+    at.switch_page("web/page_checks.py").run()          # All markets: a tab of Checks since the redesign
+    shown = next(d.value for d in at.dataframe if "Tail exponent" in getattr(d.value, "columns", []))
     table = ex.market_table()
-    diff = max(abs(float(a) - float(b_)) for a, b_ in zip(shown["Tail"], table["tail"]))
+    diff = max(abs(float(a) - float(b_)) for a, b_ in zip(shown["Tail exponent"], table["tail"]))
     row("Compare", "largest tail difference over 26 markets", diff, 0.0, 1e-12)
+
+    part_e_findings(at, row, nums, spx, herd_tails, fund_k, gone)
 
     docs = (ROOT / "figures" / "RESULTS.md").read_text() + (ROOT / "docs" / "KEY_POINTS.md").read_text()
     for want, label in ((f"{np.median(herd_tails):.2f}", "herding tail median"),
@@ -344,6 +369,56 @@ def part_e(at):
         check(ok, f"docs don't quote the site's {label} {want}")
         say(f"| docs | {label} {want} quoted in RESULTS.md / KEY_POINTS.md | - | {'yes' if ok else 'NO'} |")
     say("")
+
+
+def _paper_table(text):
+    """{measure: (paper value, our value)} read back from the paper table (Checks, Beyond the paper)."""
+    out = {}
+    for row in re.findall(r"<tr>(.*?)</tr>", text):
+        cells = re.findall(r"<td[^>]*>(.*?)</td>", row)
+        if len(cells) >= 3:
+            out[cells[0]] = tuple(float(re.match(r"[\d.]+", x).group()) for x in cells[1:3])
+    return out
+
+
+def part_e_findings(at, row, nums, spx, herd_tails, fund_k, gone):
+    """Findings, the paper section: every number it shows against web/numbers.json (or the S&P file),
+    and the paper-matched means against the numbers figures/RESULTS.md quotes."""
+    from herding import stats
+    if not _run_page(at, "findings", "web/page_checks.py"):   # Beyond the paper tab
+        return
+    t = _text(at)
+    pp = nums["paper"]
+    table = _paper_table(t)
+    check(len(table) == 3, f"Findings: paper table has {len(table)} rows, expected 3")
+    results = (ROOT / "figures" / "RESULTS.md").read_text()
+    for (key, label), quoted in zip(ex.PAPER_MEASURES.items(), ("2.62", "0.47", "0.81")):
+        mean = float(np.mean([x for x in pp[key] if x is not None]))
+        shown = table.get(label, (None, None))[1]
+        row("Findings", f"paper-matched {key} (numbers.json mean)", shown, mean, 0.005)
+        ok = f"{mean:.2f}" == quoted and quoted in results
+        check(ok, f"Findings: paper-matched {key} {mean:.2f} vs RESULTS.md's {quoted}")
+        say(f"| Findings | paper-matched {key} {mean:.2f} | RESULTS.md {quoted} | {'yes' if ok else 'NO'} |")
+        row("Findings", f"paper's published {key}", table.get(label, (None, None))[0], ex.PAPER_PUBLISHED[key][0], 0.005)
+    m = re.search(r"falls from (\d+) for one day to ([\d.]+) for 25 days", t)
+    row("Findings", "paper-matched kurtosis, 1 day (median)", m and float(m.group(1)), float(np.median(pp["kurtosis"])), 0.5)
+    row("Findings", "paper-matched kurtosis, 25 days (median)", m and float(m.group(2)), float(np.median(pp["kurt_25"])), 0.05)
+    ok = m is not None and m.group(1) == "43" and m.group(2) == "0.4"
+    check(ok, f"Findings: kurtosis should read 43 -> 0.4, reads {m and m.groups()}")
+    say(f"| Findings | kurtosis 1 day -> 25 days: {m and m.groups()} | 43 -> 0.4 | {'yes' if ok else 'NO'} |")
+    m = re.search(r"median (?:excess )?kurtosis ([+-]?[\d.]+)", t)
+    row("Findings", "no-chartist kurtosis median", m and float(m.group(1)), float(np.median(fund_k)), 0.005)
+    m = re.search(r"runs away in (\d+) of", t)
+    row("Findings", "runaways without herding", m and float(m.group(1)), gone, 0)
+    m = re.search(r"median tail exponent of \*\*([\d.]+)\*\*, against \*\*([\d.]+)\*\*", t)
+    row("Findings", "herding tail median", m and float(m.group(1)), float(np.median(herd_tails)), 0.005)
+    row("Findings", "S&P tail (Hill)", m and float(m.group(2)), spx["tail"], 0.005)
+    m = re.search(r"S&P 500's tail exponent is ([\d.]+)", t)
+    spx_reg = stats.alpha_regression(ex.log_returns(ex.saved_prices("S&P 500")).values)
+    row("Findings", "S&P tail (paper's method)", m and float(m.group(1)), spx_reg, 0.005)
+    ok = f"{spx_reg:.2f}" in results
+    check(ok, f"Findings: RESULTS.md does not quote the S&P's paper-method tail {spx_reg:.2f}")
+    say(f"| Findings | S&P paper-method tail {spx_reg:.2f} quoted in RESULTS.md | - | {'yes' if ok else 'NO'} |")
 
 
 def main(days=10000, n=20, offline=True):

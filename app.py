@@ -16,7 +16,9 @@ import streamlit as st
 # herding/explore.py and web/common.py and crashed ("setup() takes 0 positional arguments",
 # "no attribute KIRMAN_PASS", Nov 2026) until someone rebooted it by hand.
 SITE_MODULES = ["herding.checks", "herding.stats", "herding.model", "herding.market_data",
-                "herding.factors", "herding.kirman", "herding.explore", "web.common"]
+                "herding.calibrate", "herding.experiments", "herding.politics", "herding.factors",
+                "herding.kirman", "herding.explore", "web.common",
+                "web.page_compare", "web.page_findings"]   # drawn inside the Checks page
 
 
 def _loaded_at(m):
@@ -44,22 +46,25 @@ def reload_if_changed(names=SITE_MODULES):
     return list(names)
 
 
-reload_if_changed()
-from web import common  # noqa: E402  (after the reload, so this is the current copy)
-
+# The page list and the top navigation go out first, before the site's modules are imported (about
+# half a second on a fresh server: pandas, numba, the model), so the navigation bar can show while
+# the rest loads. TEST_PROGRAM must equal web.common.TEST_PROGRAM (tests/test_web_style.py checks).
+TEST_PROGRAM = "Test program"
 st.set_page_config(page_title="Herding and market crashes", page_icon="📉", layout="wide",
                    initial_sidebar_state="auto")   # open on wide screens; "expanded" covered the page on phones
 PAGES = [
     st.Page("web/page_guide.py", title="Start here", icon=":material/home:", default=True),
     st.Page("web/page_story.py", title="Story", icon=":material/auto_stories:"),
-    st.Page("web/page_explore.py", title="Workspace", icon=":material/candlestick_chart:"),
-    st.Page("web/page_compare.py", title="Compare", icon=":material/scatter_plot:"),
+    st.Page("web/page_explore.py", title=TEST_PROGRAM, icon=":material/candlestick_chart:"),
     st.Page("web/page_checks.py", title="Checks", icon=":material/fact_check:"),
-    st.Page("web/page_findings.py", title="Findings", icon=":material/photo_library:"),
+    st.Page("web/page_sources.py", title="Sources", icon=":material/menu_book:"),
 ]
 nav = st.navigation(PAGES, position="top")
-# every page's address, so the light/dark button can set the mode for pages not opened yet.
-# After st.navigation: a page only gets its url_path when navigation registers it (reading it
-# first crashed the live site on a fresh start, Nov 2026)
-common.setup(["/" + (pg.url_path or "") for pg in PAGES])
+
+reload_if_changed()
+from web import common  # noqa: E402  (after the reload, so this is the current copy)
+
+# every page's address, so the navigation numbers each page by its address. After st.navigation: a page only gets its url_path
+# when navigation registers it (reading it first crashed the live site on a fresh start, Nov 2026)
+common.setup(["/" + (pg.url_path or "") for pg in PAGES], nav.title)
 nav.run()
