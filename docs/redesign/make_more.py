@@ -79,17 +79,9 @@ for eps in (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1):
 o["kirman"] = {"eps": kir, "threshold": float(kirman.herding_threshold(100, 0.1))}
 # Compare: every saved market
 o["markets"] = json.loads(ex.market_table().to_json(orient="records"))
-# Findings: the paper comparison, the party table, the figures
+# Findings: the paper comparison, the figures
 o["paper"] = ex.paper_comparison(nums)
-party = []
-for name in ("Dow Jones", "S&P 500", "Nasdaq-100"):
-    rr = ex.log_returns(ex.saved_prices(name))
-    try:
-        v = ex.party_view(rr)
-        party.append({"name": name, "years": f"{v['start']:%Y}–{v['end']:%Y}", "gap": v["gap_year"], "luck": v["luck"]})
-    except ValueError as e:
-        party.append({"name": name, "error": str(e)})
-o["party"] = party
+o["party"] = []          # the party study was removed (28 Nov 2026); the mock-up's party table stays empty
 entries = ex.gallery_entries((ROOT / "figures" / "GALLERY.md").read_text())
 (OUT / "figs").mkdir(exist_ok=True)
 for e in entries:

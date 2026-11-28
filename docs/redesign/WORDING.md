@@ -54,7 +54,7 @@ Could not load: Investopedia (blocked), Robinhood Learn (404), Our World in Data
 | **simulated trading day** | One day in the model. 77 years = 19,329 days. | step, tick, simulated day |
 | **check** | One of the proposal's 5 tests on the Checks page. | test (taken), criterion |
 | **experiment** | Story steps 4 to 6 (they were "Test 1 to 3"). The new name avoids a clash with "Test program" and "Checks". | test |
-| **extra study** | The work beyond the proposal (the president's party, outside news). | extension |
+| **extra study** | The work beyond the proposal (the policy experiments; the party and outside-news studies were removed on 28 Nov 2026). | extension |
 
 **Number style:** years: "35 years". Tail exponents: 2 decimals (2.92). Expected counts: 1 decimal (0.8). Waits in years and counts of days: whole numbers with commas. sd sizes: whole numbers ("4 sd", "8-sd fall"). Gaps and distances: as the data gives them (0.012). Write ranges with "to". Write "per 1,000 days", never "/1k". Dates look like "19 October 1987".
 

@@ -3,19 +3,18 @@
 A checklist for improving the accuracy of the project's numbers (November 2026). Each line says
 what the data would fix, where it comes from, and whether it is in the repository.
 
-## Added in November 2026 (`data/factors/`, `data/fed_decisions.csv`)
+## Kept, and removed, on 28 November 2026
 
-| Data | Source | Fixes |
-|---|---|---|
-| Brent oil, 1987– | FRED `DCOILBRENTEU` (US Energy Information Administration) | outside news that every trader sees (Figs 16–17) |
-| Gold and copper futures, 2000– | Yahoo `GC=F`, `HG=F` (front month) | the same; gold as a "safe haven" |
-| 10-year Treasury yield, 1962– | FRED `DGS10` (Federal Reserve Board H.15) | interest-rate news |
-| Broad US dollar, 2006– | FRED `DTWEXBGS` (Federal Reserve Board H.10) | currency news |
-| Fed funds target, 1982– | FRED `DFEDTAR`, `DFEDTARU` | which Fed decisions changed rates, and by how much |
-| FOMC decision days, 1994– | federalreserve.gov FOMC calendars | scheduled vs surprise Fed news (checked against Lucca & Moench 2015) |
+The data files the project keeps: the S&P 500 (1950- and 1928-, Yahoo ^GSPC), the Nasdaq-100 (^NDX),
+the Dow Jones (1896- and 1927-1952, MeasuringWorth), 5 stocks (`data/stocks/README.md` has the rule),
+the Dow's 20 biggest days with their causes (`big_days_events.csv`), and three commodities for the
+site's Commodities group (`data/commodities/`: Brent oil from FRED `DCOILBRENTEU`, gold and copper
+futures from Yahoo `GC=F`, `HG=F`).
 
-Every file is rebuilt byte for byte by `python3 data/download_market_data.py` (checked
-16 November 2026: all 34 files identical).
+Removed as scope beyond the proposal (in git history): the outside-news files (10-year yield, broad
+dollar, Fed funds target, FOMC decision days), 15 of the 20 stocks, the VIX and the NBER recession
+months. `python3 data/download_market_data.py` rebuilt every file byte for byte on 16 November 2026;
+the slimmed-down downloader has not been rerun since.
 
 ## Still missing, in order of how much it would help
 
@@ -32,21 +31,16 @@ Every file is rebuilt byte for byte by `python3 data/download_market_data.py` (c
    Street Journal pages (copyrighted, about 130 MB), so neither is in the repository. Asking the
    authors for the classified table would replace the 20 hand-checked days in
    `data/big_days_events.csv`.
-4. **Scheduled economic releases** (jobs report, inflation). Savor & Wilson (2013) show they
-   are news days like Fed days. Their past dates are in ALFRED (St. Louis Fed), which needs a free
-   API key. That key must stay out of this public repository.
-5. **Total returns (with dividends).** The index files are price-only. That matters for the
-   average return (Fig 12's party gap), not for tails or clustering. Source: CRSP through WRDS.
-6. **More countries.** Gopikrishnan et al. and Longin & Solnik used several markets. Yahoo has
+4. **Total returns (with dividends).** The index files are price-only. That matters for the
+   average return, not for tails or clustering. Source: CRSP through WRDS.
+5. **More countries.** Gopikrishnan et al. used several markets. Yahoo has
    the FTSE 100 (1984–), DAX (1987–) and Nikkei 225 (1965–). These would test whether the model
    fits markets it never saw (like Fig 8), and are free.
 
-## Limits of the data that was added
+## Limits of the kept data
 
 - **Futures roll over each month.** A continuous futures price switches contracts, which can
   add small jumps. The biggest gold and copper days were checked and all are real events
   (2013-04-15 gold crash, July 2025 copper tariff news), not rolls.
-- **Different closing times.** Gold futures settle at 1:30 pm, oil at 2:30 pm and stocks at
-  4 pm (New York time). The regressions include the day before and after (Dimson 1979).
-- **Fed dates before 1994** are not included: until February 1994 the Fed did not announce its
-  decisions, so markets learned of them at different times.
+- **Brent oil's saved file is a spot price (FRED)**, while its live Yahoo symbol (BZ=F) is a futures
+  price; the two usually differ by 1-2% (the site says so).

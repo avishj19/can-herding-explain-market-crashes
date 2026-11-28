@@ -69,7 +69,6 @@ times, and is not tuned to the lucky test seed. Every recipe is in `tests/helper
 | bell-curve fingerprint: kurtosis over 25 days | one series, < 0.2 (3.6 sd) | average of 16, ±0.076 (sd 0.015) |
 | paper-style α of an exact power law | ±0.15 | ±0.003 (bias −0.002, sd 0.0001) |
 | the tail-fit line at the window's start | ±5% | ±0.2% |
-| regression R² = 0.5 (`factors.regress`) | 200k, ±0.01 | 800k, ±0.0036 (sd 0.0007) |
 | bootstrap interval width = 1.96/√n | 2,000 resamples, ±10% | 8,000 resamples, ±6.5% (sd 1.3%) |
 
 What the audit found besides:
@@ -88,11 +87,8 @@ What the audit found besides:
 
 - **Published facts** are limited by the source: the 20 big-day percentages in
   `data/big_days_events.csv` are typed to 2 decimals, so their tolerance is exactly half a unit
-  of the last digit (0.005), and the data use 99% of it, as rounding should. The Fed-day check
-  (33 basis points, Lucca & Moench 2015) allows ±4: their number is an *excess* return (minus the
-  Treasury-bill rate) over a slightly different window, ours a plain close-to-close return.
-- **Model simulations** (`test_model.py`, `test_policy.py`, `test_news_and_reactions.py`,
-  `test_party_scale.py`) were not re-audited: each of their checks needs whole simulated
+  of the last digit (0.005), and the data use 99% of it, as rounding should.
+- **Model simulations** (`test_model.py`, `test_policy.py`, `test_news_and_reactions.py`) were not re-audited: each of their checks needs whole simulated
   histories, so 200 seeds per check would take hours. The recorder shows they use 5–50% of
   their tolerances, so none is close to failing; auditing them is the next step if they matter.
 
@@ -130,15 +126,17 @@ Tolerances reset from measurements:
   halving with the time step. The test now checks the formula. This is a property of the
   dt = 0.01 model, written into SPEC.md sec. 5 and KEY_POINTS limitation 10; the model was not changed.
 - **S&P bootstrap tolerance** for α: centre 0.099 (the average over 39 seeds), not one seed's 0.09.
-- **Model yardstick and false-positive rates** (politics_heavy; failed on 10 and 1 of 39): rerun on 24
+- **Model yardstick and false-positive rates** (politics_heavy, removed with the party study on 28 Nov 2026;
+  failed on 10 and 1 of 39): rerun on 24
   seed sets. One measure alone can dip to 15% (the old bound was 22%), so the bound is now on
   the average of the 4 measures (35% and 32%, sd 2.4 and 2.8; must be 18–50%). The shifted
   calendar's false-positive rate averaged 11.7%, not 10%: slightly generous, now stated in
   RESULTS.md; its band is 11.7% ± 5 chance sds (3.5–20%).
 - With fewer than 4 sd of room over the 39 seeds, more data instead of a looser bound where
   possible: the news tests use 200,000 days (was 50,000), the spring test 80,000 (was 20,000),
-  the mood-flip test 40,000, the group z-score 16,000 rows; R² = 0.5 now allows 5 sd by formula
-  (0.004).
+  the mood-flip test 40,000, the group z-score 16,000 rows; R² = 0.5 now allowed 5 sd by formula
+  (0.004). (The group z-score and R² tests were removed with the election and outside-news parts on
+  28 Nov 2026.)
 
 **B. Mutation testing: would the tests catch a bug?** One small deliberate bug at a time
 ("+" to "-", "<" to "<=", a number plus 1, "and" to "or", a minus sign dropped) was put into a
@@ -161,6 +159,9 @@ passed in every file (the control).
 | `stats.py` | 135 | 99 (73%) | 115 (85%) |
 | **all of `herding/`** | **1162** | **864 (74%)** | **956 (82%)** |
 | the scripts (figures, analysis) | 1476 | 398 (27%) | not rerun |
+
+`factors.py` and `politics.py` (and their tests) were removed on 28 Nov 2026 with the outside-news and
+president's-party studies; their rows stay as the record of that run.
 
 "Caught now" reran every bug that survived in `herding/` against the new tests, plus a random
 fifth of the caught ones, to check the edited tests still catch them: one did not (a "+" turned

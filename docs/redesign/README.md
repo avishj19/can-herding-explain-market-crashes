@@ -38,11 +38,11 @@ Then open http://localhost:8765. (In Claude Code's browser pane: the `redesign-m
    with trader-mix and zoom pickers; How rare big days are with Tail / Histogram; Bursts of wild days
    with Bursts / Memory); "Try this" and a one-line insight under each; the scorecard; four tabs below
    (Model and S&P 500, Big days with the reader, History log, Every history on one chart). Other
-   markets, live prices, chart switches, a2 / v1 / days / seed, the party study and the share link go
+   markets, live prices, chart switches, a2 / v1 / days / seed and the share link go
    in the sidebar ("Settings"). Runs are automatic (no Run button).
 6. **Checks:** a table of the 5 checks; click a row to open its rule and chart (ants with the ε
    slider, the two dot charts, the crash chart, the comparison table). Tabs: Beyond the paper (the
-   textbook checklist vs GARCH, the paper comparison, the party study as "extra study"), All markets
+   textbook checklist vs GARCH, the paper comparison), All markets
    (today's Compare map), Figures (today's gallery).
 7. **Sources:** "For educational purposes only" at the top; 15 references in groups with what each
    was used for; data and tools.
@@ -66,3 +66,7 @@ check the new version.
 
 A backup of the site before the rebuild was in `scratch/backup_before_rebuild/` on the old Mac
 (git-ignored, so not on GitHub; the last commit has the same code once this work is committed).
+
+**28 Nov 2026:** the party study (Test program switch, slider and panel; the Checks page's party section)
+and the outside-news study were removed as scope beyond the proposal. The mock-up's party table
+(`make_more.py`) is now left empty.

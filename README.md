@@ -26,7 +26,7 @@ Requires Python 3.10 or newer.
 ```bash
 pip install -r requirements.txt
 python3 scripts/main.py              # S&P 500 vs the model -> figures/fig00_quick_check_sp500_vs_model.png
-python3 scripts/make_figures.py      # all figures fig01-fig12 (about 2 minutes on 8 cores)
+python3 scripts/make_figures.py      # all figures fig01-fig11 (about 2 minutes on 8 cores)
 python3 -m pytest tests/ -q -m "not slow"   # quick tests
 python3 -m pytest tests/ -q          # all tests
 python3 -m herding.calibrate paper   # refit to the paper's numbers (add --refine to polish)
@@ -56,7 +56,7 @@ Each folder has one job:
 │   ├── SPEC.md          the model's equations, each with its source
 │   ├── proposal.pdf     my project proposal
 │   └── papers/          source papers
-├── data/            real market data (S&P 500, Nasdaq-100, 20 stocks, VIX, recessions)
+├── data/            real market data (S&P 500, Nasdaq-100, Dow Jones, 5 stocks, oil, gold, copper)
 ├── settings/        the two fitted settings (paper-matched, S&P-calibrated)
 ├── tests/           one test file per module in herding/
 ├── journal/         build journal (Claude Code session logs, copied automatically)

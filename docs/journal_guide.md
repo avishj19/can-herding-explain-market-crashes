@@ -63,5 +63,15 @@ figures in the paper's style. Summary: `figures/RESULTS.md`, "Overnight recalibr
   the S&P settings' runaway rate measured on 400 histories (2.75%). Details:
   `docs/TEST_ACCURACY.md`, section 4.
 
+## 28 Nov 2026: re-checking everything against the proposal (session 2fddbe40)
+- Asked for the data, papers and sources to be re-checked from scratch, the data condensed to what the project
+  uses, and the plan put in the journal. Four agents re-checked in parallel; reports in `testing_checks/`.
+- Findings: the saved numbers reproduce exactly and on fresh seeds; the tail match is partly by design (the fit
+  aimed at it); the 2.5-3.5 range had been chosen after the results, so check 3 went back to the proposal's
+  2.6-3 ("Close"); one day (Black Monday) drives most of the S&P 500's excess kurtosis.
+- Answered the kurtosis exercise myself: a power of 4 lets one extreme day dominate.
+- Removed the party study, the outside-news study, 15 of 20 stocks and two unused data files.
+- Open: seed 1025's "92.6-sd fall" is a model overshoot (-82% then +285%), not a crash (`NEXT_STEPS.md`).
+
 ## Git history
 Commit messages are in my own words: `git log --oneline`.

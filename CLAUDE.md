@@ -40,9 +40,7 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
 - `docs/SPEC.md`: the model's equations, each with its source (rebuild of November 2026). Code and spec must agree.
 - `app.py`: the web app (`streamlit run app.py`): five pages in `web/` (Start here, Story, Test program, Checks, Sources); the Checks page has four tabs (the five checks; Beyond the paper, drawn by `web/page_findings.py`; All markets, `web/page_compare.py`; Figures). Dark mode only (redesign, Nov 2026): `web/common.py` holds the colors (one meaning each), chart style and cached data; the one color set is in `.streamlit/config.toml`. Pages only draw: every number comes from `herding/explore.py`. Model results the pages show (40 held-out histories, the herding-strength sweep, the crash counts behind the Checks page's crash check: `explore.crash_check`) are saved in `web/numbers.json` by `python3 scripts/web_numbers.py` (same recipe as Fig 4, so the site matches RESULTS.md; rerun it after refitting). Stress test, including site-vs-backend numbers: `python3 scripts/analysis/web_stress_test.py`. Live prices: Yahoo's quote every 15 s for the header, the last days of closes every minute, the long history once a day (`web/common.py`, LIVE_REFRESH / QUOTE_REFRESH). Saved data checked against FRED and Yahoo: `python3 scripts/analysis/data_crosscheck.py` (found the Dow's wrong closes, now in `market_data.BAD_CLOSES`)
 - `scripts/main.py`: quick comparison (S&P 500 vs 20 held-out S&P-calibrated histories), saves `figures/fig00_quick_check_sp500_vs_model.png`
-- `scripts/party_figures.py`: makes `figures/fig13-fig15*.png` (parties over 130 years of the Dow)
-- `scripts/outside_news_figures.py`: makes `figures/fig16-fig18*.png` (commodities, interest rates, the dollar, Fed days; the four moments with error bars)
-- `scripts/make_figures.py`: makes `figures/fig01-fig12*.png` (descriptive names), explained in `figures/RESULTS.md`; `figures/GALLERY.md` shows them all with plain captions
+- `scripts/make_figures.py`: makes `figures/fig01-fig11*.png` (descriptive names), explained in `figures/RESULTS.md`; `figures/GALLERY.md` shows them all with plain captions
 - `herding/`: the program, one module per job
   - `model.py`: the Lux-Marchesi simulation from SPEC.md (numba-accelerated), runaway guard; optional `panic` (off = SPEC.md; `scripts/analysis/panic_skew.py`: it does not give the S&P's skew)
   - `stats.py`: tail exponents (Hill and the paper's regression), kurtosis, autocorrelation, DFA/Hurst H,
@@ -54,10 +52,6 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
     (reproduces the paper's numbers) and `settings/sp500_calibrated.json` (reproduces the S&P 500)
   - `experiments.py`: many histories in parallel, percentiles, the typical history
   - `policy.py`: extension: circuit breakers and a policy surprise (paired runs), used by Fig 11
-  - `politics.py`: extension: the president's party (1893-2026) and its return gap against luck, used by Fig 12-15
-    and the web app (explore.party_view: the luck test for any market; explore.party_shocks: an optional party
-    drift in the model's value, 0 = off = the model of SPEC.md)
-  - `factors.py`: extension: outside news every trader sees (oil, gold, copper, dollar, 10-year rate, Fed decision days), used by Fig 16-18
   - `plots.py`: palette and drawing helpers (reusable by the future web app)
   - `explore.py`: the science behind the web app: load any stock, index fund or commodity (or a live
     ticker from Yahoo), run the three trader mixes (fundamentalists / chartists without herding / herding),
@@ -76,11 +70,14 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
 - `scripts/analysis/`: scripts behind individual findings (see its README; older versions are in git history)
 - `docs/proposal.pdf`: my project proposal; `docs/course_project_guide.pdf`: the course's project handout (local only, git-ignored)
 - `data/`: made by `data/download_market_data.py` (all series end 2026-10-30): S&P 500 1950- and 1928- (Yahoo ^GSPC),
-  Nasdaq-100 (^NDX, 1985-), `stocks/` (20 large stocks with market beta 0.9-1.1, 2000-), VIX, NBER recessions (FRED USREC),
+  Nasdaq-100 (^NDX, 1985-), `stocks/` (5 large stocks: MSFT, DIS, HD, NKE, HON; full-file market beta 0.9-1.1,
+  a household name, five sectors; the rule is in `stocks/README.md`; 2000-),
   Dow Jones 1896- and 1927-1952 (MeasuringWorth; the short file is used to find 11 wrong closes in the 1928 S&P file),
   `big_days_events.csv` (the Dow's 20 biggest days with their documented causes and sources),
-  `factors/` (Brent oil, gold, copper, broad dollar, 10-year yield, Fed funds target; FRED and Yahoo),
-  `fed_decisions.csv` (every FOMC decision since Feb 1994, from federalreserve.gov); what is still missing: `docs/MISSING_DATA.md`
+  `commodities/` (Brent oil from FRED, gold and copper futures from Yahoo: the site's Commodities group);
+  what is still missing: `docs/MISSING_DATA.md`. The president's-party study (Figs 12-15), the outside-news
+  study (Figs 16-18), 15 of the 20 stocks, the VIX and the recession months were removed on 28 Nov 2026 as
+  scope beyond the proposal (in git history)
 - `docs/papers/`: sources, all kept locally only (git-ignored). The Lux & Marchesi Nature paper (doi:10.1038/17290) is `docs/papers/LuxMarchesi1999_Nature.pdf`,
   kept locally only (git-ignored: copyrighted, and this repo is public). The equations come from the
   Samanidou et al. (2007) review (see SPEC.md); the parameter tables of Lux & Marchesi (2000) are still

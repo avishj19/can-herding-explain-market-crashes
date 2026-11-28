@@ -23,6 +23,9 @@ SOURCES = [
          "The paper's settings tables (not yet obtained, so this site fits its own)."),
         ("Kirman, A. (1993). Ants, rationality, and recruitment. *Quarterly Journal of Economics* 108, 137–156.",
          "The ant model behind herding, checked against its exact formula first."),
+        ("Dewachter, H. & Lyrio, M. The economic value of technical trading rules: a nonparametric utility-based "
+         "approach.",
+         "Why trend chasers (chartists) are worth modelling: traders really do trade on past price patterns."),
     ]),
     ("Measuring markets", [
         ("Gopikrishnan, P. et al. (1998). Inverse cubic law for the distribution of stock price variations. "
@@ -45,17 +48,19 @@ SOURCES = [
          "volatility model. *Phys. Rev. Lett.* 87, 228701. "
          "[doi:10.1103/PhysRevLett.87.228701](https://doi.org/10.1103/PhysRevLett.87.228701)",
          "The \"panic\" idea, tested here. It does not make falls bigger than rises."),
-        ("Santa-Clara, P. & Valkanov, R. (2003). The presidential puzzle. *J. Finance* 58, 1841–1872; and "
-         "Pástor, Ľ. & Veronesi, P. (2020). Political cycles and stock returns. *J. Political Economy* 128, 4011–4045.",
-         "The extra study on the president's party."),
     ]),
     ("Data", [
-        ("Yahoo Finance.", "The S&P 500 (^GSPC), the Nasdaq-100, 20 stocks, gold and copper, and live prices."),
+        ("Yahoo Finance.", "The S&P 500 (^GSPC), the Nasdaq-100, 5 stocks, gold and copper, and live prices."),
         ("FRED, Federal Reserve Bank of St. Louis.",
-         "A second copy of the S&P 500 to check against, NBER recessions, oil, interest rates and the dollar."),
-        ("MeasuringWorth; the Federal Reserve Board.", "The Dow Jones since 1896; the dates of Fed decisions."),
+         "A second copy of the S&P 500 to check against, and Brent oil."),
+        ("MeasuringWorth.", "The Dow Jones since 1896."),
     ]),
 ]
+# the proposal planned Stooq for the S&P 500; by the time the data was downloaded Stooq answered programs with a
+# browser check and gates its downloads behind a key, so Yahoo was used, with FRED as an independent copy
+DATA_NOTE = ("The project proposal planned to take the S&P 500 from Stooq. Stooq now blocks automated downloads, so "
+             "the site uses Yahoo Finance and checks it against an independent copy from FRED: they agree on every "
+             "day both have (2016 to 2026) to within 0.12%.")
 EDUCATION = ("**For educational purposes only.** This is a student project for 02-120 Programming for "
              "Scientists at Carnegie Mellon University. It is a simulation for learning, not a forecast, "
              "not trading advice and not investment advice.")
@@ -71,6 +76,8 @@ def page():
         for cite, use in items:
             n += 1
             st.markdown(f"**[{n}]** {cite}  \n<span class='muted'>{use}</span>", unsafe_allow_html=True)
+        if group == "Data":
+            st.caption(DATA_NOTE)
     st.header("Tools", anchor=False)
     st.markdown(f"Python, NumPy, SciPy, pandas, Numba, Plotly and Streamlit. The code and its tests are public: "
                 f"[{REPO.removeprefix('https://')}]({REPO}).")
