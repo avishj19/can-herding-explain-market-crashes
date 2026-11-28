@@ -31,12 +31,14 @@ The final product is a web app where users can tune herding strength and watch c
 - Extreme moves and volatility clustering should be comparable to the S&P 500.
 - Later: reproduce Kirman's ant model first as a check against his math.
 
+**Start of a session: if `NEXT_STEPS.md` exists, read it first and follow it.**
+
 ## Where things live
 Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to look at), `docs/` (things to read),
 `data/`, `settings/`, `tests/`, `journal/`, `scratch/`. Run scripts from the project folder, e.g. `python3 scripts/main.py`.
 - `docs/KEY_POINTS.md`: self-contained guide to the project for someone new to it (ideas, figures, findings, limits)
 - `docs/SPEC.md`: the model's equations, each with its source (rebuild of November 2026). Code and spec must agree.
-- `app.py`: the web app (`streamlit run app.py`): six pages in `web/` (Start here, Story, Test program, Compare, Checks, Findings); `web/common.py` holds the colors (one meaning each, per light/dark mode), chart style and cached data; light and dark color sets in `.streamlit/config.toml`, switched by a button at the top right (it saves Streamlit's own theme choice and reloads). Pages only draw: every number comes from `herding/explore.py`. Model results the pages show (40 held-out histories, the herding-strength sweep, the crash counts behind the Checks page's crash check: `explore.crash_check`) are saved in `web/numbers.json` by `python3 scripts/web_numbers.py` (same recipe as Fig 4, so the site matches RESULTS.md; rerun it after refitting). Stress test, including site-vs-backend numbers: `python3 scripts/analysis/web_stress_test.py`. Live prices: Yahoo's quote every 15 s for the header, the last days of closes every minute, the long history once a day (`web/common.py`, LIVE_REFRESH / QUOTE_REFRESH). Saved data checked against FRED and Yahoo: `python3 scripts/analysis/data_crosscheck.py` (found the Dow's wrong closes, now in `market_data.BAD_CLOSES`)
+- `app.py`: the web app (`streamlit run app.py`): five pages in `web/` (Start here, Story, Test program, Checks, Sources); the Checks page has four tabs (the five checks; Beyond the paper, drawn by `web/page_findings.py`; All markets, `web/page_compare.py`; Figures). Dark mode only (redesign, Nov 2026): `web/common.py` holds the colors (one meaning each), chart style and cached data; the one color set is in `.streamlit/config.toml`. Pages only draw: every number comes from `herding/explore.py`. Model results the pages show (40 held-out histories, the herding-strength sweep, the crash counts behind the Checks page's crash check: `explore.crash_check`) are saved in `web/numbers.json` by `python3 scripts/web_numbers.py` (same recipe as Fig 4, so the site matches RESULTS.md; rerun it after refitting). Stress test, including site-vs-backend numbers: `python3 scripts/analysis/web_stress_test.py`. Live prices: Yahoo's quote every 15 s for the header, the last days of closes every minute, the long history once a day (`web/common.py`, LIVE_REFRESH / QUOTE_REFRESH). Saved data checked against FRED and Yahoo: `python3 scripts/analysis/data_crosscheck.py` (found the Dow's wrong closes, now in `market_data.BAD_CLOSES`)
 - `scripts/main.py`: quick comparison (S&P 500 vs 20 held-out S&P-calibrated histories), saves `figures/fig00_quick_check_sp500_vs_model.png`
 - `scripts/party_figures.py`: makes `figures/fig13-fig15*.png` (parties over 130 years of the Dow)
 - `scripts/outside_news_figures.py`: makes `figures/fig16-fig18*.png` (commodities, interest rates, the dollar, Fed days; the four moments with error bars)
@@ -83,6 +85,7 @@ Top level: `herding/` (code), `scripts/` (things to run), `figures/` (things to 
   kept locally only (git-ignored: copyrighted, and this repo is public). The equations come from the
   Samanidou et al. (2007) review (see SPEC.md); the parameter tables of Lux & Marchesi (2000) are still
   needed via CMU library access.
+- `docs/redesign/`: the approved website redesign, being built (README.md: the plan, its order and what is done; index.html: the clickable mock-up; WORDING.md: the wording guide every page must follow)
 - `docs/`: everything to read (KEY_POINTS, SPEC, proposal, papers/), plus my notes from tutoring sessions; `docs/journal_guide.md` points to the key moments in `journal/`
 - `scratch/`: temporary files (git-ignored)
 - `journal/`: build journal logs (copied automatically; don't edit by hand)

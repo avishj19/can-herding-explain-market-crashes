@@ -4,8 +4,29 @@
     {
       "name": "web-app",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "streamlit", "run", "app.py", "--server.port", "8501"],
+      "runtimeArgs": [
+        "-m",
+        "streamlit",
+        "run",
+        "app.py",
+        "--server.port",
+        "8501"
+      ],
       "port": 8501
+    },
+    {
+      "name": "redesign-mockup",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "docs/redesign"
+      ],
+      "port": 8765
     }
   ]
 }

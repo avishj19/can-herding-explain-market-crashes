@@ -1,0 +1,1177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Herding site mock-up v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="plotly.min.js"></script>
+<script src="data.js"></script>
+<script src="more.js"></script>
+<style>
+:root {
+  --bg:#000; --card:#050505; --panel:#0B0B0B; --raise:#111; --line:#2A2A2A; --line2:#4A4A4A; --grid:#2E2E2E;
+  --text:#F2F4F8; --text2:#C9C6BF; --muted:#A29F98; --accent:#FFA028; --accent-dim:rgba(255,160,40,.14);
+  --up:#34D399; --down:#FF7A6B; --herd:#F2A7DA; --fund:#3D9BE0; --tag:#C084FC;
+  --snap:cubic-bezier(.2,.8,.2,1); --fast:140ms; --med:220ms;
+}
+* { box-sizing:border-box; }
+html { background:var(--bg); }
+body { margin:0; background:var(--bg); color:var(--text2); font:16px/1.55 Inter, system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+.mono { font-family:'JetBrains Mono', ui-monospace, Menlo, monospace; font-variant-numeric:tabular-nums; }
+.wrap { max-width:1200px; margin:0 auto; padding:0 16px; }
+a { color:var(--accent); }
+
+/* ---------- top: tape + nav, pinned ---------- */
+.top { position:sticky; top:0; z-index:20; background:rgba(0,0,0,.86); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+       border-bottom:1px solid var(--line); }
+.loadbar { position:absolute; left:0; top:0; height:2px; width:0; background:var(--accent); box-shadow:0 0 12px var(--accent); opacity:0; }
+.loadbar.go { animation:load 420ms var(--snap) forwards; }                                   /* m5 */
+@keyframes load { 0% { width:0; opacity:1 } 70% { width:85%; opacity:1 } 100% { width:100%; opacity:0 } }
+.tapebox { overflow:hidden; border-bottom:1px solid var(--line); }
+.tape { display:flex; width:max-content; animation:marquee 48s linear infinite; }           /* m1 */
+.tapebox:hover .tape, .tapebox:focus-within .tape { animation-play-state:paused; }
+.tape span.i { font:13px 'JetBrains Mono', monospace; padding:7px 22px; white-space:nowrap; border-right:1px solid var(--line); color:var(--text2); }
+.tape b { color:var(--text); font-weight:600; }
+@keyframes marquee { from { transform:translateX(0) } to { transform:translateX(-50%) } }
+.live { display:inline-flex; align-items:center; gap:7px; color:var(--accent); font-weight:700; }
+.live i { width:7px; height:7px; border-radius:50%; background:var(--accent); position:relative; }
+.live i::after { content:""; position:absolute; inset:0; border-radius:50%; background:var(--accent); animation:ping 1.6s var(--snap) infinite; }
+@keyframes ping { 0% { transform:scale(1); opacity:.7 } 80%,100% { transform:scale(2.8); opacity:0 } }
+nav { position:relative; display:flex; align-items:center; gap:2px; padding:4px 0; }
+nav a { position:relative; font:600 13px 'JetBrains Mono', monospace; color:var(--muted); text-decoration:none; padding:0 12px;
+        min-height:44px; display:inline-flex; align-items:center; gap:7px; transition:color var(--fast) var(--snap); }
+nav a:hover, nav a.on { color:var(--text); }
+nav a b { font-weight:600; border:1px solid var(--line2); padding:0 5px; color:var(--muted); transition:all var(--fast) var(--snap); }
+nav a.on b { background:var(--accent); border-color:var(--accent); color:#000; }
+.ink { position:absolute; bottom:0; height:2px; background:var(--accent); transition:transform var(--med) var(--snap), width var(--med) var(--snap); } /* m8 */
+nav .sp { flex:1; }
+.kbd { font:600 11px 'JetBrains Mono', monospace; border:1px solid var(--line2); border-bottom-width:2px; padding:1px 5px; color:var(--muted); }
+button { font:600 13px 'JetBrains Mono', monospace; min-height:44px; padding:0 14px; border:1px solid var(--line2); background:var(--panel);
+         color:var(--text2); cursor:pointer; transition:transform var(--fast) var(--snap), border-color var(--fast), background var(--fast), color var(--fast); }
+button:hover { border-color:var(--accent); color:var(--text); }
+button:active { transform:scale(.97); }
+.primary { background:var(--accent); color:#000; border-color:var(--accent); }
+.primary:hover { color:#000; box-shadow:0 0 0 4px var(--accent-dim); }
+
+.mock { border:1px dashed var(--tag); padding:10px 14px; margin:16px 0 0; font-size:14px; color:var(--text2); }
+.mock b { color:var(--tag); }
+.tag { display:inline-block; font:700 10px 'JetBrains Mono', monospace; color:#000; background:var(--tag); padding:1px 5px; margin-left:6px;
+       vertical-align:middle; letter-spacing:.03em; }
+
+/* ---------- sections ---------- */
+section { padding:34px 0 18px; border-bottom:1px solid var(--line); scroll-margin-top:110px; }
+.rise { opacity:0; transform:translateY(10px); transition:opacity 260ms var(--snap), transform 260ms var(--snap); }   /* m6 */
+.rise.in { opacity:1; transform:none; }
+h1 { font:700 34px/1.2 'JetBrains Mono', monospace; color:var(--text); margin:6px 0 12px; letter-spacing:-.01em; }
+h1 .w { display:inline-block; opacity:0; transform:translateY(8px); filter:blur(4px); animation:word 300ms var(--snap) forwards; }
+@keyframes word { to { opacity:1; transform:none; filter:none } }
+h1 em { font-style:normal; color:var(--accent); text-shadow:0 0 24px rgba(255,160,40,.35); }
+h2 { font:600 19px 'JetBrains Mono', monospace; color:var(--text); margin:4px 0 14px; }
+h2::before { content:"■ "; color:var(--accent); }
+.lead { font-size:18px; max-width:760px; }
+.cards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:18px 0; }
+.card { border:1px solid var(--line); background:var(--card); padding:14px 16px; position:relative; overflow:hidden;
+        transition:transform var(--fast) var(--snap), border-color var(--fast); }                      /* m7 */
+.card:hover { transform:translateY(-2px); border-color:var(--accent); }
+.card::after { content:""; position:absolute; inset:-1px; background:radial-gradient(240px circle at var(--mx,50%) var(--my,50%), rgba(255,160,40,.12), transparent 60%);
+               opacity:0; transition:opacity var(--fast); pointer-events:none; }
+.card:hover::after { opacity:1; }
+.card .l { font:12px 'JetBrains Mono', monospace; color:var(--muted); letter-spacing:.03em; text-transform:uppercase; }
+.card .v { font:700 34px 'JetBrains Mono', monospace; color:var(--text); }
+.card .n { font-size:14px; color:var(--muted); }
+.grid2 { display:grid; grid-template-columns:1fr 2fr; gap:24px; align-items:start; }
+.chart { border:1px solid var(--line); background:var(--card); position:relative; }
+.cap { font-size:14px; color:var(--muted); margin:8px 0 0; }
+.try { border-left:3px solid var(--accent); background:linear-gradient(90deg, var(--accent-dim), transparent 80%); padding:9px 12px; margin:10px 0 4px; }
+.try::before { content:"TRY THIS ▸ "; font:700 12px 'JetBrains Mono', monospace; color:var(--accent); letter-spacing:.06em; }
+
+/* segmented controls with a sliding highlight (m2) */
+.seg { position:relative; display:inline-flex; border:1px solid var(--line2); background:var(--panel); margin:8px 0; max-width:100%; overflow-x:auto; }
+.seg button { border:0; background:transparent; position:relative; z-index:1; color:var(--muted); white-space:nowrap; }
+.seg button.on { color:#000; }
+.seg .pill { position:absolute; top:0; bottom:0; background:var(--accent); transition:transform var(--med) var(--snap), width var(--med) var(--snap); }
+
+.quote { display:flex; align-items:baseline; gap:12px; margin:10px 0; flex-wrap:wrap; }
+.quote .px { font:700 36px 'JetBrains Mono', monospace; color:var(--text); padding:0 6px; }
+/* digit roll (m4): each digit is a column of 0-9 that slides */
+.odo { display:inline-flex; overflow:hidden; height:1.2em; line-height:1.2em; vertical-align:bottom; }
+.odo .d { display:inline-block; height:1.2em; overflow:hidden; }
+.odo .d > span { display:flex; flex-direction:column; transition:transform 420ms var(--snap); }
+.odo .d > span > i { font-style:normal; height:1.2em; }
+.tint-up { animation:tu 700ms var(--snap); } .tint-down { animation:td 700ms var(--snap); }
+@keyframes tu { 0% { background:rgba(52,211,153,.22) } 100% { background:transparent } }
+@keyframes td { 0% { background:rgba(255,122,107,.22) } 100% { background:transparent } }
+
+.panel { border:1px solid var(--line); background:var(--card); padding:14px; }
+.panel h3 { font:700 12px 'JetBrains Mono', monospace; color:var(--accent); letter-spacing:.08em; margin:0 0 10px; }
+input[type=range] { width:100%; accent-color:var(--accent); height:44px; }
+.score { list-style:none; padding:0; margin:8px 0 0; font-size:14px; }
+.score li { display:grid; grid-template-columns:1fr auto; gap:4px 8px; padding:8px 0; border-top:1px solid var(--line); }
+.badge { font:700 11px 'JetBrains Mono', monospace; padding:2px 7px; border:1px solid; transition:all var(--med) var(--snap); }
+.badge.match { color:var(--up); border-color:var(--up); } .badge.close { color:var(--accent); border-color:var(--accent); }
+.badge.off { color:var(--down); border-color:var(--down); }
+.pop { animation:pop 260ms var(--snap); } @keyframes pop { 0% { transform:scale(.85) } 60% { transform:scale(1.08) } 100% { transform:scale(1) } }
+.chart.loading::before { content:""; position:absolute; inset:0; z-index:2; pointer-events:none;
+  background:linear-gradient(100deg, transparent 30%, rgba(255,160,40,.07) 50%, transparent 70%); background-size:200% 100%;
+  animation:shimmer 420ms var(--snap); }                                                                  /* m5 */
+@keyframes shimmer { from { background-position:120% 0 } to { background-position:-20% 0 } }
+table { border-collapse:collapse; width:100%; font-size:15px; background:var(--card); }
+th, td { border:1px solid var(--line); padding:9px 10px; text-align:left; vertical-align:top; }
+th { font:700 12px 'JetBrains Mono', monospace; color:var(--muted); background:var(--panel); letter-spacing:.04em; }
+tr { transition:background var(--fast); } tr:hover td { background:#0F0F0F; }
+.ok { color:var(--up); font-weight:600; } .mid { color:var(--accent); font-weight:600; }
+
+/* ---------- settings drawer (s1) and command palette (s2) ---------- */
+.scrim { position:fixed; inset:0; background:rgba(0,0,0,.6); opacity:0; pointer-events:none; transition:opacity var(--med) var(--snap); z-index:40; }
+.scrim.open { opacity:1; pointer-events:auto; }
+.drawer { position:fixed; top:0; left:0; bottom:0; width:min(380px, 92vw); background:var(--panel); border-right:1px solid var(--line2);
+          transform:translateX(-102%); transition:transform var(--med) var(--snap); z-index:50; overflow-y:auto; padding:16px; }
+.drawer.open { transform:none; }
+.drawer h4 { font:700 12px 'JetBrains Mono', monospace; color:var(--accent); letter-spacing:.08em; margin:18px 0 6px; }
+.row { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:44px; border-bottom:1px solid var(--line); font-size:14px; }
+.sw { width:40px; height:22px; border:1px solid var(--line2); background:var(--raise); position:relative; cursor:pointer; flex:none; }
+.sw::after { content:""; position:absolute; top:3px; left:3px; width:14px; height:14px; background:var(--muted); transition:transform var(--fast) var(--snap), background var(--fast); }
+.sw.on { border-color:var(--accent); } .sw.on::after { transform:translateX(18px); background:var(--accent); }
+.chips { display:flex; flex-wrap:wrap; gap:6px; padding:6px 0; }
+.chips button { min-height:36px; padding:0 10px; font-size:12px; }
+.palette { position:fixed; left:50%; top:16vh; width:min(560px, 92vw); transform:translate(-50%, -8px) scale(.98); opacity:0; pointer-events:none;
+           background:var(--panel); border:1px solid var(--line2); box-shadow:0 20px 60px rgba(0,0,0,.6); z-index:60;
+           transition:opacity var(--fast) var(--snap), transform var(--fast) var(--snap); }
+.palette.open { opacity:1; transform:translate(-50%, 0) scale(1); pointer-events:auto; }
+.palette input { width:100%; background:transparent; border:0; border-bottom:1px solid var(--line); color:var(--text); font:15px 'JetBrains Mono', monospace; padding:14px; outline:none; }
+.palette ul { list-style:none; margin:0; padding:6px; max-height:46vh; overflow:auto; }
+.palette li { padding:10px 10px; font-size:14px; display:flex; justify-content:space-between; cursor:pointer; }
+.palette li.sel { background:var(--accent-dim); color:var(--text); box-shadow:inset 2px 0 0 var(--accent); }
+.palette li small { color:var(--muted); font-family:'JetBrains Mono', monospace; }
+
+/* reduced motion: the OS setting, or the switch in Settings */
+@media (prefers-reduced-motion: reduce) { :root:not(.motion) * { animation:none !important; transition:none !important; } .rise { opacity:1; transform:none; } h1 .w { opacity:1; transform:none; filter:none; } }
+:root.still * { animation:none !important; transition:none !important; }
+:root.still .rise, :root.still h1 .w { opacity:1 !important; transform:none !important; filter:none !important; }
+nav a, nav button { white-space:nowrap; flex:none; }
+nav .links { display:flex; gap:2px; overflow-x:auto; scrollbar-width:none; min-width:0; flex:1; position:relative; }
+nav .links::-webkit-scrollbar { display:none; }
+@media (max-width:980px) { nav .lbl, nav .kbd, nav .tag { display:none; } nav button { padding:0 12px; } nav a { padding:0 9px; } }
+@media (max-width:760px) { .cards, .grid2 { grid-template-columns:1fr; } h1 { font-size:25px; } }
+
+/* ---------- v3: one page at a time, with a quick page change ---------- */
+.page { display:none; }
+.page.show { display:block; animation:pagein 240ms var(--snap); }
+@keyframes pagein { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:none } }
+.page > section:last-child { border-bottom:0; }
+.eyebrow { font:700 12px 'JetBrains Mono', monospace; color:var(--accent); letter-spacing:.12em; }
+.hero { display:grid; grid-template-columns:1.05fr 1fr; gap:28px; align-items:center; }
+.crowd { border:1px solid var(--line); background:var(--card); position:relative; }
+.crowd canvas { display:block; width:100%; height:auto; }
+.crowd .legend { align-items:center; display:flex; flex-wrap:wrap; gap:6px 16px; padding:8px 12px; border-top:1px solid var(--line);
+                 font:13px 'JetBrains Mono', monospace; color:var(--text2); }
+.crowd .legend i { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:-1px; }
+.crowd .ctl { position:absolute; top:8px; right:8px; display:flex; gap:6px; }
+.crowd .ctl button { min-height:32px; padding:0 10px; font-size:12px; background:rgba(0,0,0,.6); }
+.steps3 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:16px 0; }
+.step { border:1px solid var(--line); background:var(--card); padding:14px 16px; transition:transform var(--fast) var(--snap), border-color var(--fast); }
+.step:hover { transform:translateY(-2px); border-color:var(--accent); }
+.step .k { font:700 12px 'JetBrains Mono', monospace; color:var(--accent); letter-spacing:.08em; }
+.step b { color:var(--text); display:block; margin:4px 0; font-size:16px; }
+.step svg { display:block; width:100%; height:86px; margin:6px 0 4px; }
+.quote-big { border-left:3px solid var(--accent); padding:6px 16px; margin:18px 0; font-size:19px; color:var(--text); max-width:820px; }
+.edu { border:1px solid var(--accent); background:var(--accent-dim); color:var(--text); padding:14px 16px; margin:14px 0 6px;
+       font:600 15px 'JetBrains Mono', monospace; letter-spacing:.02em; }
+.edu b { color:var(--accent); }
+.refs { list-style:none; padding:0; margin:0; counter-reset:r; }
+.refs li { counter-increment:r; padding:12px 0 12px 46px; border-top:1px solid var(--line); position:relative; font-size:15px; }
+.refs li::before { content:"[" counter(r) "]"; position:absolute; left:0; top:12px; font:600 13px 'JetBrains Mono', monospace; color:var(--accent); }
+.refs li .use { display:block; color:var(--muted); font-size:14px; margin-top:2px; }
+.refs li a { word-break:break-word; }
+.refgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px 32px; }
+.pill2 { display:inline-block; font:600 11px 'JetBrains Mono', monospace; border:1px solid var(--line2); color:var(--muted); padding:1px 7px; margin-right:6px; }
+.grid2 > *, .hero > * { min-width:0; }
+@media (max-width:900px) { .hero, .steps3, .refgrid, .grid2 { grid-template-columns:1fr !important; } }
+
+/* ---------- the Story: one idea per screen ---------- */
+.story { display:grid; grid-template-columns:250px 1fr; gap:22px; align-items:start; }
+.stepper { list-style:none; margin:0; padding:0; position:sticky; top:118px; border-left:1px solid var(--line); }
+.stepper li { position:relative; padding:9px 10px 9px 30px; cursor:pointer; font-size:14px; color:var(--muted); min-height:44px;
+              transition:color var(--fast) var(--snap), background var(--fast); }
+.stepper li:hover { color:var(--text); background:#0B0B0B; }
+.stepper li::before { content:attr(data-n); position:absolute; left:-12px; top:10px; width:22px; height:22px; display:grid; place-items:center;
+                      font:700 11px 'JetBrains Mono', monospace; background:var(--bg); border:1px solid var(--line2); color:var(--muted);
+                      transition:all var(--med) var(--snap); }
+.stepper li.done::before { content:"✓"; color:var(--up); border-color:var(--up); }
+.stepper li.on { color:var(--text); }
+.stepper li.on::before { background:var(--accent); border-color:var(--accent); color:#000; transform:scale(1.1); }
+.stepcard { border:1px solid var(--line); background:var(--card); padding:18px 20px 16px; min-width:0; }
+.progress { height:3px; background:var(--line); margin:-18px -20px 16px; }
+.progress span { display:block; height:100%; background:var(--accent); width:0; transition:width var(--med) var(--snap); box-shadow:0 0 10px var(--accent); }
+.s-title { font:700 24px/1.25 'JetBrains Mono', monospace; color:var(--text); margin:6px 0 14px; }
+.s-title::before { content:none; }
+.s-grid { display:grid; grid-template-columns:1fr 1.35fr; gap:22px; align-items:start; }
+.s-grid > * { min-width:0; }
+.s-body p { margin:0 0 10px; font-size:16.5px; }
+.s-body b { color:var(--text); }
+.bignum { margin:14px 0; font:700 40px 'JetBrains Mono', monospace; color:var(--accent); line-height:1.05; }
+.bignum small { display:block; font:500 13px 'JetBrains Mono', monospace; color:var(--muted); margin-top:4px; letter-spacing:.02em; }
+.notice { border-left:3px solid var(--herd); background:rgba(242,167,218,.07); padding:9px 12px; font-size:15px; }
+.notice::before { content:"WHAT TO NOTICE ▸ "; font:700 12px 'JetBrains Mono', monospace; color:var(--herd); letter-spacing:.05em; }
+.s-vis { min-height:330px; }
+.s-swap { animation:swap 220ms var(--snap); }
+@keyframes swap { from { opacity:0; transform:translateX(10px) } to { opacity:1; transform:none } }
+.s-nav { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:16px; border-top:1px solid var(--line); padding-top:12px; }
+.kinds { display:grid; gap:10px; padding:14px; }
+.kind { display:grid; grid-template-columns:120px 1fr; gap:12px; align-items:center; border:1px solid var(--line); padding:10px 12px; }
+.kind svg { width:120px; height:46px; }
+.kind b { color:var(--text); display:block; }
+.guess { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+.verdict { list-style:none; padding:14px; margin:0; display:grid; gap:8px; }
+.verdict li { border:1px solid var(--line); padding:10px 12px; font-size:15px; display:grid; grid-template-columns:28px 1fr; gap:8px; }
+.verdict li b { color:var(--text); }
+@media (max-width:900px) { .story, .s-grid { grid-template-columns:1fr; } .stepper { position:static; display:flex; overflow-x:auto; border-left:0; border-bottom:1px solid var(--line); }
+  .stepper li { white-space:nowrap; padding:10px 10px 10px 30px; } .stepper li::before { left:4px; } .stepper li span { display:none; } }
+
+/* ---------- restored Test program features ---------- */
+.tasks { border:1px solid var(--line); background:var(--card); margin:4px 0 16px; }
+.tasks summary { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 14px; min-height:44px; cursor:pointer;
+                 font:700 13px 'JetBrains Mono', monospace; color:var(--text); list-style:none; }
+.tasks summary::-webkit-details-marker { display:none; }
+.tasks summary span:last-child { color:var(--accent); }
+.taskbar { height:3px; background:var(--line); margin:0 14px; } .taskbar span { display:block; height:100%; width:0; background:var(--up); transition:width var(--med) var(--snap); }
+.tasks ol { list-style:none; padding:6px 14px 12px; margin:0; display:grid; gap:6px; }
+.tasks li { display:grid; grid-template-columns:24px 1fr; gap:8px; font-size:15px; padding:6px 0; }
+.tasks li .box { width:20px; height:20px; border:1px solid var(--line2); display:grid; place-items:center; font-size:13px; transition:all var(--med) var(--snap); }
+.tasks li.done .box { background:var(--up); border-color:var(--up); color:#000; }
+.tasks li.done .t { color:var(--muted); text-decoration:line-through; }
+.srcnote { font-size:12px; color:var(--muted); }
+.subrow { min-height:0; display:flex; flex-wrap:wrap; gap:8px; margin:-2px 0 8px; }
+.subrow .seg { margin:0; }
+.subrow .seg button { min-height:34px; font-size:12px; }
+.insight { font-size:15px; color:var(--text2); border-top:1px dashed var(--line); padding-top:8px; margin-top:10px; }
+.insight::before { content:"IN ONE LINE ▸ "; font:700 12px 'JetBrains Mono', monospace; color:var(--muted); letter-spacing:.05em; }
+.presets { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:10px; }
+.presets button { min-height:52px; padding:4px 6px; font-size:12px; line-height:1.25; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.presets button small { font:500 11px Inter, sans-serif; color:inherit; opacity:.8; }
+.presets button.on { background:var(--accent); color:#000; border-color:var(--accent); }
+.lowbox { border:1px solid var(--line); background:var(--card); padding:12px; min-height:120px; }
+.lowbox table td.num, .lowbox table th.num { text-align:right; font-family:'JetBrains Mono', monospace; }
+.bd-list { max-height:320px; overflow:auto; }
+.bd-list tr { cursor:pointer; } .bd-list tr.sel td { background:var(--accent-dim); }
+.story-box { border-left:3px solid var(--accent); padding:10px 12px; margin-top:10px; background:var(--panel); font-size:15px; }
+.checkrow { cursor:pointer; } .checkrow td:first-child::before { content:"▸ "; color:var(--accent); display:inline-block; transition:transform var(--fast) var(--snap); }
+.checkrow.open td:first-child::before { transform:rotate(90deg); }
+.detail td { background:#070707; padding:14px; }
+.detail .grid2 { grid-template-columns:1fr 1.6fr; }
+.mapchips { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0; }
+.mapchips button { min-height:34px; font-size:12px; } .mapchips button.on { border-color:var(--accent); color:var(--text); background:var(--accent-dim); }
+.gallery img { width:100%; border:1px solid var(--line); background:#fff; display:block; }
+.gallery figure { margin:0 0 18px; } .gallery figcaption { font-size:14px; color:var(--text2); margin-top:6px; }
+.glossary dl { display:grid; grid-template-columns:200px 1fr; gap:8px 18px; margin:10px 0; font-size:15px; }
+.glossary dt { font:600 14px 'JetBrains Mono', monospace; color:var(--text); }
+@media (max-width:760px) { .glossary dl { grid-template-columns:1fr; } .detail .grid2 { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="loadbar" id="loadbar"></div>
+  <div class="tapebox" tabindex="0" aria-label="Ticker tape, hover to pause"><div class="tape mono" id="tape"></div></div>
+  <div class="wrap">
+    <nav id="nav">
+      <div class="links">
+        <a href="#start" class="on"><b>1</b>Start</a>
+        <a href="#story"><b>2</b>Story</a>
+        <a href="#lab"><b>3</b>Test program</a>
+        <a href="#checks"><b>4</b>Checks</a>
+        <a href="#sources"><b>5</b>Sources</a>
+        <span class="ink" id="ink"></span>
+      </div>
+      <button id="open-pal" title="Search every setting and market (⌘K)" aria-label="Search">⌕<span class="lbl"> Search</span> <span class="kbd">⌘K</span></button>
+      <button id="open-set" style="margin-left:6px" title="Settings (S)" aria-label="Settings">⚙<span class="lbl"> Settings</span> <span class="kbd">S</span></button>
+    </nav>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Settings">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <b class="mono" style="color:var(--text)">⚙ SETTINGS</b><button id="close-set">✕ Esc</button></div>
+  <p class="cap">Every option from the current site is here.</p>
+  <h4>MARKET</h4>
+  <div class="chips" id="mk"></div>
+  <div class="row"><span>Any stock symbol (from Yahoo Finance)</span><button style="min-height:34px">Type…</button></div>
+  <div class="row"><span>Live prices, with 1-day and 7-day charts</span><span class="sw" data-k="live"></span></div>
+  <h4>CHART</h4>
+  <div class="row"><span>Mark big days (beyond 4 sd)</span><span class="sw on"></span></div>
+  <div class="row"><span>Show the fall from the last peak (drawdown)</span><span class="sw on"></span></div>
+  <div class="row"><span>Log price scale (equal heights = equal % changes)</span><span class="sw on"></span></div>
+  <div class="row"><span>Shade by the president's party (extra study)</span><span class="sw"></span></div>
+  <h4>MORE MODEL SETTINGS</h4>
+  <div class="row"><span>Reaction to price trends (a2)</span><span class="mono">0.13</span></div>
+  <div class="row"><span>How often trend chasers change mood (v1)</span><span class="mono">fitted</span></div>
+  <div class="row"><span>Simulated trading days · Seed (picks the history)</span><span class="mono">19,329 · 1000</span></div>
+  <div class="row"><span>Party effect on true value (extra study)</span><span class="mono">0% a year</span></div>
+  <h4>MORE</h4>
+  <div class="row"><span>History log: every history you ran, on one chart</span><button style="min-height:34px">Open</button></div>
+  <div class="row"><span>Copy a link to this exact view</span><button style="min-height:34px">Copy</button></div>
+  <div class="row"><span>Reduce motion</span><span class="sw" id="still"></span></div>
+  <div class="row"><span>Reset everything</span><button style="min-height:34px">Reset</button></div>
+</aside>
+<div class="palette" id="palette" role="dialog" aria-label="Search">
+  <input id="pal-in" placeholder="Search markets, charts, settings…  (↑↓ to move, Enter to go)">
+  <ul id="pal-list"></ul>
+</div>
+
+<div class="wrap">
+  <div class="mock"><b>MOCK-UP v3.</b> Five separate pages, dark only, real numbers. The trader crowd on Start is drawn live from the
+    model's own run through its biggest crash. Press <span class="kbd">S</span> for settings or <span class="kbd">⌘K</span> to search.</div>
+
+  <!-- ===================================================== 1 START -->
+  <div class="page" id="p-start">
+    <section>
+      <div class="hero">
+        <div>
+          <div class="eyebrow">A STUDENT PROJECT · 02-120 · CMU · FALL 2026</div>
+          <h1 id="hero">The news follows a bell curve. Traders copy each other. Is that enough to make a <em>crash</em>?</h1>
+          <p class="lead">This site runs a market of 500 simulated traders, side by side with the real S&amp;P 500, to test one idea: that
+            crashes can come from traders copying each other, even when the news is plain bell-curve noise.</p>
+          <button class="primary" data-go="story">▶ Start the story</button>
+          <button data-go="lab" style="margin-left:6px">Open the test program</button>
+        </div>
+        <div class="crowd" id="crowdbox">
+          <canvas id="crowd" width="640" height="420" aria-label="500 simulated traders, colored by what each is doing, day by day through the model's biggest crash"></canvas>
+                    <div class="legend"><span><i style="background:var(--fund)"></i>Value traders <b id="n-f"></b></span>
+            <span><i style="background:var(--up)"></i>Optimists <b id="n-o"></b></span>
+            <span><i style="background:var(--down)"></i>Pessimists <b id="n-p"></b></span>
+            <span style="margin-left:auto;color:var(--muted)">simulated day <b id="n-day"></b></span><button id="crowd-play" style="min-height:30px;padding:0 10px;font-size:12px">❚❚ Pause</button></div>
+        </div>
+      </div>
+      <p class="cap">The model's 500 traders, day by day, through its biggest crash. Each dot is one trader. Watch optimists pile up, then
+        flip to pessimists all at once: that flip is the crash.</p>
+    </section>
+
+    <section>
+      <h2>Why build this</h2>
+      <div class="quote-big">On 19 October 1987 the S&amp;P 500 fell 20% in one day. If daily moves followed a bell curve, a fall that size would come
+        about once in 10<sup>86</sup> years (a 1 followed by 86 zeros). It came within decades.</div>
+      <div class="cards" id="cards"></div>
+      <p>The question from the proposal: <b>If the news is plain bell-curve noise, can traders copying each other (herding) alone cause the fat tails, crashes and bursts of wild days that real markets show?</b></p>
+    </section>
+
+    <section>
+      <h2>How the program answers it</h2>
+      <div class="steps3">
+        <div class="step"><span class="k">STEP 1 · CHECK THE HERDING RULE</span><b>Kirman's ants</b>
+          <svg viewBox="0 0 200 86" aria-hidden="true">
+            <circle cx="40" cy="43" r="26" fill="none" stroke="#4A4A4A"/><text x="40" y="48" fill="#A29F98" font-size="13" text-anchor="middle" font-family="JetBrains Mono">A</text>
+            <circle cx="160" cy="43" r="26" fill="none" stroke="#4A4A4A"/><text x="160" y="48" fill="#A29F98" font-size="13" text-anchor="middle" font-family="JetBrains Mono">B</text>
+            <g fill="#F2A7DA" id="antsA"></g><path d="M70 43 Q100 20 130 43" fill="none" stroke="#FFA028" stroke-dasharray="3 3"/><polygon points="130,43 123,39 124,46" fill="#FFA028"/>
+          </svg>
+          Ants copy each other when they choose between two food sources. The simulation must match Kirman's exact formula before the market is built on it.</div>
+        <div class="step"><span class="k">STEP 2 · BUILD THE MARKET</span><b>500 traders</b>
+          <svg viewBox="0 0 200 86" aria-hidden="true" id="mini-crowd"></svg>
+          Value traders buy below the true value and sell above it. Trend chasers follow the trend and copy the crowd's mood. Each trader switches to whichever kind is making more money.</div>
+        <div class="step"><span class="k">STEP 3 · COMPARE</span><b>Against the real S&amp;P 500</b>
+          <svg viewBox="0 0 200 86" aria-hidden="true">
+            <path id="mini-bell" fill="none" stroke="#737A87" stroke-width="2" stroke-dasharray="3 3"/>
+            <path id="mini-fat" fill="none" stroke="#F2F4F8" stroke-width="2"/>
+            <text x="150" y="20" fill="#F2F4F8" font-size="10" font-family="JetBrains Mono">real</text>
+            <text x="100" y="80" fill="#737A87" font-size="10" font-family="JetBrains Mono">bell</text>
+          </svg>
+          Same measurements on both: how rare big days are, whether wild days come in bursts, and how long between crashes.</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================================================== 2 STORY (step by step) -->
+  <div class="page" id="p-story">
+    <section>
+      <div class="eyebrow">THE ARGUMENT IN 8 STEPS · ABOUT 3 MINUTES</div>
+      <div class="story">
+        <ol class="stepper" id="stepper"></ol>
+        <div class="stepcard" id="stepcard">
+          <div class="progress"><span id="sbar"></span></div>
+          <div class="eyebrow" id="s-of"></div>
+          <h2 class="s-title" id="s-title"></h2>
+          <div class="s-grid">
+            <div>
+              <div class="s-body" id="s-body"></div>
+              <div class="bignum"><span id="s-num"></span><small id="s-numl"></small></div>
+              <div class="notice" id="s-notice"></div>
+            </div>
+            <div><div class="chart s-vis" id="s-vis"></div><p class="cap" id="s-cap"></p></div>
+          </div>
+          <div class="s-nav">
+            <button id="s-back">← Back</button>
+            <span class="mono" style="color:var(--muted);font-size:12px">or use the ← → keys</span>
+            <button class="primary" id="s-next">Next →</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================================================== 3 TEST PROGRAM -->
+  <div class="page" id="p-lab">
+    <section>
+      <div class="eyebrow">TRY IT YOURSELF</div>
+      <h2>Test program</h2>
+      <details class="tasks" id="tasks" open>
+        <summary><span>Three things to try</span><span class="mono" id="task-n">0 of 3 done</span></summary>
+        <div class="taskbar"><span id="task-bar"></span></div>
+        <ol id="task-list"></ol>
+      </details>
+      <div class="grid2" style="grid-template-columns:3.2fr 1.25fr">
+        <div>
+          <div class="quote">
+            <span class="mono" style="font-weight:700;color:var(--text)">S&amp;P 500</span>
+            <span class="px" id="px"></span><span class="mono" id="chg"></span>
+            <span class="srcnote mono">saved prices, last close 30 October 2026 · <a href="#" class="open-set">Turn on live prices</a></span>
+          </div>
+          <div class="seg" id="views"></div>
+          <div class="subrow" id="subrow"></div>
+          <div class="chart" id="mainbox"><div id="c_main"></div></div>
+          <p class="cap" id="cap_main"></p>
+          <div class="try" id="try_main"></div>
+          <p class="insight" id="insight"></p>
+        </div>
+        <div class="panel">
+          <h3>THE MODEL</h3>
+          <div class="presets" id="presets"></div>
+          <label class="mono" style="font-size:14px">Herding strength <b id="a1v" style="color:var(--text)"></b></label>
+          <input type="range" id="a1" min="0" step="1">
+          <div class="mono" style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)"><span>wilder</span><span>best fit</span><span>calmer</span></div>
+          <p class="cap">The model reruns as you drag. The chart switches to the new simulated history.</p>
+          <div class="mono" style="font-size:13px;margin-top:8px;color:var(--text)">HOW CLOSE TO THE S&amp;P 500?</div>
+          <ul class="score" id="score"></ul>
+          <p class="cap">More model settings, other markets and the history log are in <a href="#" class="open-set">⚙ Settings</a></p>
+        </div>
+      </div>
+      <div class="seg" id="lowtabs" style="margin-top:18px"></div>
+      <div class="lowbox" id="lowbox"></div>
+    </section>
+  </div>
+
+  <!-- ===================================================== 4 CHECKS -->
+  <div class="page" id="p-checks">
+    <section>
+      <div class="eyebrow">THE PROPOSAL'S TESTS, IN ITS ORDER</div>
+      <h2>Checks</h2>
+      <p style="max-width:780px">Each test from the project proposal, with the rule decided in advance and the result. Model numbers come from
+        40 simulated histories, each as long as the S&amp;P 500's record. None of them was used to tune the model. Click a row to see the details.</p>
+      <div class="seg" id="checktabs"></div>
+      <div id="checkbox"></div>
+    </section>
+  </div>
+
+  <!-- ===================================================== 5 SOURCES -->
+  <div class="page" id="p-sources">
+    <section>
+      <div class="eyebrow">PAPERS · DATA · TOOLS</div>
+      <h2>Sources</h2>
+      <div class="edu"><b>FOR EDUCATIONAL PURPOSES ONLY.</b> This is a student project for 02-120 Programming for Scientists at Carnegie Mellon
+        University. It is a simulation for learning, not a forecast, not trading advice and not investment advice.</div>
+      <div class="refgrid">
+        <div>
+          <h3 class="eyebrow" style="margin:18px 0 4px">THE MODEL</h3>
+          <ol class="refs">
+            <li>Lux, T. &amp; Marchesi, M. (1999). Scaling and criticality in a stochastic multi-agent model of a financial market.
+              <i>Nature</i> 397, 498–500. <a href="https://doi.org/10.1038/17290">doi:10.1038/17290</a>
+              <span class="use"><span class="pill2">CORE</span>The model this site rebuilds, and the results it reproduces.</span></li>
+            <li>Samanidou, E., Zschischang, E., Stauffer, D. &amp; Lux, T. (2007). Agent-based models of financial markets.
+              <i>Rep. Prog. Phys.</i> 70, 409–450. <a href="https://arxiv.org/abs/physics/0701140">arXiv:physics/0701140</a>
+              <span class="use"><span class="pill2">EQUATIONS</span>Every equation of the model (docs/SPEC.md).</span></li>
+            <li>Cristelli, M., Pietronero, L. &amp; Zaccaria, A. (2011). Critical overview of agent-based models for economics.
+              <a href="https://arxiv.org/abs/1101.1847">arXiv:1101.1847</a>
+              <span class="use"><span class="pill2">CROSS-CHECK</span>The same equations, checked a second time.</span></li>
+            <li>Lux, T. &amp; Marchesi, M. (2000). Volatility clustering in financial markets: a microsimulation of interacting agents.
+              <i>Int. J. Theor. Appl. Finance</i> 3, 675–702.
+              <span class="use"><span class="pill2">PARAMETERS</span>The paper's tables of settings (not yet obtained, so this site fits its own).</span></li>
+            <li>Kirman, A. (1993). Ants, rationality, and recruitment. <i>Quarterly Journal of Economics</i> 108, 137–156.
+              <span class="use"><span class="pill2">HERDING</span>The ant model, checked against its exact formula first.</span></li>
+          </ol>
+          <h3 class="eyebrow" style="margin:18px 0 4px">MEASURING MARKETS</h3>
+          <ol class="refs" style="counter-reset:r 5">
+            <li>Gopikrishnan, P. et al. (1998). Inverse cubic law for the distribution of stock price variations. <i>Eur. Phys. J. B</i> 3, 139–140.
+              <a href="https://arxiv.org/abs/cond-mat/9803374">arXiv:cond-mat/9803374</a>
+              <span class="use"><span class="pill2">TAIL ≈ 3</span>The target for the tail exponent: about 3.</span></li>
+            <li>Cont, R. (2001). Empirical properties of asset returns: stylized facts and statistical issues. <i>Quantitative Finance</i> 1, 223–236.
+              <a href="https://doi.org/10.1080/713665670">doi:10.1080/713665670</a>
+              <span class="use"><span class="pill2">CHECKLIST</span>The textbook checklist of real-market patterns.</span></li>
+            <li>Peng, C.-K. et al. (1994). Mosaic organization of DNA nucleotides. <i>Phys. Rev. E</i> 49, 1685–1689.
+              <span class="use"><span class="pill2">MEMORY</span>The method that measures how long wild spells last (DFA, Hurst H).</span></li>
+          </ol>
+        </div>
+        <div>
+          <h3 class="eyebrow" style="margin:18px 0 4px">BEYOND THE PAPER</h3>
+          <ol class="refs" style="counter-reset:r 8">
+            <li>Bollerslev, T. (1986). Generalized autoregressive conditional heteroskedasticity. <i>J. Econometrics</i> 31, 307–327.
+              <a href="https://doi.org/10.1016/0304-4076(86)90063-1">doi:10.1016/0304-4076(86)90063-1</a>
+              <span class="use"><span class="pill2">RIVAL</span>GARCH: a rival formula for bursts of wild days, with no traders in it.</span></li>
+            <li>Glosten, L., Jagannathan, R. &amp; Runkle, D. (1993). On the relation between the expected value and the volatility of the
+              nominal excess return on stocks. <i>J. Finance</i> 48, 1779–1801.
+              <span class="use"><span class="pill2">RIVAL</span>The part of GARCH that makes falls bigger than rises.</span></li>
+            <li>Bouchaud, J.-P., Matacz, A. &amp; Potters, M. (2001). Leverage effect in financial markets: the retarded volatility model.
+              <i>Phys. Rev. Lett.</i> 87, 228701. <a href="https://doi.org/10.1103/PhysRevLett.87.228701">doi:10.1103/PhysRevLett.87.228701</a>
+              <span class="use"><span class="pill2">TESTED</span>The "panic" idea: tested here. It does not make falls bigger than rises.</span></li>
+            <li>Santa-Clara, P. &amp; Valkanov, R. (2003). The presidential puzzle. <i>J. Finance</i> 58, 1841–1872; and Pástor, Ľ. &amp;
+              Veronesi, P. (2020). Political cycles and stock returns. <i>J. Political Economy</i> 128, 4011–4045.
+              <span class="use"><span class="pill2">EXTENSION</span>The extra study on the president's party.</span></li>
+          </ol>
+          <h3 class="eyebrow" style="margin:18px 0 4px">DATA</h3>
+          <ol class="refs" style="counter-reset:r 12">
+            <li>Yahoo Finance: S&amp;P 500 (^GSPC), Nasdaq-100, 20 stocks, gold and copper, live quotes.</li>
+            <li>FRED, Federal Reserve Bank of St. Louis: S&amp;P 500 check copy, NBER recessions, oil, rates, the dollar.</li>
+            <li>MeasuringWorth: the Dow Jones since 1896. Federal Reserve Board: FOMC decision dates.</li>
+          </ol>
+          <h3 class="eyebrow" style="margin:18px 0 4px">TOOLS</h3>
+          <p style="font-size:15px">Python, NumPy, SciPy, pandas, Numba, Plotly and Streamlit. Code and tests:
+            <a href="https://github.com/avishj19/can-herding-explain-market-crashes">github.com/avishj19/can-herding-explain-market-crashes</a></p>
+        </div>
+      </div>
+    </section>
+  </div>
+  <p class="cap" style="padding:16px 0 50px">For educational purposes only. A simulation for learning, not a forecast or investment advice.</p>
+</div>
+
+<script>
+const M = window.MOCK;
+const P = { real:"#F2F4F8", bell:"#737A87", up:"#34D399", down:"#FF7A6B", guide:"#8A8D99", grid:"#2E2E2E", line:"#4A4A4A",
+            muted:"#A29F98", text2:"#C9C6BF", card:"#050505", panel:"#0D0D0D", fund:"#3D9BE0", herd:"#F2A7DA",
+            herdFill:"rgba(242,167,218,0.10)", accent:"#FFA028" };
+const A1S = Object.keys(M.runs).sort((a, b) => a - b);
+let a1i = A1S.indexOf(String(M.fit_a1)); if (a1i < 0) a1i = Math.floor(A1S.length / 2);
+const fmt = (x, d=2) => x.toLocaleString("en-US", {minimumFractionDigits:d, maximumFractionDigits:d});
+const still = () => document.documentElement.classList.contains("still") || matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---------- layout and charts ---------- */
+function base(extra) {
+  const ax = { gridcolor:P.grid, linecolor:P.line, zerolinecolor:P.line, tickfont:{size:13, color:P.muted}, title:{font:{size:13, color:P.muted}},
+               showspikes:true, spikemode:"across", spikedash:"dot", spikecolor:P.guide, spikethickness:1 };
+  return Object.assign({ paper_bgcolor:P.card, plot_bgcolor:P.card, font:{family:"JetBrains Mono, monospace", size:13, color:P.text2},
+    margin:{l:62, r:16, t:16, b:48}, hoverlabel:{font:{size:14, family:"JetBrains Mono"}, bgcolor:P.panel, bordercolor:P.accent},
+    legend:{orientation:"h", y:1.02, yanchor:"bottom", x:0, font:{size:13}}, xaxis:{...ax}, yaxis:{...ax}, hovermode:"closest" }, extra || {});
+}
+const CFG = { displayModeBar:false, responsive:true };
+
+function kirman() {
+  const K = M.kirman, xs = [...Array(K.sim.length).keys()], b = base();
+  document.getElementById("tv").textContent = K.tv.toFixed(4);
+  Plotly.newPlot("c_kirman", [
+    { x:K.steps, y:K.count, mode:"lines", line:{color:P.herd, width:1.6}, name:"Simulation", hovertemplate:"%{x:.2f}M steps: %{y} ants<extra></extra>" },
+    { x:xs, y:K.sim, type:"bar", marker:{color:P.herd, opacity:.45}, name:"Simulated share", xaxis:"x2", yaxis:"y2" },
+    { x:xs, y:K.exact, mode:"lines", line:{color:P.real, width:2.5}, name:"Kirman's exact answer", xaxis:"x2", yaxis:"y2" }],
+    base({ height:420, bargap:0, grid:{rows:2, columns:1, pattern:"independent", roworder:"top to bottom"}, margin:{l:62, r:16, t:34, b:48},
+      xaxis:{...b.xaxis, title:{text:"Steps (millions)"}}, yaxis:{...b.yaxis, title:{text:"Ants at A"}},
+      xaxis2:{...b.xaxis, title:{text:"Ants at source A"}}, yaxis2:{...b.yaxis, title:{text:"Share of time"}} }), CFG);
+}
+
+/* ---------- segmented control with a sliding highlight ---------- */
+function seg(id, items, current, onpick) {
+  const el = document.getElementById(id);
+  el.innerHTML = `<span class="pill"></span>` + items.map(v => `<button data-v="${v}" class="${v === current ? "on" : ""}">${v}</button>`).join("");
+  const move = () => { const on = el.querySelector("button.on"), pill = el.querySelector(".pill");
+    pill.style.width = on.offsetWidth + "px"; pill.style.transform = `translateX(${on.offsetLeft}px)`; };
+  el.querySelectorAll("button").forEach(b => b.onclick = () => {
+    el.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); move(); onpick(b.dataset.v); });
+  requestAnimationFrame(move); addEventListener("resize", move);
+}
+
+/* ---------- digit roll ---------- */
+function odo(el, text) {
+  if (!el.firstChild || el.dataset.len !== String(text.length)) {
+    el.innerHTML = `<span class="odo">${[...text].map(ch => /\d/.test(ch)
+      ? `<span class="d"><span>${[...Array(10).keys()].map(n => `<i>${n}</i>`).join("")}</span></span>` : `<span>${ch}</span>`).join("")}</span>`;
+    el.dataset.len = text.length;
+  }
+  let k = 0;
+  el.querySelectorAll(".odo > *").forEach((node, i) => {
+    const ch = text[i];
+    if (node.classList.contains("d")) node.firstChild.style.transform = `translateY(-${(+ch) * 1.2}em)`;
+  });
+}
+function tape() {
+  const s = M.spx, up = s.chg >= 0, r = M.runs[A1S[a1i]];
+  const items = [`<span class="live"><i></i>SAVED DATA · ${s.date}</span>`, `S&amp;P 500 <b>${fmt(s.last)}</b> <span style="color:${up ? P.up : P.down}">${up ? "▲" : "▼"} ${fmt(Math.abs(s.chg) * 100)}%</span>`,
+    `TAIL EXPONENT <b>${fmt(s.tail)}</b>`, `BIG DAYS <b>${s.big}</b> (BELL CURVE ${fmt(s.bell_big, 1)})`, `MODEL HERDING <b>${r.a1}</b> · TAIL EXPONENT <b>${r.tail ? fmt(r.tail) : "RAN AWAY"}</b>`,
+    `BELL CURVE: ONE 20-sd FALL EVERY <b>10⁸⁶ YEARS</b>`, `MODEL: ONE 8-sd FALL EVERY <b>${fmt(M.crash_years.model8, 0)} YEARS</b>`];
+  const one = items.map(t => `<span class="i">${t}</span>`).join("");
+  document.getElementById("tape").innerHTML = one + one;                               // two copies: a seamless loop
+}
+function quote(delta) {
+  const s = M.spx, px = s.last + (delta || 0), up = (delta || s.chg) >= 0, el = document.getElementById("px");
+  odo(el, fmt(px));
+  document.getElementById("chg").innerHTML = `<span style="color:${up ? P.up : P.down}">${up ? "▲ +" : "▼ −"}${fmt(Math.abs(delta ? delta / s.last : s.chg) * 100)}%</span>`;
+  if (delta && !still()) { el.classList.remove("tint-up", "tint-down"); void el.offsetWidth; el.classList.add(up ? "tint-up" : "tint-down"); }
+}
+
+/* ---------- model panel ---------- */
+let lastVerdicts = {};
+function model() {
+  const run = M.runs[A1S[a1i]];
+  document.getElementById("a1v").textContent = run.a1;
+  document.getElementById("score").innerHTML = (run.score || []).map(r => {
+    const changed = lastVerdicts[r.what] && lastVerdicts[r.what] !== r.verdict;
+    return `<li><span>${({ "Crash days":"Big days (per 1,000 days)", "Wild days bunch up":"Bursts of wild days" })[r.what] || r.what}</span><span class="badge ${r.verdict} ${changed && !still() ? "pop" : ""}">${{match:"✓ MATCHES", close:"≈ CLOSE", off:"✗ FAR OFF"}[r.verdict]}</span>
+      <span class="mono" style="grid-column:1/-1;color:var(--muted);font-size:13px">Model ${fmt(r.model)} · S&amp;P 500 ${fmt(r.market)}</span></li>`; }).join("")
+    || `<li>This simulated history ran away: the price left its true value for good.</li>`;
+  (run.score || []).forEach(r => lastVerdicts[r.what] = r.verdict);
+}
+function cards() {
+  const c = M.crash_years;
+  document.getElementById("cards").innerHTML = [["Bell curve: one 20-sd fall every", "10⁸⁶ years", "A fall the size of Black Monday. Far longer than the universe has existed."],
+    ["S&P 500: one such fall in", fmt(c.spx_years, 0) + " years", "Black Monday (1987) came within its record since 1950."],
+    ["Model: one such fall every", fmt(c.bm_model, 0) + " years", "Much closer than a bell curve, but rarer than in the S&P 500. Smaller crashes (8 sd) come every " + fmt(c.model8, 0) + " years."]]
+    .map(([l, v, n]) => `<div class="card rise"><div class="l">${l}</div><div class="v">${v}</div><div class="n">${n}</div></div>`).join("");
+  document.querySelectorAll(".card").forEach(cd => cd.onmousemove = e => {
+    const r = cd.getBoundingClientRect(); cd.style.setProperty("--mx", (e.clientX - r.left) + "px"); cd.style.setProperty("--my", (e.clientY - r.top) + "px"); });
+}
+
+/* ---------- hero words, entrance, scroll-spy, ink bar ---------- */
+function hero() {
+  const h = document.getElementById("hero"), parts = h.innerHTML.split(/(<em>.*?<\/em>|\s+)/).filter(Boolean);
+  let i = 0;
+  h.innerHTML = parts.map(p => /^\s+$/.test(p) ? " " : `<span class="w" style="animation-delay:${(i++) * 35}ms">${p}</span>`).join("");
+}
+function ink() {
+  const on = document.querySelector("nav a.on"), bar = document.getElementById("ink");
+  bar.style.width = on.offsetWidth + "px"; bar.style.transform = `translateX(${on.offsetLeft}px)`;
+}
+const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), {threshold:.06});
+
+/* ---------- settings drawer and search ---------- */
+const drawer = document.getElementById("drawer"), scrim = document.getElementById("scrim"), pal = document.getElementById("palette");
+const openSet = v => { drawer.classList.toggle("open", v); scrim.classList.toggle("open", v || pal.classList.contains("open")); };
+const openPal = v => { pal.classList.toggle("open", v); scrim.classList.toggle("open", v || drawer.classList.contains("open")); if (v) { const i = document.getElementById("pal-in"); i.value = ""; list(""); setTimeout(() => i.focus(), 30); } };
+const ACTIONS = [
+  ["Show chart: Price", "chart", () => pick("Price")], ["Show chart: Watch a crash", "chart", () => pick("Watch a crash")],
+  ["Show chart: How rare big days are", "chart", () => pick("How rare big days are")], ["Show chart: Bursts of wild days", "chart", () => pick("Bursts of wild days")],
+  ["Set herding: 0.9 (wilder)", "herding", () => setA1(0)], ["Set herding: best fit to the S&P 500", "herding", () => setA1(A1S.indexOf(String(M.fit_a1)))], ["Set herding: 1.4 (calmer)", "herding", () => setA1(A1S.length - 1)],
+  ["Switch market: S&P 500", "market", () => {}], ["Switch market: Nasdaq-100", "market", () => {}], ["Switch market: Dow Jones", "market", () => {}],
+  ["Switch market: Apple, Cisco, … (20 stocks)", "market", () => openSet(true)], ["Switch market: oil, gold, copper", "market", () => openSet(true)],
+  ["Switch market: type any stock symbol", "market", () => openSet(true)], ["Turn live prices on or off", "setting", () => openSet(true)],
+  ["Open more model settings", "setting", () => openSet(true)], ["Shade by the president's party (extra study)", "setting", () => openSet(true)],
+  ["Open the history log", "setting", () => openSet(true)], ["Copy a link to this view", "setting", () => {}], ["Reduce motion", "setting", () => openSet(true)],
+  ["Go to: Start", "page", () => location.hash = "#start"], ["Go to: Story", "page", () => location.hash = "#story"], ["Go to: Test program", "page", () => location.hash = "#lab"], ["Go to: Checks", "page", () => location.hash = "#checks"], ["Go to: Sources", "page", () => location.hash = "#sources"]];
+let sel = 0, shown = ACTIONS;
+function list(q) {
+  shown = ACTIONS.filter(a => a[0].toLowerCase().includes(q.toLowerCase())); sel = 0;
+  document.getElementById("pal-list").innerHTML = shown.map((a, i) => `<li class="${i === sel ? "sel" : ""}" data-i="${i}"><span>${a[0]}</span><small>${a[1]}</small></li>`).join("");
+  document.querySelectorAll("#pal-list li").forEach(li => li.onclick = () => { run(+li.dataset.i); });
+}
+function run(i) { const a = shown[i]; openPal(false); if (a) a[2](); }
+document.getElementById("pal-in").oninput = e => list(e.target.value);
+document.getElementById("pal-in").onkeydown = e => {
+  const lis = document.querySelectorAll("#pal-list li");
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); sel = (sel + (e.key === "ArrowDown" ? 1 : -1) + lis.length) % lis.length;
+    lis.forEach((li, j) => li.classList.toggle("sel", j === sel)); lis[sel].scrollIntoView({block:"nearest"}); }
+  if (e.key === "Enter") run(sel);
+};
+addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPal(!pal.classList.contains("open")); }
+  else if (e.key === "Escape") { openPal(false); openSet(false); }
+  else if (e.key.toLowerCase() === "s" && !/INPUT|TEXTAREA/.test(document.activeElement.tagName) && !pal.classList.contains("open")) openSet(!drawer.classList.contains("open"));
+});
+document.getElementById("open-pal").onclick = () => openPal(true);
+document.getElementById("open-set").onclick = () => openSet(true);
+document.getElementById("close-set").onclick = () => openSet(false);
+scrim.onclick = () => { openSet(false); openPal(false); };
+document.querySelectorAll(".sw").forEach(s => s.onclick = () => s.classList.toggle("on"));
+document.getElementById("still").onclick = () => document.documentElement.classList.toggle("still");
+document.getElementById("mk").innerHTML = ["S&P 500", "Nasdaq-100", "Dow Jones", "Apple", "Cisco", "+18 stocks", "Oil", "Gold", "Copper"]
+  .map((m, i) => `<button class="${i === 0 ? "primary" : ""}">${m}</button>`).join("");
+
+/* ---------- wiring ---------- */
+function bar() { if (still()) return; const b = document.getElementById("loadbar"); b.classList.remove("go"); void b.offsetWidth; b.classList.add("go"); }
+
+hero(); cards(); tape(); quote(); model();
+document.querySelectorAll(".rise").forEach(el => io.observe(el));
+requestAnimationFrame(ink); addEventListener("resize", ink);
+
+/* ---------- v3: pages ---------- */
+const PAGES = ["start", "story", "lab", "checks", "sources"];
+function route() {
+  const id = (location.hash || "#start").slice(1), p = PAGES.includes(id) ? id : "start";
+  document.querySelectorAll(".page").forEach(el => el.classList.toggle("show", el.id === "p-" + p));
+  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + p));
+  ink(); window.scrollTo({top:0, behavior:"instant"});
+  requestAnimationFrame(() => {                       // charts drawn while hidden need their real width now
+    if (p === "story") story.resize();
+    if (p === "lab") Plotly.Plots.resize("c_main");
+    dispatchEvent(new Event("resize"));            // tab highlights measured while their page was hidden
+    document.querySelectorAll("#p-" + p + " .rise").forEach(el => el.classList.add("in"));
+  });
+}
+addEventListener("hashchange", route);
+document.querySelectorAll("[data-go]").forEach(b => b.onclick = () => location.hash = "#" + b.dataset.go);
+
+/* ---------- v3: the trader crowd, from the model's biggest-crash run ---------- */
+const crowd = (() => {
+  const cv = document.getElementById("crowd"), ctx = cv.getContext("2d"), W = cv.width, H = cv.height, N = 500;
+  const c = M.crash, days = c.day.length;
+  const ZONES = [{x:14, label:"VALUE TRADERS", col:P.fund}, {x:224, label:"OPTIMISTS · BUY", col:P.up}, {x:434, label:"PESSIMISTS · SELL", col:P.down}];
+  const COLS = 20, GAP = 9.6, TOP = 46;
+  const counts = d => { const z = c.z[d], m = c.crowd[d];
+    const o = Math.round((z + m) / 2 * N), p = Math.round((z - m) / 2 * N); return [N - o - p, o, p]; };
+  let day = 0, playing = !still(), last = 0;
+  const first = counts(0);
+  const dots = [...Array(N).keys()].map(i => ({ g: i < first[0] ? 0 : i < first[0] + first[1] ? 1 : 2, x: 0, y: 0, tx: 0, ty: 0 }));
+  function regroup(target) {
+    const have = [0, 1, 2].map(g => dots.filter(d => d.g === g));
+    for (let g = 0; g < 3; g++) while (have[g].length > target[g]) {          // move the fewest traders that match the counts
+      const to = [0, 1, 2].find(h => have[h].length < target[h]); const d = have[g].splice(Math.floor(Math.random() * have[g].length), 1)[0];
+      d.g = to; have[to].push(d); }
+    for (let g = 0; g < 3; g++) have[g].forEach((d, i) => { d.tx = ZONES[g].x + 8 + (i % COLS) * GAP; d.ty = TOP + Math.floor(i / COLS) * GAP; });
+  }
+  regroup(first); dots.forEach(d => { d.x = d.tx; d.y = d.ty; });
+  const py = c.price, lo = Math.min(...py), hi = Math.max(...py);
+  const sx = i => 14 + i / (days - 1) * (W - 28), sy = v => H - 14 - (v - lo) / (hi - lo) * 70;
+  function frame(t) {
+    if (playing && t - last > 75) { last = t; day = (day + 1) % days; regroup(counts(day)); }
+    ctx.fillStyle = P.card; ctx.fillRect(0, 0, W, H);
+    ctx.font = "600 12px JetBrains Mono, monospace";
+    ZONES.forEach(z => { ctx.fillStyle = z.col; ctx.fillText(z.label, z.x + 6, 28); ctx.strokeStyle = "#1E1E1E"; ctx.strokeRect(z.x, 36, 200, 252); });
+    const k = still() ? 1 : 0.22;
+    dots.forEach(d => { d.x += (d.tx - d.x) * k; d.y += (d.ty - d.y) * k;
+      ctx.fillStyle = ZONES[d.g].col; ctx.beginPath(); ctx.arc(d.x, d.y, 3.3, 0, 6.283); ctx.fill(); });
+    ctx.strokeStyle = P.line; ctx.beginPath(); ctx.moveTo(14, H - 92); ctx.lineTo(W - 14, H - 92); ctx.stroke();
+    ctx.fillStyle = P.muted; ctx.fillText("PRICE", 14, H - 74);
+    ctx.strokeStyle = P.herd; ctx.lineWidth = 1.8; ctx.beginPath();
+    py.forEach((v, i) => i ? ctx.lineTo(sx(i), sy(v)) : ctx.moveTo(sx(i), sy(v))); ctx.stroke(); ctx.lineWidth = 1;
+    ctx.strokeStyle = P.accent; ctx.beginPath(); ctx.moveTo(sx(day), H - 88); ctx.lineTo(sx(day), H - 8); ctx.stroke();
+    ctx.fillStyle = P.accent; ctx.beginPath(); ctx.arc(sx(day), sy(py[day]), 4, 0, 6.283); ctx.fill();
+    const n = counts(day);
+    document.getElementById("n-f").textContent = n[0]; document.getElementById("n-o").textContent = n[1];
+    document.getElementById("n-p").textContent = n[2]; document.getElementById("n-day").textContent = c.day[day].toLocaleString();
+    requestAnimationFrame(frame);
+  }
+  const btn = document.getElementById("crowd-play");
+  btn.onclick = () => { playing = !playing; btn.textContent = playing ? "❚❚ Pause" : "▶ Play"; };
+  btn.textContent = playing ? "❚❚ Pause" : "▶ Play";
+  if (!playing) { day = c.price.indexOf(Math.min(...c.price.slice(0)));  regroup(counts(day)); dots.forEach(d => { d.x = d.tx; d.y = d.ty; }); }
+  requestAnimationFrame(frame);
+})();
+
+/* ---------- v3: small drawings for the three steps ---------- */
+(() => {
+  const ants = document.getElementById("antsA");             // most ants at A, a few at B
+  let s = ""; for (let i = 0; i < 22; i++) { const a = i * 2.4, r = 6 + (i % 4) * 4.5; s += `<circle cx="${40 + r * Math.cos(a)}" cy="${43 + r * Math.sin(a)}" r="2.2"/>`; }
+  for (let i = 0; i < 4; i++) s += `<circle cx="${152 + i * 5}" cy="${40 + (i % 2) * 7}" r="2.2"/>`;
+  ants.innerHTML = s;
+  const mc = document.getElementById("mini-crowd"); let m = "";
+  for (let i = 0; i < 84; i++) { const col = i % 11 === 3 ? P.up : i % 13 === 5 ? P.down : P.fund;
+    m += `<circle cx="${12 + (i % 14) * 13.5}" cy="${12 + Math.floor(i / 14) * 12.5}" r="3.6" fill="${col}"/>`; }
+  mc.innerHTML = m;
+  const lx = v => 10 + (Math.log10(v) + 1) / Math.log10(300) * 180, ly = v => 8 + (-Math.log10(v)) / 5 * 74;   // log-log, 0.1..30 sd, 1..1e-5
+  const path = (xs, ys) => xs.map((x, i) => (ys[i] > 1e-5 && x <= 30 ? (i ? "L" : "M") + lx(x).toFixed(1) + " " + ly(ys[i]).toFixed(1) : "")).join(" ").replace(/^ *L/, "M");
+  document.getElementById("mini-bell").setAttribute("d", path(M.bell.x, M.bell.y));
+  document.getElementById("mini-fat").setAttribute("d", path(M.tail_spx.x, M.tail_spx.y));
+})();
+
+/* ---------- the Story: eight steps, one idea each ---------- */
+const story = (() => {
+  const c = M.crash_years, fit = M.runs[String(M.fit_a1)];
+  const tailLayout = (extra) => { const l = base(Object.assign({ height:330, margin:{l:56, r:10, t:10, b:44} }, extra || {}));
+    Object.assign(l.xaxis, { type:"log", title:{text:"Size of the day's move (sd)"}, tickvals:[0.1,0.5,1,2,5,10,20], ticktext:["0.1","0.5","1","2","5","10","20"] });
+    Object.assign(l.yaxis, { type:"log", range:[-5, 0], dtick:1, tickformat:".3~%", title:{text:"Share of days at least this big"} });
+    l.legend = { x:0.02, y:0.05, bgcolor:"rgba(0,0,0,.6)", font:{size:12} }; return l; };
+  const bell = { x:M.bell.x, y:M.bell.y, mode:"lines", line:{color:P.bell, width:2.5, dash:"dot"}, name:"Bell curve" };
+  const spx = { x:M.tail_spx.x, y:M.tail_spx.y, mode:"lines", line:{color:P.real, width:3}, name:"Real S&P 500" };
+  const four = { type:"line", x0:4, x1:4, yref:"paper", y0:0, y1:1, line:{color:P.guide, width:1.5, dash:"dot"} };
+  const vis = () => document.getElementById("s-vis");
+  const plot = (tr, lay) => { if (vis().dataset.html) { vis().innerHTML = ""; delete vis().dataset.html; } Plotly.react("s-vis", tr, lay, CFG); };
+  const html = h => { Plotly.purge("s-vis"); vis().innerHTML = h; vis().dataset.html = "1"; };
+  let guess = null;
+  const STEPS = [
+    { short:"The puzzle", title:"Real markets have days a bell curve says should never happen",
+      body:`<p>A <b>standard deviation</b> (sd) is the usual size of a day's move. A 4-sd day moves four times as much as usual.</p>
+            <p>If daily moves followed a <b>bell curve</b> (a "normal distribution"), days that big would almost never come. The S&amp;P 500 has had dozens.</p>`,
+      num:() => `${M.spx.big} days`, numl:() => `beyond 4 sd since 1950. A bell curve expects ${fmt(M.spx.bell_big, 1)}.`,
+      notice:"Right of the dotted line at 4 sd, the bell curve drops away. The white S&P 500 line keeps going.",
+      cap:"Each step down the left side is 10 times rarer. Higher means more common.",
+      draw:() => plot([bell, spx], tailLayout({ shapes:[four] })) },
+    { short:"The idea", title:"The idea: traders copy each other, like ants do",
+      body:`<p>Biologists gave ants two identical food sources. The ants don't split evenly: they <b>crowd onto one</b>, then suddenly switch together. Economist Alan Kirman (1993) wrote the math for it.</p>
+            <p>Each ant mostly copies another ant. Copying the crowd like this is called <b>herding</b>. It is the one rule this project adds to a market.</p>`,
+      num:() => M.kirman.tv.toFixed(3), numl:() => "gap between the simulated ants and Kirman's exact formula (0 = perfect match; the check needs under 0.05)",
+      notice:"The line jumps from top to bottom: nearly all ants switch sources together. Nobody tells them to.",
+      cap:"100 ants over 5 million steps: how many are at source A.",
+      draw:() => plot([{ x:M.kirman.steps, y:M.kirman.count, mode:"lines", line:{color:P.herd, width:1.6}, name:"Ants at A" }],
+        (() => { const l = base({ height:330, margin:{l:56, r:10, t:10, b:44}, showlegend:false }); l.xaxis.title = {text:"Steps (millions)"}; l.yaxis.title = {text:"Ants at source A"}; return l; })()) },
+    { short:"The market", title:"So we build a market of 500 traders and feed it bell-curve news",
+      body:`<p>Every trader is one of three kinds, and switches to whichever kind is making more money.</p>
+            <p>The <b>news</b> (changes in the stock's <b>true value</b>) is plain bell-curve noise. So if big days appear, the <b>traders</b> made them.</p>`,
+      num:() => "500", numl:() => "simulated traders, trading every day for 77 years",
+      notice:"Only trend chasers (economists call them chartists) copy the crowd. Turning that copying up or down is the experiment.",
+      cap:"The three kinds of trader (Lux & Marchesi, 1999).",
+      draw:() => html(`<div class="kinds">
+        <div class="kind"><svg viewBox="0 0 120 46">${[...Array(18).keys()].map(i => `<circle cx="${8 + (i % 9) * 13}" cy="${12 + Math.floor(i / 9) * 18}" r="4.5" fill="${P.fund}"/>`).join("")}</svg>
+          <div><b>Value traders</b>Economists call them fundamentalists. They buy when the price is below the true value and sell when it is above. They pull the price back.</div></div>
+        <div class="kind"><svg viewBox="0 0 120 46">${[...Array(18).keys()].map(i => `<circle cx="${8 + (i % 9) * 13}" cy="${12 + Math.floor(i / 9) * 18}" r="4.5" fill="${P.up}"/>`).join("")}</svg>
+          <div><b>Optimists</b>Trend chasers who expect a rise, so they buy. They copy the crowd's mood.</div></div>
+        <div class="kind"><svg viewBox="0 0 120 46">${[...Array(18).keys()].map(i => `<circle cx="${8 + (i % 9) * 13}" cy="${12 + Math.floor(i / 9) * 18}" r="4.5" fill="${P.down}"/>`).join("")}</svg>
+          <div><b>Pessimists</b>Trend chasers who expect a fall, so they sell. They copy the crowd's mood too.</div></div></div>`) },
+    { short:"Experiment 1", title:"Experiment 1: with only value traders, daily moves follow a bell curve",
+      body:`<p>Switch the trend chasers off. Only value traders remain, reacting to bell-curve news.</p>
+            <p>The market's daily moves come out as a bell curve too: <b>no extra big days</b>. So bell-curve news alone does not make big days.</p>`,
+      num:() => `${M.fund.big} days`, numl:() => `beyond 4 sd in 77 simulated years. The S&P 500 had ${M.spx.big} since 1950.`,
+      notice:"The blue line sits right on top of the dotted bell curve.",
+      cap:"Value traders only, against a bell curve.",
+      draw:() => plot([bell, { x:M.tail_fund.x, y:M.tail_fund.y, mode:"lines", line:{color:P.fund, width:3, dash:"dashdot"}, name:"Model, value traders only" }], tailLayout({ shapes:[four] })) },
+    { short:"Experiment 2", title:"Experiment 2: without herding, trend chasers make the price run away",
+      body:`<p>Add trend chasers, but don't let them copy each other. Buying after a rise brings more buying.</p>
+            <p>The price stays calm for years, then <b>leaves its true value and never comes back</b>: a bubble that never ends. Real markets do not do that.</p>`,
+      num:() => `${M.runaway_count[0]} of ${M.runaway_count[1]}`, numl:() => "simulated histories ran away",
+      notice:() => `Calm for about ${M.runaway.calm.toLocaleString()} days while trend chasers slowly grow, then a vertical take-off.`,
+      cap:"Top: share of traders chasing the trend. Bottom: how far the price is above its true value.",
+      draw:() => { const R = M.runaway, b = base();
+        plot([{ x:R.day, y:R.z, mode:"lines", line:{color:"#E66A1F", width:2}, name:"Trend chasers" },
+              { x:R.day, y:R.gap, mode:"lines", line:{color:P.real, width:1.8}, name:"Price above true value", yaxis:"y2" }],
+          base({ height:330, margin:{l:56, r:10, t:10, b:44}, showlegend:false,
+            yaxis:{...b.yaxis, domain:[.55, 1], tickformat:".0%", range:[0, 1], title:{text:"Trend chasers"}},
+            yaxis2:{...b.yaxis, domain:[0, .45], tickformat:"+.0%", title:{text:"Price above true value"}, anchor:"x"},
+            xaxis:{...b.xaxis, anchor:"y2", title:{text:"Simulated trading day"}} })); } },
+    { short:"Experiment 3", title:"Experiment 3: with herding, the model gets the S&P 500's fat tails",
+      body:`<p>Now let trend chasers copy the crowd's mood. Optimism spreads, then collapses all at once, and the value traders pull the price back.</p>
+            <p>Big days now come about as often as in the S&amp;P 500, and they come in <b>bursts</b>, as they do there.</p>`,
+      num:() => fmt(M.checks.tail_median), numl:() => `tail exponent (lower = more big days), middle value of 40 simulated histories. S&P 500: ${fmt(M.spx.tail)}. A bell curve: about 6.`,
+      notice:"The pink model line follows the white S&P 500 line far past 4 sd. The bell curve drops away long before.",
+      cap:"The model with herding (pink) against the S&P 500 (white).",
+      draw:() => plot([bell, spx, { x:fit.tail_x, y:fit.tail_y, mode:"lines", line:{color:P.herd, width:3}, name:"Model" }], tailLayout({ shapes:[four] })) },
+    { short:"How much?", title:"How much herding? Guess first",
+      body:() => `<p>If trend chasers copy each other more and more, does the market get <b>wilder</b> or <b>calmer</b>?</p>
+            <div class="guess">${["Wilder", "Wilder, then calmer", "Calmer"].map(g => `<button class="${guess === g ? "primary" : ""}" data-g="${g}">${g}</button>`).join("")}</div>
+            ${guess ? `<p>${guess === "Calmer" ? "<b>Right, surprisingly.</b>" : "<b>Not quite.</b>"} With too little herding the price runs away. More herding calms it. The S&P 500's fat tails appear only near the edge between the two.</p>` : `<p class="cap">The chart appears once you guess.</p>`}`,
+      num:() => guess ? String(M.fit_a1) : "?", numl:() => guess ? "the herding strength that best matches the S&P 500, right at that edge" : "guess to see the answer",
+      notice:"Lux and Marchesi called their paper “Scaling and criticality”: fat tails appear near a tipping point.",
+      cap:"Each dot: the tail exponent at one herding strength (10 simulated histories each). Bars: how many of the 10 ran away.",
+      draw:() => { if (!guess) { html(`<div style="display:grid;place-items:center;height:330px;color:var(--muted)" class="mono">◌ hidden until you guess</div>`); return; }
+        const S = M.sweep, ok = S.filter(s => s.tail !== null && s.ran_away <= s.n / 2), b = base();
+        plot([{ x:S.map(s => s.a1), y:S.map(s => s.ran_away), type:"bar", marker:{color:"rgba(255,122,107,.35)"}, name:"Ran away (of 10)", yaxis:"y2" },
+              { x:ok.map(s => s.a1), y:ok.map(s => s.tail), mode:"lines+markers", line:{color:P.herd, width:3}, marker:{size:8}, name:"Tail exponent" }],
+          base({ height:330, margin:{l:56, r:56, t:10, b:44}, legend:{x:.02, y:.98, font:{size:12}},
+            shapes:[{ type:"line", xref:"paper", x0:0, x1:1, y0:M.spx.tail, y1:M.spx.tail, line:{color:P.real, width:1.5, dash:"dash"} }],
+            annotations:[{ xref:"paper", x:.99, y:M.spx.tail, text:"real S&P", showarrow:false, xanchor:"right", yanchor:"bottom", font:{color:P.real, size:12} }],
+            xaxis:{...b.xaxis, title:{text:"Herding strength (how strongly trend chasers copy)"}},
+            yaxis:{...b.yaxis, title:{text:"Tail exponent (lower = more big days)"}},
+            yaxis2:{...b.yaxis, overlaying:"y", side:"right", range:[0, 30], tickvals:[0, 5, 10], showgrid:false, showspikes:false, title:{text:"Ran away (of 10)"}} })); } },
+    { short:"The verdict", title:"The verdict: herding explains a lot, not everything",
+      body:`<p>Fed only bell-curve news, a market with herding reproduces most of what makes real markets wild. It still misses two things.</p>`,
+      num:() => `${fmt(c.model8, 0)} years`, numl:() => "between 8-sd falls in the model. A bell curve: trillions of years.",
+      notice:"Every number here is checked on the Checks page, with the rule for each test.",
+      cap:"What herding alone explains, and what it doesn't.",
+      draw:() => html(`<ul class="verdict">
+        <li><span class="ok">✓</span><span><b>Fat tails.</b> Big days as common as in the S&amp;P 500 (tail exponent ${fmt(M.checks.tail_median)}; S&amp;P 500 ${fmt(M.spx.tail)}).</span></li>
+        <li><span class="ok">✓</span><span><b>Bursts of wild days</b>, like the S&amp;P 500's.</span></li>
+        <li><span class="ok">✓</span><span><b>Crashes within decades:</b> an 8-sd fall about every ${fmt(c.model8, 0)} years, not trillions.</span></li>
+        <li><span class="mid">≈</span><span>A <b>fall the size of Black Monday</b> comes about every ${fmt(c.bm_model, 0)} years in the model. The S&amp;P 500 had one in ${fmt(c.spx_years, 0)} years.</span></li>
+        <li><span style="color:var(--down)">✗</span><span><b>Falls bigger than rises.</b> In the S&amp;P 500 the biggest falls are bigger than the biggest rises. In the model they are the same size.</span></li>
+        <li style="border-color:var(--accent)"><span>▶</span><span><a href="#lab">Open the test program</a> · <a href="#checks">See all the checks</a></span></li></ul>`) },
+  ];
+  let i = 0;
+  const val = v => typeof v === "function" ? v() : v;
+  function show(n, dir) {
+    i = Math.max(0, Math.min(STEPS.length - 1, n));
+    const s = STEPS[i];
+    document.getElementById("stepper").innerHTML = STEPS.map((t, j) =>
+      `<li data-n="${j + 1}" class="${j === i ? "on" : j < i ? "done" : ""}" data-i="${j}"><span>${t.short}</span></li>`).join("");
+    document.querySelectorAll("#stepper li").forEach(li => li.onclick = () => show(+li.dataset.i));
+    document.getElementById("sbar").style.width = ((i + 1) / STEPS.length * 100) + "%";
+    document.getElementById("s-of").textContent = `STEP ${i + 1} OF ${STEPS.length}`;
+    document.getElementById("s-title").textContent = s.title;
+    document.getElementById("s-body").innerHTML = val(s.body);
+    document.getElementById("s-num").textContent = val(s.num);
+    document.getElementById("s-numl").textContent = val(s.numl);
+    document.getElementById("s-notice").textContent = val(s.notice);
+    document.getElementById("s-cap").textContent = s.cap;
+    document.querySelectorAll("#s-body [data-g]").forEach(b => b.onclick = () => { guess = b.dataset.g; show(i); });
+    const vis = document.getElementById("s-vis"); s.draw();
+    if (!still()) [vis, document.getElementById("s-title")].forEach(el => { el.classList.remove("s-swap"); void el.offsetWidth; el.classList.add("s-swap"); });
+    document.getElementById("s-back").disabled = i === 0;
+    const next = document.getElementById("s-next");
+    next.textContent = i === STEPS.length - 1 ? "Open the test program →" : "Next →";
+  }
+  document.getElementById("s-back").onclick = () => show(i - 1);
+  document.getElementById("s-next").onclick = () => i === STEPS.length - 1 ? (location.hash = "#lab") : show(i + 1);
+  addEventListener("keydown", e => { if (!document.getElementById("p-story").classList.contains("show") || /INPUT/.test(document.activeElement.tagName)) return;
+    if (e.key === "ArrowRight") show(i + 1); if (e.key === "ArrowLeft") show(i - 1); });
+  show(0);
+  return { show, resize: () => document.querySelector("#s-vis .js-plotly-plot") && Plotly.Plots.resize("s-vis") };
+})();
+
+/* ---------- Test program: every view, sub-view and tab of today's site ---------- */
+const X = window.MORE;
+const VIEWS = ["Price", "Watch a crash", "How rare big days are", "Bursts of wild days"];
+const SUBS = { "How rare big days are": ["Tail", "Histogram"], "Bursts of wild days": ["Bursts", "Memory"] };   // sub-view names: see SUBNAME
+let view = "Price", sub = { "How rare big days are":"Tail", "Bursts of wild days":"Bursts" }, mix = "With herding", zoom = "Biggest crash", range = "All";
+const RANGES = ["1D", "7D", "YTD", "1Y", "5Y", "20Y", "All"];
+const TRY = {
+  "Price": "Click All and count the triangles. Each is a big day (beyond 4 sd). A bell curve expects about one in all these years.",
+  "Watch a crash": "Look just before the fall: trend chasers pile in, most turn optimist, then they flip together.",
+  "Tail": "Find 5 sd on the bottom axis. The bell curve has already dropped away. The S&P 500 and the model are still there. Then drag the herding slider: less herding is wilder, more is calmer.",
+  "Histogram": "Look past 4 sd at either edge. The bell curve is almost zero there. The S&P 500's bars are not.",
+  "Bursts": "Do the tall spikes come alone, or in bursts? S&P 500 on top, model below, on the same scale.",
+  "Memory": "Read the lines at 20 days apart. Above 0, a wild day still signals wild days a month later. A bell curve stays at 0." };
+const CAP = {
+  "Price": "The S&P 500 since 1950. Log scale: equal heights mean equal % changes. ▲ big rise, ▼ big fall (beyond 4 sd). Lower panel: the fall from the last peak (drawdown).",
+  "Watch a crash": "The model day by day. Top: price and true value. Middle: share of traders who are trend chasers. Bottom: the crowd's mood (optimists minus pessimists).",
+  "Tail": "Across: size of a day's move. Up: share of days at least that big. A line that stays straight instead of dropping away means fat tails.",
+  "Histogram": "How common each size of daily move is, in sd. The up axis grows in steps of 10, so the rare edges still show.",
+  "Bursts": "Each day's move, in sd. Dotted lines: 4 sd, which a bell curve almost never passes.",
+  "Memory": "How long bursts of wild days last: how strongly a wild day is linked to the size of days 1 to 200 days later. 0 means no link." };
+const cur = () => SUBS[view] ? sub[view] : view;
+let runLog = [];
+
+function rangeCut(xs) {
+  if (range === "All" || range === "1D" || range === "7D") return 0;
+  const end = new Date(xs[xs.length - 1]), start = new Date(end);
+  if (range === "YTD") start.setMonth(0, 1); else start.setFullYear(end.getFullYear() - parseInt(range));
+  const iso = start.toISOString().slice(0, 10);
+  return xs.findIndex(x => x >= iso);
+}
+function mainTraces() {
+  const run = M.runs[A1S[a1i]], b = base(), v = cur();
+  if (v === "Price") {
+    const k = rangeCut(M.price.x), kd = rangeCut(X.dd.x), from = M.price.x[k];
+    const up = M.big.move.map(m => m > 0), inR = M.big.x.map(x => x >= from);
+    const lay = base({ height:480, hovermode:"x unified",
+      yaxis:{...b.yaxis, type:"log", domain:[.32, 1], title:{text:"Price"}}, yaxis2:{...b.yaxis, domain:[0, .25], tickformat:".0%", title:{text:"Below high"}, anchor:"x"},
+      xaxis:{...b.xaxis, anchor:"y2"} });
+    return [[{ x:M.price.x.slice(k), y:M.price.y.slice(k), mode:"lines", line:{color:P.real, width:2}, name:"S&P 500", hovertemplate:"%{y:,.2f}<extra></extra>" },
+      { x:M.big.x.filter((_, i) => up[i] && inR[i]), y:M.big.y.filter((_, i) => up[i] && inR[i]), mode:"markers", name:"Big rise ▲", marker:{symbol:"triangle-up", size:10, color:P.up}, hoverinfo:"skip" },
+      { x:M.big.x.filter((_, i) => !up[i] && inR[i]), y:M.big.y.filter((_, i) => !up[i] && inR[i]), mode:"markers", name:"Big fall ▼", marker:{symbol:"triangle-down", size:10, color:P.down}, hoverinfo:"skip" },
+      { x:X.dd.x.slice(kd), y:X.dd.y.slice(kd), mode:"lines", fill:"tozeroy", fillcolor:"rgba(255,122,107,.12)", line:{color:P.down, width:1.4}, name:"Below last high", yaxis:"y2", hovertemplate:"%{y:.1%}<extra></extra>" }], lay];
+  }
+  if (v === "Watch a crash") {
+    const src = mix === "With herding" ? (zoom === "Whole history" ? X.mm.herding_all : zoom === "Wildest year" ? X.mm.herding_burst : M.crash) : X.mm.fund_all;
+    if (mix === "Trend chasers, no herding") {
+      const R = M.runaway;
+      return [[{ x:R.day, y:R.z, mode:"lines", line:{color:"#E66A1F", width:2}, name:"Trend chasers" },
+               { x:R.day, y:R.gap, mode:"lines", line:{color:P.real, width:1.8}, name:"Price above true value", yaxis:"y2" }],
+        base({ height:480, hovermode:"x unified", yaxis:{...b.yaxis, domain:[.55, 1], tickformat:".0%", range:[0, 1], title:{text:"Trend chasers"}},
+          yaxis2:{...b.yaxis, domain:[0, .45], tickformat:"+.0%", title:{text:"Price above true value"}, anchor:"x"}, xaxis:{...b.xaxis, anchor:"y2", title:{text:"Simulated trading day"}},
+          annotations:[{ x:R.gone, y:1, yref:"paper", text:"runs away", showarrow:false, font:{color:P.down, size:12}, xanchor:"right" }] })];
+    }
+    const col = mix === "With herding" ? P.herd : P.fund;
+    const lay = base({ height:520, hovermode:"x unified",
+      yaxis:{...b.yaxis, type:"log", domain:[.46, 1], title:{text:"Price"}, anchor:"x"}, yaxis2:{...b.yaxis, domain:[.24, .42], tickformat:".0%", range:[0, 1], title:{text:"Trend chasers"}, anchor:"x"},
+      yaxis3:{...b.yaxis, domain:[0, .2], tickformat:"+.0%", title:{text:"Mood"}, anchor:"x"}, xaxis:{...b.xaxis, anchor:"y3", title:{text:"Simulated trading day"}} });
+    return [[{ x:src.day, y:src.value, mode:"lines", line:{color:P.guide, width:1.6, dash:"dot"}, name:"True value" },
+      { x:src.day, y:src.price, mode:"lines", line:{color:col, width:2}, name:"Price" },
+      { x:src.day, y:src.z, mode:"lines", fill:"tozeroy", fillcolor:P.herdFill, line:{color:col, width:1.6}, name:"Trend chasers", yaxis:"y2" },
+      { x:src.day, y:src.crowd, mode:"lines", line:{color:P.fund, width:1.6}, name:"Optimists − pessimists", yaxis:"y3" }], lay];
+  }
+  if (v === "Tail") {
+    const lay = base({ height:470 });
+    Object.assign(lay.xaxis, { type:"log", title:{text:"Size of the day's move (sd)"}, tickvals:[0.1,0.2,0.5,1,2,5,10,20], ticktext:["0.1","0.2","0.5","1","2","5","10","20"] });
+    Object.assign(lay.yaxis, { type:"log", range:[-5, 0], dtick:1, tickformat:".3~%", title:{text:"Share of days at least this big"} });
+    const tr = [{ x:M.bell.x, y:M.bell.y, mode:"lines", line:{color:P.bell, width:2.5, dash:"dot"}, name:"Bell curve" },
+      { x:M.tail_fund.x, y:M.tail_fund.y, mode:"lines", line:{color:P.fund, width:2.5, dash:"dashdot"}, name:"Model, value traders only" },
+      { x:M.tail_spx.x, y:M.tail_spx.y, mode:"lines", line:{color:P.real, width:3}, name:"S&P 500" }];
+    if (run.tail_x) tr.push({ x:run.tail_x, y:run.tail_y, mode:"lines", line:{color:P.herd, width:3}, name:"Model" });
+    return [tr, lay];
+  }
+  if (v === "Histogram") {
+    const lay = base({ height:470, bargap:0.05 }); lay.yaxis.type = "log"; lay.yaxis.dtick = 1; lay.yaxis.title = {text:"Share of days (per sd)"};
+    lay.xaxis.title = {text:"Size of the day's move (sd)"}; lay.xaxis.range = [-8, 8];
+    return [[{ x:X.hist.spx.x, y:X.hist.spx.y, type:"bar", marker:{color:"rgba(242,244,248,.55)"}, name:"S&P 500" },
+      { x:X.hist.herd.x, y:X.hist.herd.y, mode:"lines+markers", line:{color:P.herd, width:2.5}, marker:{size:5}, name:"Model" },
+      { x:X.bell_density.x, y:X.bell_density.y, mode:"lines", line:{color:P.bell, width:2.5, dash:"dot"}, name:"Bell curve" }], lay];
+  }
+  if (v === "Memory") {
+    const lay = base({ height:470 }); lay.xaxis.type = "log"; lay.xaxis.title = {text:"Days apart"}; lay.yaxis.title = {text:"Link between wild days"};
+    lay.xaxis.tickvals = X.memory.lags;
+    return [[{ x:X.memory.lags, y:X.memory.spx, mode:"lines+markers", line:{color:P.real, width:3}, name:"S&P 500" },
+      { x:X.memory.lags, y:X.memory.herd, mode:"lines+markers", line:{color:P.herd, width:3}, name:"Model" },
+      { x:X.memory.lags, y:X.memory.fund, mode:"lines+markers", line:{color:P.fund, width:2.5, dash:"dashdot"}, name:"Model, value traders only" },
+      { x:[1, 200], y:[0, 0], mode:"lines", line:{color:P.bell, width:2, dash:"dot"}, name:"Bell curve (no link)" }], lay];
+  }
+  const shapes = [];
+  for (const ax of ["y", "y2"]) for (const val of [-4, 4]) shapes.push({ type:"line", xref:(ax === "y" ? "x" : "x2") + " domain", x0:0, x1:1, yref:ax, y0:val, y1:val, line:{color:P.guide, width:1.5, dash:"dot"}, layer:"above" });
+  const lay = base({ height:480, shapes, hovermode:"x", xaxis:{...b.xaxis, anchor:"y"}, yaxis:{...b.yaxis, domain:[.54, 1], range:[-25, 12], title:{text:"S&P 500"}},
+    xaxis2:{...b.xaxis, anchor:"y2", title:{text:"Simulated trading day"}}, yaxis2:{...b.yaxis, domain:[0, .44], range:[-25, 12], title:{text:"Model"}} });
+  const tr = [{ x:M.bursts_spx.x, y:M.bursts_spx.y, mode:"lines", line:{color:P.real, width:1.3}, name:"S&P 500" }];
+  if (run.burst_x) tr.push({ x:run.burst_x, y:run.burst_y, mode:"lines", line:{color:P.herd, width:1.3}, name:"Model", xaxis:"x2", yaxis:"y2" });
+  return [tr, lay];
+}
+function drawMain(changed) {
+  const [tr, lay] = mainTraces(), box = document.getElementById("mainbox");
+  if (changed && !still()) {
+    box.style.transition = "opacity 150ms cubic-bezier(.2,.8,.2,1)"; box.style.opacity = .35;
+    setTimeout(() => { Plotly.react("c_main", tr, lay, CFG); box.style.opacity = 1; box.classList.remove("loading"); void box.offsetWidth; box.classList.add("loading"); }, 150);
+  } else Plotly.react("c_main", tr, lay, CFG);
+  document.getElementById("cap_main").textContent = CAP[cur()];
+  document.getElementById("try_main").textContent = TRY[cur()];
+  document.getElementById("insight").textContent = X.insight;
+  subrow();
+}
+function subrow() {
+  const el = document.getElementById("subrow"); el.innerHTML = "";
+  const add = (id, items, val, set) => { const d = document.createElement("div"); d.className = "seg"; d.id = id; el.appendChild(d); seg(id, items, val, v => { set(v); bar(); drawMain(true); }); };
+  if (view === "Price") {
+    add("ranges", RANGES, range, v => { if (v === "1D" || v === "7D") { openSet(true); return; } range = v; });
+    el.insertAdjacentHTML("beforeend", `<span class="srcnote mono" style="align-self:center">1D and 7D need live prices (in Settings)</span>`);
+  }
+  if (SUBS[view]) add("subview", SUBS[view], sub[view], v => sub[view] = v);
+  if (view === "Watch a crash") {
+    add("mixes", ["With herding", "Value traders only", "Trend chasers, no herding"], mix, v => mix = v);
+    if (mix === "With herding") add("zooms", ["Whole history", "Biggest crash", "Wildest year"], zoom, v => { zoom = v; if (v === "Biggest crash") task(0); });
+  }
+}
+function pick(v) { view = v; seg("views", VIEWS, view, pick2); bar(); drawMain(true); if (v === "Watch a crash" && zoom === "Biggest crash" && mix === "With herding") task(0); }
+function pick2(v) { view = v; bar(); drawMain(true); if (v === "Watch a crash" && zoom === "Biggest crash" && mix === "With herding") task(0); }
+
+/* ---------- presets, slider, run log ---------- */
+const PRESETS = [["Wilder", 0], ["Best fit", A1S.indexOf(String(M.fit_a1))], ["Calmer", A1S.length - 1]];
+function presets() {
+  document.getElementById("presets").innerHTML = PRESETS.map(([n, i]) => `<button class="${i === a1i ? "on" : ""}" data-i="${i}">${n}<small>strength ${M.runs[A1S[i]].a1}</small></button>`).join("");
+  document.querySelectorAll("#presets button").forEach(b => b.onclick = () => setA1(+b.dataset.i));
+}
+function setA1(i) {
+  a1i = i; document.getElementById("a1").value = i; bar(); model(); tape(); presets(); drawMain(true);
+  const r = M.runs[A1S[i]];
+  runLog.unshift({ t:new Date().toLocaleTimeString(), a1:r.a1, tail:r.tail, kurt:r.kurt, memory:r.memory });
+  if (i === 0) task(1);
+  if (low === "History log" || low === "Every history on one chart") lowtab(low);
+}
+const slider = document.getElementById("a1");
+slider.max = A1S.length - 1; slider.value = a1i; slider.oninput = () => setA1(+slider.value);
+
+/* ---------- three things to try ---------- */
+const TASKS = ["<b>Watch a crash.</b> Open <b>Watch a crash</b> and pick <b>Biggest crash</b>.",
+  "<b>Find the edge.</b> Drag <b>Herding strength</b> all the way to wilder. What happens to the big days?",
+  "<b>See the verdict.</b> Open the <b>Checks</b> page: which tests pass, and which don't?"];
+let done = [false, false, false];
+function task(n) { if (n !== undefined) done[n] = true; const k = done.filter(Boolean).length;
+  document.getElementById("task-n").textContent = `${k} of 3 done`; document.getElementById("task-bar").style.width = (k / 3 * 100) + "%";
+  document.getElementById("task-list").innerHTML = TASKS.map((t, i) => `<li class="${done[i] ? "done" : ""}"><span class="box">${done[i] ? "✓" : ""}</span><span class="t">${t}</span></li>`).join(""); }
+addEventListener("hashchange", () => { if (location.hash === "#checks") task(2); });
+
+/* ---------- the tabs under the chart ---------- */
+const LOWS = ["Model and S&P 500", "Big days", "History log", "Every history on one chart"];
+let low = LOWS[0], bdSel = null;
+const f2 = (v, d = 2) => v === null || v === undefined ? "—" : typeof v === "number" ? fmt(v, d) : v;
+function lowtab(v) {
+  low = v; const box = document.getElementById("lowbox");
+  if (v === "Model and S&P 500") {
+    const T = X.table, names = { days:"Days", tail:"Tail exponent", kurtosis:"Excess kurtosis", memory:"Bursts of wild days (link 20 days apart)", worst:"Worst day (sd)",
+      big_days:"Big days (beyond 4 sd)", max_drawdown:"Worst fall from a peak", runaway_day:"Ran away on day" };
+    const idx = T.cols;
+    box.innerHTML = `<table><tr><th>MEASURE</th>${T.rows.map(r => `<th class="num">${r[0].toUpperCase()}</th>`).join("")}</tr>` +
+      idx.map((c, j) => `<tr><td>${names[c] || c}</td>${T.rows.map(r => `<td class="num">${c === "max_drawdown" && typeof r[j + 1] === "number" ? fmt(r[j + 1] * 100, 1) + "%" : c === "days" || c === "big_days" || c === "runaway_day" ? (r[j + 1] === null ? "—" : Math.round(r[j + 1]).toLocaleString()) : f2(r[j + 1])}</td>`).join("")}</tr>`).join("") + `</table>`;
+  } else if (v === "Big days") {
+    box.innerHTML = `<p class="cap" style="margin-top:0">${X.bigdays.length} big days (beyond 4 sd). Click one to read what happened.</p>
+      <div class="bd-list"><table><tr><th>DATE</th><th class="num">MOVE</th><th class="num">SD</th></tr>${X.bigdays.map((d, i) =>
+        `<tr data-i="${i}" class="${bdSel === i ? "sel" : ""}"><td class="mono">${d.date}</td><td class="num" style="color:${d.move > 0 ? P.up : P.down}">${d.move > 0 ? "▲ +" : "▼ −"}${fmt(Math.abs(d.move) * 100, 1)}%</td><td class="num">${d.sd > 0 ? "+" : "−"}${fmt(Math.abs(d.sd), 1)}</td></tr>`).join("")}</table></div>
+      <div id="bd-story"></div>`;
+    box.querySelectorAll("tr[data-i]").forEach(tr => tr.onclick = () => { bdSel = +tr.dataset.i; lowtab("Big days");
+      const d = X.bigdays[bdSel]; document.getElementById("bd-story").innerHTML = `<div class="story-box">${d.story}${d.sources.length ? `<br><span class="cap">Sources: ${d.sources.map((s, k) => `<a href="${s}">[${k + 1}]</a>`).join(" ")}</span>` : ""}</div>`; });
+  } else if (v === "History log") {
+    box.innerHTML = runLog.length ? `<table><tr><th>TIME</th><th class="num">HERDING STRENGTH</th><th class="num">TAIL EXPONENT</th><th class="num">KURTOSIS</th><th class="num">BURSTS (LINK)</th></tr>${runLog.map(r =>
+      `<tr><td class="mono">${r.t}</td><td class="num">${r.a1}</td><td class="num">${f2(r.tail)}</td><td class="num">${f2(r.kurt, 1)}</td><td class="num">${f2(r.memory)}</td></tr>`).join("")}</table>`
+      : `<p class="cap">Drag the herding slider. Each simulated history you run is added here.</p>`;
+  } else {
+    box.innerHTML = `<div id="c_dial"></div><p class="cap">The band: the middle half of 10 saved simulated histories at each herding strength (strengths where most ran away are left out). Dots: the histories you ran. Dashed line: the S&P 500.</p>`;
+    const ok = X.band.filter(r => r.shown), bb = base();
+    Plotly.newPlot("c_dial", [
+      { x:ok.map(r => r.a1).concat(ok.map(r => r.a1).reverse()), y:ok.map(r => r.q3).concat(ok.map(r => r.q1).reverse()), fill:"toself", fillcolor:P.herdFill, line:{width:0}, hoverinfo:"skip", name:"Middle half of saved histories" },
+      { x:ok.map(r => r.a1), y:ok.map(r => r.median), mode:"lines+markers", line:{color:P.herd, width:2.5}, name:"Saved histories (middle value)" },
+      { x:runLog.map(r => r.a1), y:runLog.map(r => r.tail), mode:"markers", marker:{color:P.accent, size:11, line:{color:"#000", width:1}}, name:"Your histories" }],
+      base({ height:320, shapes:[{ type:"line", xref:"paper", x0:0, x1:1, y0:M.spx.tail, y1:M.spx.tail, line:{color:P.real, width:1.5, dash:"dash"} }],
+        xaxis:{...bb.xaxis, title:{text:"Herding strength"}}, yaxis:{...bb.yaxis, title:{text:"Tail exponent (lower = more big days)"}} }), CFG);
+  }
+  seg("lowtabs", LOWS, low, lowtab);
+}
+
+/* ---------- Checks: the proposal's tests, beyond the paper, all markets, figures ---------- */
+const CT = ["The proposal's checks", "Beyond the paper", "All markets", "Figures"];
+let ct = CT[0], openRow = null, eps = "0.002", mapGroups = new Set(["Indexes", "Stocks", "Commodities"]), figSec = null;
+const dots = (id, ys, band, ref, ytitle, color) => { const bb = base(), C = X.checks;
+  const pts = C.seeds.map((s, i) => [s, ys[i]]).filter(p => p[1] !== null);
+  const shapes = [{ type:"rect", xref:"paper", x0:0, x1:1, y0:band[0], y1:band[1], fillcolor:"rgba(52,211,153,.08)", line:{width:0}, layer:"below" }];
+  if (ref !== null) shapes.push({ type:"line", xref:"paper", x0:0, x1:1, y0:ref, y1:ref, line:{color:P.real, width:1.5, dash:"dash"} });
+  Plotly.newPlot(id, [{ x:pts.map(p => p[0]), y:pts.map(p => p[1]), mode:"markers", marker:{color, size:9}, name:"One history", hovertemplate:"history %{x}: %{y:.3f}<extra></extra>" }],
+    base({ height:260, shapes, showlegend:false, xaxis:{...bb.xaxis, title:{text:"History number"}}, yaxis:{...bb.yaxis, title:{text:ytitle}} }), CFG); };
+const DETAIL = {
+  0: () => `<div class="grid2"><div><p>The herding rule comes from Kirman's ants. Each step one ant switches on its own (chance ε) or copies another.
+      The share of time the simulated ants spend at each count must match Kirman's exact formula.</p>
+      <p><b>Rule:</b> the gap between them is under 0.05 (0 = a perfect match).</p>
+      <label class="mono" style="font-size:13px">Chance an ant switches on its own (ε)</label><div class="seg" id="epsseg"></div>
+      <p>Gap: <b class="mono" id="eps-tv"></b> · <span id="eps-v"></span></p></div><div class="chart" id="c_k"></div></div>`,
+  1: () => `<div class="grid2"><div><p>With no trend chasers, the market should be as calm as its bell-curve news.</p>
+      <p><b>Rule:</b> every history's excess kurtosis (0 for a bell curve) is within ±${fmt(X.checks.bell.tol, 3)} of 0: five times the
+      wobble a perfect bell curve shows over this many days.</p><p>Farthest from 0: <b class="mono">${fmt(X.checks.bell.worst, 3)}</b> · <span class="ok">passes</span></p></div><div class="chart" id="c_1"></div></div>`,
+  2: () => `<div class="grid2"><div><p>With herding, big days should be about as common as in the S&amp;P 500.</p>
+      <p><b>Rule:</b> the middle value of the 40 tail exponents (lower = more big days) is between 2.5 and 3.5. The "inverse cubic law" says about 3; the proposal guessed 2.6 to 3.</p>
+      <p>Middle value <b class="mono">${fmt(M.checks.tail_median)}</b>, a little above the proposal's guess; the S&amp;P 500's ${fmt(M.spx.tail)} is inside it. <span class="ok">passes</span></p></div><div class="chart" id="c_2"></div></div>`,
+  3: () => `<div class="grid2"><div><p>A bell curve says a fall the size of Black Monday should come once in 10<sup>86</sup> years (a 1 followed by 86 zeros). Does herding bring crashes within decades?</p>
+      <p><b>Rule:</b> (a) 8-sd falls come at least once every 50 years: <b>${fmt(M.crash_years.model8, 0)} years</b> <span class="ok">passes</span>.
+      (b) so do falls the size of Black Monday: <b>${fmt(M.crash_years.bm_model, 0)} years</b> <span style="color:var(--down)">does not pass</span>.</p></div><div class="chart" id="c_3"></div></div>`,
+  4: () => `<p>The model's extreme days and bunched wild days next to the S&amp;P 500's. No pass mark: the proposal asked for numbers "comparable" to the S&amp;P 500.</p>
+      <table><tr><th>MEASURE</th><th class="num">MODEL (MIDDLE VALUE)</th><th class="num">MIDDLE 90% OF HISTORIES</th><th class="num">S&amp;P 500</th></tr>${X.checks.table.map(r =>
+      `<tr><td>${{ tail:"Tail exponent", kurtosis:"Excess kurtosis", memory:"Bursts of wild days (link 20 days apart)", worst:"Worst day (sd)" }[r.index] || r.index}</td>
+       <td class="num">${fmt(r.median, r.index === "kurtosis" || r.index === "worst" ? 1 : 2)}</td><td class="num">${fmt(r.low, 1)} to ${fmt(r.high, 1)}</td><td class="num">${fmt(r.sp500, r.index === "kurtosis" || r.index === "worst" ? 1 : 2)}</td></tr>`).join("")}</table>` };
+const DRAW = {
+  0: () => { seg("epsseg", Object.keys(X.kirman.eps), eps, v => { eps = v; DRAW[0](); }); const K = X.kirman.eps[eps], bb = base(), xs = [...Array(K.sim.length).keys()];
+    document.getElementById("eps-tv").textContent = K.tv.toFixed(4);
+    document.getElementById("eps-v").innerHTML = (K.tv < 0.05 ? '<span class="ok">passes</span>' : '<span style="color:var(--down)">does not pass</span>') +
+      (+eps < X.kirman.threshold ? " · the ants herd" : " · the ants spread out");
+    Plotly.newPlot("c_k", [{ x:xs, y:K.sim, type:"bar", marker:{color:P.herd, opacity:.5}, name:"Simulated" }, { x:xs, y:K.exact, mode:"lines", line:{color:P.real, width:2.5}, name:"Kirman's exact answer" }],
+      base({ height:280, bargap:0, xaxis:{...bb.xaxis, title:{text:"Ants at source A"}}, yaxis:{...bb.yaxis, title:{text:"Share of time"}} }), CFG); },
+  1: () => dots("c_1", X.checks.kurt, [-X.checks.bell.tol, X.checks.bell.tol], null, "Excess kurtosis", P.fund),
+  2: () => dots("c_2", X.checks.tails, [2.5, 3.5], M.spx.tail, "Tail exponent", P.herd),
+  3: () => { const R = X.checks.crash, bb = base();
+    Plotly.newPlot("c_3", [{ x:R.map(r => r.size), y:R.map(r => r.bell), mode:"lines+markers", line:{color:P.bell, dash:"dot", width:2.5}, name:"Bell curve" },
+      { x:R.filter(r => r.model !== null).map(r => r.size), y:R.filter(r => r.model !== null).map(r => r.model), mode:"lines+markers", line:{color:P.herd, width:2.5}, name:"Model" },
+      { x:R.filter(r => r.sp500 !== null).map(r => r.size), y:R.filter(r => r.sp500 !== null).map(r => r.sp500), mode:"lines+markers", line:{color:P.real, width:2.5}, name:"S&P 500" }],
+      base({ height:300, shapes:[{ type:"rect", xref:"paper", x0:0, x1:1, y0:0.1, y1:50, fillcolor:"rgba(52,211,153,.08)", line:{width:0}, layer:"below" }],
+        xaxis:{...bb.xaxis, title:{text:"Size of the fall (sd)"}}, yaxis:{...bb.yaxis, type:"log", range:[-1, 14], dtick:2, title:{text:"Years between such falls"}} }), CFG); } };
+const ROWS = [["1. Kirman's ants", "Reproduce Kirman's ant model first", () => `Gap ${M.kirman.tv.toFixed(4)} (needs under 0.05)`, "ok", "✓ Passes"],
+  ["2. No trend chasers", "A bell curve (kurtosis near 0)", () => `Kurtosis ${fmt(M.checks.kurt_median, 3)} (0 = bell curve)`, "ok", "✓ Passes"],
+  ["3. Fat tails", "Tail exponent about 2.6 to 3", () => `Model ${fmt(M.checks.tail_median)} · S&P 500 ${fmt(M.spx.tail)}`, "ok", "✓ Passes"],
+  ["4. Crashes", "Within decades, not 10⁸⁶ years", () => `An 8-sd fall every ${fmt(M.crash_years.model8, 0)} years; a fall the size of Black Monday every ${fmt(M.crash_years.bm_model, 0)} years`, "mid", "≈ Partly"],
+  ["5. Big days and bursts of wild days", "Comparable to the S&P 500", () => "Compared in the table inside", "", "No pass mark set"]];
+function checks(v) {
+  ct = v; seg("checktabs", CT, ct, checks);
+  const box = document.getElementById("checkbox");
+  if (v === CT[0]) {
+    box.innerHTML = `<table><tr><th>CHECK</th><th>THE PROPOSAL EXPECTED</th><th>RESULT</th><th>VERDICT</th></tr>${ROWS.map((r, i) =>
+      `<tr class="checkrow ${openRow === i ? "open" : ""}" data-i="${i}"><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]()}</td><td class="${r[3]}">${r[4]}</td></tr>` +
+      (openRow === i ? `<tr class="detail"><td colspan="4">${DETAIL[i]()}</td></tr>` : "")).join("")}</table>`;
+    box.querySelectorAll(".checkrow").forEach(tr => tr.onclick = () => { openRow = openRow === +tr.dataset.i ? null : +tr.dataset.i; checks(ct); });
+    if (openRow !== null && DRAW[openRow]) DRAW[openRow]();
+  } else if (v === CT[1]) {
+    const F = X.checks.facts, n = F[0].of;
+    box.innerHTML = `<h3 class="eyebrow" style="margin:14px 0 6px">THE TEXTBOOK CHECKLIST OF REAL MARKETS (CONT, 2001), AGAINST A FORMULA WITH NO TRADERS</h3>
+      <table><tr><th>PATTERN OF REAL MARKETS</th><th>S&amp;P 500</th><th>MODEL</th><th>FORMULA, NO TRADERS (GARCH)</th><th>RULE</th></tr>${F.map(f =>
+      `<tr><td><b style="color:var(--text)">${f.name}</b><br><span class="cap">${f.meaning}</span></td><td>${f.sp500_pass ? "✅" : "❌"}</td>
+       <td>${f.herding_pass > n / 2 ? "✅" : "❌"} ${f.herding_pass}/${n}</td><td>${f.garch_pass > n / 2 ? "✅" : "❌"} ${f.garch_pass}/${n}</td><td class="cap">${f.rule}</td></tr>`).join("")}</table>
+      <h3 class="eyebrow" style="margin:22px 0 6px">DOES THE REBUILD GIVE THE PAPER'S NUMBERS? (LUX &amp; MARCHESI 1999)</h3>
+      <table><tr><th>MEASURE</th><th class="num">PAPER</th><th class="num">OURS</th><th>VERDICT</th></tr>${X.paper.map(r =>
+      `<tr><td>${r.measure}</td><td class="num">${fmt(r.paper)} ± ${fmt(r.paper_err, 3)}</td><td class="num">${fmt(r.ours)} ± ${fmt(r.ours_sd)}</td><td class="${r.close ? "ok" : ""}">${r.close ? "✓ close" : "✗ off"}</td></tr>`).join("")}</table>
+      <h3 class="eyebrow" style="margin:22px 0 6px">EXTRA STUDY · THE PRESIDENT'S PARTY</h3>
+      <table><tr><th>MARKET</th><th>YEARS</th><th class="num">DEMOCRATS − REPUBLICANS, A YEAR</th><th class="num">BIGGER THAN LUCK GIVES IN</th></tr>${X.party.map(r => r.error ? `<tr><td>${r.name}</td><td colspan="3" class="cap">${r.error}</td></tr>` :
+      `<tr><td>${r.name}</td><td>${r.years}</td><td class="num">${r.gap > 0 ? "+" : "−"}${fmt(Math.abs(r.gap) * 100, 1)} points</td><td class="num">${fmt(r.luck.gap ?? Object.values(r.luck)[0], 0)}% of reshuffled calendars</td></tr>`).join("")}</table>`;
+  } else if (v === CT[2]) {
+    const G = { Indexes:P.real, Stocks:"#7A8496", Commodities:"#E66A1F" };
+    box.innerHTML = `<p class="cap" style="margin-top:0">Every saved market by its tail exponent (across) and its bursts of wild days (up). The model was tuned on the S&amp;P 500 only, so the other markets are a fair test.</p>
+      <div class="mapchips">${Object.keys(G).map(g => `<button class="${mapGroups.has(g) ? "on" : ""}" data-g="${g}">${g}</button>`).join("")}</div><div class="chart" id="c_map"></div>`;
+    box.querySelectorAll("[data-g]").forEach(b => b.onclick = () => { mapGroups.has(b.dataset.g) ? mapGroups.delete(b.dataset.g) : mapGroups.add(b.dataset.g); checks(ct); });
+    const bb = base(), run = M.runs[String(M.fit_a1)];
+    const tr = [...mapGroups].map(g => { const d = X.markets.filter(m => m.group === g);
+      return { x:d.map(m => m.tail), y:d.map(m => m.memory), text:d.map(m => m.name), mode:"markers+text", textposition:"top center", textfont:{size:12, color:P.muted},
+               marker:{size:10, color:G[g], symbol:g === "Stocks" ? "circle" : g === "Indexes" ? "square" : "diamond"}, name:g }; });
+    tr.push({ x:[run.tail], y:[run.memory], mode:"markers+text", text:["Model"], textposition:"bottom center", textfont:{size:12, color:P.herd}, marker:{size:14, color:P.herd, symbol:"star"}, name:"Model" });
+    Plotly.newPlot("c_map", tr, base({ height:460, shapes:[{ type:"rect", x0:2.5, x1:3.5, yref:"paper", y0:0, y1:1, fillcolor:"rgba(255,255,255,.04)", line:{width:0}, layer:"below" }],
+      xaxis:{...bb.xaxis, title:{text:"Tail exponent (lower = more big days)"}}, yaxis:{...bb.yaxis, title:{text:"Bursts of wild days (link 20 days apart)"}} }), CFG);
+  } else {
+    const secs = [...new Set(X.gallery.map(e => e.section))]; figSec = figSec || secs[0];
+    box.innerHTML = `<div class="seg" id="figsec"></div><div class="gallery">${X.gallery.filter(e => e.section === figSec).map(e =>
+      `<figure><img loading="lazy" src="figs/${e.file}" alt=""><figcaption>${e.caption.replace(" ✅", "")}</figcaption></figure>`).join("")}</div>`;
+    seg("figsec", secs, figSec, s => { figSec = s; checks(ct); });
+  }
+}
+document.querySelectorAll(".open-set").forEach(a => a.onclick = e => { e.preventDefault(); openSet(true); });
+presets(); task(); lowtab(low); seg("views", VIEWS, view, pick2); drawMain(false); checks(ct);
+route();
+</script>
+</body>
+</html>

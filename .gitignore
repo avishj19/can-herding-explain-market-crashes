@@ -11,3 +11,12 @@ docs/course_project_guide.pdf
 
 # Private words the journal hook hides (the list itself must stay off GitHub)
 .claude/hooks/private_terms.local.txt
+
+# API keys and passwords: never in this public repo (Streamlit Cloud has its own secrets settings)
+.streamlit/secrets.toml
+.env
+*.pem
+
+# the redesign mock-up: copies made by docs/redesign/make_more.py (Plotly's library, the figures)
+docs/redesign/plotly.min.js
+docs/redesign/figs/
