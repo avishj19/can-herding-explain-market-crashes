@@ -163,7 +163,7 @@ def _cap(u):
 
 def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
               beta, sigma_mu, sigma_eps, tick, floor, n_plus, n_minus, max_gap, max_days,
-              hard_gap, cb1, cb2, cb3, halt_steps, pause_end, shock):
+              hard_gap, cb1, cb2, cb3, halt_steps, pause_end, shock, panic):
     """The simulation loop (see SPEC.md). Returns per-day log price, log value,
     chartist share and opinion at each day's close, the circuit-breaker level of
     each day, and the number of days completed (fewer than `days` if the price ran
@@ -175,6 +175,9 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
     nothing happens); falling to cb3 freezes it for the rest of the day, at any time.
     Traders keep switching while the price is frozen.
     shock[day]: log change of the value at the start of that day (policy surprise).
+    panic: extra weight of a FALLING trend in the chartists' mood (extension, 0 = SPEC.md):
+    U1 gets + panic / v1 * min(trend, 0), so falls push chartists to pessimism harder than rises
+    push them to optimism (after Bouchaud, Matacz & Potters 2001, the "panic" behind the leverage effect).
     The last value returned says whether the run ran away (on any day, the last included;
     more than MAX_TICKS ticks in one step also counts, so no random draw is asked for
     an absurd number)."""
@@ -213,7 +216,8 @@ def _simulate(g, days, steps, chartists, N, v1, v2, a1, a2, a3, s, R, tc, gamma,
             if chartists:
                 nc = n_plus + n_minus
                 # sec. 1: mood. sec. 2: strategy (profit of chartists vs fundamentalists)
-                U1 = _cap(a1 * (n_plus - n_minus) / nc + a2 / v1 * trend)
+                # + 0.0 when panic = 0: the same number as without the term, so results are unchanged
+                U1 = _cap(a1 * (n_plus - n_minus) / nc + a2 / v1 * trend + panic / v1 * min(trend, 0.0))
                 gain = R * (1.0 + gap) + trend / v2    # (r + (dp/dt)/v2) / p, r = R p_f
                 U21 = _cap(a3 * (gain - R - s * abs(gap)))
                 U22 = _cap(a3 * (R - gain - s * abs(gap)))
@@ -287,7 +291,13 @@ USE_NUMBA = numba is not None and os.environ.get("MODEL_NO_NUMBA") != "1"
 if USE_NUMBA:
     _leave = numba.njit(cache=True)(_leave)
     _cap = numba.njit(cache=True)(_cap)
-    _simulate = numba.njit(cache=True)(_simulate)
+    # nogil: the loop lets go of Python's lock while it runs, so several histories (the web app's
+    # three trader mixes) can run at the same time on different cores. Each has its own random
+    # generator, so every history is the same as when run alone.
+    _simulate = numba.njit(cache=True, nogil=True)(_simulate)
+
+
+PANIC_MAX = 10.0         # largest panic weight simulate accepts (in units of a2's trend weight)
 
 
 def check_breakers(breakers):
@@ -343,7 +353,7 @@ def minute_to_step(minute, dt):
 
 
 def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_DAYS,
-             breakers=None, shocks=None):
+             breakers=None, shocks=None, panic=0.0):
     """Run the market for `days` trading days with settings p.
 
     Returns a dict of daily series (one value per day's close, days + 1 values):
@@ -355,6 +365,7 @@ def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_D
     chartists=False runs the "no chartists" check: everybody is a fundamentalist.
     breakers (check_breakers, e.g. US_BREAKERS) and shocks (check_shocks) are the
     policy options; both off by default, which leaves the model exactly as in SPEC.md.
+    panic (a number >= 0) makes chartists react more to falls than to rises (_simulate); 0 = off.
 
     Raises RunawayError if the price runs away: more than a factor e^max_gap from
     its value for max_days trading days in a row, or ever more than e^HARD_GAP
@@ -377,6 +388,8 @@ def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_D
         raise ValueError(f"max_days must be a whole number >= 1, got {max_days!r}")
     check_breakers(breakers)
     check_shocks(shocks, days)
+    if not _is_number(panic) or not 0 <= panic <= PANIC_MAX:
+        raise ValueError(f"panic must be a number from 0 to {PANIC_MAX}, got {panic!r}")
     if breakers is None:
         cb, halt_steps, pause_end = (-np.inf, -np.inf, -np.inf), 0, 0
     else:
@@ -391,7 +404,7 @@ def simulate(p, days, seed=None, chartists=True, max_gap=MAX_GAP, max_days=MAX_D
         N, *(float(p[k]) for k in ("v1", "v2", "a1", "a2", "a3", "s", "R", "tc", "gamma",
                                    "beta", "sigma_mu", "sigma_eps", "tick")),
         floor, each, each, np.inf if max_gap is None else float(max_gap), int(max_days),
-        np.inf if max_gap is None else HARD_GAP, *cb, int(halt_steps), int(pause_end), shock)
+        np.inf if max_gap is None else HARD_GAP, *cb, int(halt_steps), int(pause_end), shock, float(panic))
     if ran_away:
         ratio = np.exp(min(abs(lp[done] - lf[done]), 700.0))   # 700: largest safe exponent
         raise RunawayError(f"day {done}: the price is {ratio:.3g}x away from its value with "

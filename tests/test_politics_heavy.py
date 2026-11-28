@@ -174,7 +174,9 @@ def test_democrat_rejects_random_early_dates():
 
 
 @pytest.mark.parametrize("market,days,dem_days,starts", [("spx_1928", 24814, 12988, 13),
-                                                         ("dow", 35247, 16350, 16)])
+                                                         # 35,247 before the Dow's 17 wrong closes were
+                                                         # left out (market_data.BAD_CLOSES, Nov 2026)
+                                                         ("dow", 35230, 16345, 16)])
 def test_democrat_on_the_real_trading_days(market, days, dem_days, starts):
     # correct = on every real trading day the party equals the slow walk's answer
     # (pinned counts: a change in the data files or the table shows up here)

@@ -158,10 +158,6 @@ def spx_loss(fp, target, tol):
     return float(np.mean(np.square(gaps)))
 
 
-def spx_target():
-    return stats.fingerprint(market_data.spx_returns().values)
-
-
 # ------------------------------------------------------------------ one fit
 
 def fit_seeds(kind):
@@ -185,7 +181,7 @@ class Fit:
             self.days, self.seeds, self.target = PAPER_DAYS, fit_seeds(kind), None
         else:
             spx = market_data.spx_returns().values
-            self.target = stats.fingerprint(spx)               # = spx_target()
+            self.target = stats.fingerprint(spx)
             self.tol = spx_tolerance(spx)
             self.days, self.seeds = len(spx), fit_seeds(kind)
 

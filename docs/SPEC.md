@@ -164,6 +164,15 @@ Off by default; with both off the model is exactly sections 1-5.
   1 = the price followed the value exactly. A placebo (the same history without the
   surprise) measures how much of that the ordinary wobble gives by itself.
 
+## Panic (an extension, not in the sources; model.simulate(panic=...))
+Off by default (panic = 0: the term is exactly 0 and the model is sections 1-5). After Bouchaud,
+Matacz & Potters (2001, Phys. Rev. Lett. 87, 228701), who explain the "leverage effect" of indexes
+by panic: the chartists' mood index becomes
+U1 = a1 x + (a2 / v1) (dp/dt)/p + (panic / v1) min((dp/dt)/p, 0),
+so a falling trend pushes chartists to pessimism harder than a rising one pushes them to optimism.
+Result (scripts/analysis/panic_skew.py, Nov 2026): it does not give the S&P 500's skew (the 1% worst
+day over the 1% best day goes 1.00 -> 1.03 at panic 10; the S&P's is 1.09). It is not used on the website.
+
 ## Parameters
 [L?] Parameter set I (unverified, from memory of [L] Table 1):
 N=500, v1=3, v2=2, beta=6, T_c = N t_c = 10, T_f = N gamma = 5, a1=0.6, a2=0.2,

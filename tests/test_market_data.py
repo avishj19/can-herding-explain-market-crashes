@@ -284,3 +284,16 @@ def test_load_prices_rejects_zero_prices_and_repeated_dates(tmp_path, body, word
     f.write_text(body)
     with pytest.raises(ValueError, match=words):
         data.load_prices(f)
+
+
+# Spec: the Dow's wrong closes (found against Yahoo's ^DJI and the S&P 500) are left out, so no
+# false +6.7% day on 2002-09-26 and the next return runs from the last good close.
+def test_dow_returns_skip_the_bad_closes():
+    r = data.returns("dow")
+    s = data.load_prices(data.MARKETS["dow"])["Close"]
+    for d in data.BAD_CLOSES["dow"]:
+        assert pd.Timestamp(d) not in r.index
+    i = s.index.get_loc(pd.Timestamp("2002-09-26"))
+    assert r.loc["2002-09-26"] == pytest.approx(np.log(s.iloc[i] / s.iloc[i - 2]))
+    # it now spans 25 and 26 Sep: Yahoo's ^DJI moved +2.04% and +1.96% (log), together +4.0%, not +6.7%
+    assert r.loc["2002-09-26"] == pytest.approx(0.02044 + 0.01961, abs=2e-4)

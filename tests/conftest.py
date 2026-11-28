@@ -39,3 +39,27 @@ def _keep_the_real_main_module():
     main = sys.modules.get("__main__")
     yield
     sys.modules["__main__"] = main
+
+
+@pytest.fixture(autouse=True)
+def _no_live_quotes(monkeypatch):
+    """No test may ask Yahoo for a live quote, or FRED for closes, over the internet: both behave as
+    if they were down, unless a test puts its own fake in herding.explore._yahoo_quote / _fred_csv."""
+    from herding import explore
+
+    def down(ticker):
+        raise ConnectionError("no internet in tests")
+    monkeypatch.setattr(explore, "_yahoo_quote", down)
+    monkeypatch.setattr(explore, "_fred_csv", down)          # nor FRED (the backup for daily closes)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_fetch_limit():
+    """The server-wide limit on Yahoo downloads (web/common.py allow_fetch) counts every fetch in the
+    last minute. The whole suite opens many fake tickers within a minute, so later tests found the
+    limit used up and saw "busy" instead of their prices: each test starts with an empty count."""
+    import sys
+    common = sys.modules.get("web.common")
+    if common is not None:
+        common._fetches.clear()
+    yield

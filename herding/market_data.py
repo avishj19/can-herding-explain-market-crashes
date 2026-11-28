@@ -38,7 +38,17 @@ DOW = DATA / "dow_jones_daily_1927_1952.csv"     # MeasuringWorth; only to re-de
 # there the Dow made the larger move, so either series could have the wrong day.
 BAD_CLOSES = {"spx_1928": ("1930-03-31", "1931-01-07", "1934-05-17", "1935-04-16", "1935-05-16",
                            "1935-08-16", "1935-12-16", "1936-09-16", "1938-01-06", "1938-10-10",
-                           "1946-09-03")}
+                           "1946-09-03"),
+              # Wrong closes in the MeasuringWorth Dow, found by scripts/analysis/data_crosscheck.py
+              # (November 2026): the close differs from Yahoo's ^DJI by more than 0.1% and the S&P 500's
+              # move that day sides with Yahoo (FRED's DJIA agrees too where it covers, 2019-05-31).
+              # Most are typing slips: 2002-09-25 reads 7481.82 for 7841.82, which made a false +6.7%
+              # day on 2002-09-26. 2019-04-19 was Good Friday, when the market was closed: the file
+              # repeats the day before. Two days where the S&P sided with the file (1999-05-04,
+              # 2009-07-22) are kept.
+              "dow": ("1999-01-26", "1999-06-04", "1999-12-08", "1999-12-10", "2001-12-03", "2002-09-25",
+                      "2003-07-28", "2005-08-05", "2005-11-10", "2006-01-12", "2006-01-31", "2008-10-21",
+                      "2008-10-24", "2008-10-31", "2009-07-30", "2019-04-19", "2019-05-31")}
 
 
 def load_prices(path):
